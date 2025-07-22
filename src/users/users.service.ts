@@ -1,7 +1,7 @@
-import { ConflictException, Injectable, InternalServerErrorException } from '@nestjs/common';
+import { ConflictException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { User } from './user.entity';
+import { User, UserRole } from './user.entity';
 import { RegisterAuthDto } from 'src/auth/dto/register-auth.dto';
 
 @Injectable()
@@ -11,7 +11,7 @@ export class UsersService {
     private usersRepository: Repository<User>,
   ) {}
 
-  // Encuentra un usuario por su email
+  // Busca un usuario por su email
   async findOneByEmail(email: string): Promise<User | null> {
     return this.usersRepository.findOne({ where: { email } });
   }
@@ -20,24 +20,40 @@ export class UsersService {
   async create(registerAuthDto: RegisterAuthDto): Promise<User> {
     const { email, name, password } = registerAuthDto;
 
-    // Revisa si el usuario ya existe
     const existingUser = await this.findOneByEmail(email);
     if (existingUser) {
       throw new ConflictException('Email already registered');
     }
 
-    // Crea la nueva instancia de usuario
     const newUser = this.usersRepository.create({
       email,
       name,
-      password, // El hash se hace automáticamente gracias al @BeforeInsert en la entidad
+      password,
     });
 
     try {
       return await this.usersRepository.save(newUser);
     } catch (error) {
-      // Maneja otros posibles errores de la base de datos
       throw new InternalServerErrorException('Something went wrong, user not created');
     }
+  }
+
+  // --- NUEVAS FUNCIONES ---
+
+  // 1. Encontrar todos los usuarios
+  async findAll(): Promise<User[]> {
+    return this.usersRepository.find({
+      order: { createdAt: 'DESC' }
+    });
+  }
+
+  // 2. Actualizar el rol de un usuario
+  async updateUserRole(id: string, role: UserRole): Promise<User> {
+    const user = await this.usersRepository.findOneBy({ id });
+    if (!user) {
+      throw new NotFoundException(`User with ID "${id}" not found`);
+    }
+    user.role = role;
+    return this.usersRepository.save(user);
   }
 }
