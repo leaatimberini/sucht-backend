@@ -13,7 +13,7 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   app.enableCors();
-
+  app.setGlobalPrefix('api');
   // --- Script para crear el admin ---
   const usersService = app.get(UsersService);
   const adminEmail = 'leaa@sucht.com.ar'; // <-- CAMBIA ESTE EMAIL SI QUIERES
