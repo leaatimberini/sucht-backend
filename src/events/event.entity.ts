@@ -4,7 +4,10 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  OneToMany,
 } from 'typeorm';
+import { Ticket } from 'src/tickets/ticket.entity';
+import { TicketTier } from 'src/ticket-tiers/ticket-tier.entity'; // 1. IMPORTAR
 
 @Entity('events')
 export class Event {
@@ -25,10 +28,16 @@ export class Event {
 
   @Column({ type: 'timestamp' })
   endDate: Date;
-  
-  // 2. NUEVO CAMPO PARA LA URL DEL FLYER
+      
   @Column({ nullable: true })
   flyerImageUrl: string;
+
+  @OneToMany(() => Ticket, (ticket) => ticket.event)
+  tickets: Ticket[];
+
+  // 2. AÑADIR RELACIÓN
+  @OneToMany(() => TicketTier, (ticketTier) => ticketTier.event, { cascade: true })
+  ticketTiers: TicketTier[];
 
   @CreateDateColumn({ type: 'timestamp' })
   createdAt: Date;

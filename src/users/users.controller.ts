@@ -7,18 +7,36 @@ import { UserRole } from './user.entity';
 import { UpdateUserRoleDto } from './dto/update-user-role.dto';
 
 @Controller('users')
-// Protegemos todo el controlador para que solo los Admins puedan acceder
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserRole.ADMIN)
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
+  // Este endpoint ahora devuelve TODOS los usuarios
   @Get()
   async findAll() {
-    // Excluimos las contraseñas de la respuesta
     const users = await this.usersService.findAll();
     return users.map(user => {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { password, ...result } = user;
+      return result;
+    });
+  }
+
+  // --- NUEVOS ENDPOINTS ---
+
+  @Get('staff')
+  async findStaff() {
+    const users = await this.usersService.findStaff();
+    return users.map(user => {
+      const { password, ...result } = user;
+      return result;
+    });
+  }
+
+  @Get('clients')
+  async findClients() {
+    const users = await this.usersService.findClients();
+    return users.map(user => {
       const { password, ...result } = user;
       return result;
     });
@@ -30,7 +48,6 @@ export class UsersController {
     @Body() updateUserRoleDto: UpdateUserRoleDto,
   ) {
     const user = await this.usersService.updateUserRole(id, updateUserRoleDto.role);
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { password, ...result } = user;
     return result;
   }

@@ -5,10 +5,11 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   BeforeInsert,
+  OneToMany, // 1. IMPORTAR
 } from 'typeorm';
 import * as bcrypt from 'bcrypt';
+import { Ticket } from 'src/tickets/ticket.entity'; // 2. IMPORTAR
 
-// Definimos los roles que puede tener un usuario
 export enum UserRole {
   ADMIN = 'admin',
   RRPP = 'rrpp',
@@ -16,7 +17,7 @@ export enum UserRole {
   CLIENT = 'client',
 }
 
-@Entity('users') // Esto le dice a TypeORM que esta clase es una tabla llamada 'users'
+@Entity('users')
 export class User {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -29,13 +30,13 @@ export class User {
 
   @Column()
   name: string;
-  
-  @Column({
-    type: 'enum',
-    enum: UserRole,
-    default: UserRole.CLIENT,
-  })
+
+  @Column({ type: 'enum', enum: UserRole, default: UserRole.CLIENT })
   role: UserRole;
+
+  // 3. AÑADIR RELACIÓN
+  @OneToMany(() => Ticket, (ticket) => ticket.user)
+  tickets: Ticket[];
 
   @CreateDateColumn({ type: 'timestamp' })
   createdAt: Date;
@@ -43,7 +44,6 @@ export class User {
   @UpdateDateColumn({ type: 'timestamp' })
   updatedAt: Date;
 
-  // Hook que se ejecuta ANTES de que un nuevo usuario se inserte en la DB
   @BeforeInsert()
   async hashPassword() {
     this.password = await bcrypt.hash(this.password, 10);
