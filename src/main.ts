@@ -14,22 +14,6 @@ async function bootstrap() {
 
   app.enableCors();
   app.setGlobalPrefix('api');
-  // --- Script para crear el admin ---
-  const usersService = app.get(UsersService);
-  const adminEmail = 'leaa@sucht.com.ar'; // <-- CAMBIA ESTE EMAIL SI QUIERES
-  
-  const adminExists = await usersService.findOneByEmail(adminEmail);
-  if (!adminExists) {
-    console.log('Creando usuario administrador por defecto...');
-    await usersService.create({
-      name: 'Leandro',
-      email: adminEmail,
-      password: 'InocencioArias2998', // <-- CAMBIA ESTA CONTRASEÑA
-      role: Role.Admin,
-    });
-    console.log('Usuario administrador creado con éxito.');
-  }
-  // --- Fin del script ---
 
   app.useStaticAssets(join(__dirname, '..', 'uploads'), {
     prefix: '/uploads/',
