@@ -6,23 +6,25 @@ import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import { UserRole } from 'src/users/user.entity';
 
-@Controller('events/:eventId/ticket-tiers') // Anidamos la ruta bajo eventos
-@UseGuards(JwtAuthGuard, RolesGuard)
+// CORRECCIÓN: Quitamos los guardias de aquí para no proteger todo el controlador
+@Controller('events/:eventId/ticket-tiers')
 export class TicketTiersController {
-  constructor(private readonly ticketTiersService: TicketTiersService) {}
+constructor(private readonly ticketTiersService: TicketTiersService) {}
 
-  @Post()
-  @Roles(UserRole.ADMIN)
-  create(
-    @Param('eventId') eventId: string,
-    @Body() createTicketTierDto: CreateTicketTierDto,
-  ) {
-    return this.ticketTiersService.create(eventId, createTicketTierDto);
-  }
+@Post()
+// Y los ponemos aquí, para proteger solo la creación
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.ADMIN)
+create(
+@Param('eventId') eventId: string,
+@Body() createTicketTierDto: CreateTicketTierDto,
+) {
+return this.ticketTiersService.create(eventId, createTicketTierDto);
+}
 
-  @Get()
-  @Roles(UserRole.ADMIN, UserRole.RRPP) // Admins y RRPPs pueden ver los tipos de entrada
-  findByEvent(@Param('eventId') eventId: string) {
-    return this.ticketTiersService.findByEvent(eventId);
-  }
+@Get()
+// Esta ruta ahora es pública y cualquiera puede ver los tipos de entrada
+findByEvent(@Param('eventId') eventId: string) {
+return this.ticketTiersService.findByEvent(eventId);
+}
 }
