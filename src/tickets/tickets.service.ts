@@ -48,7 +48,14 @@ export class TicketsService {
       order: { createdAt: 'DESC' },
     });
   }
-
+  async findOne(ticketId: string): Promise<Ticket> {
+  const ticket = await this.ticketsRepository.findOne({ 
+    where: { id: ticketId },
+    relations: ['user', 'event', 'tier'],
+  });
+  if (!ticket) throw new NotFoundException('Entrada no válida o no encontrada.');
+  return ticket;
+}
   // --- LÓGICA DE VERIFICACIÓN ACTUALIZADA ---
   async redeemTicket(ticketId: string, quantityToRedeem: number) {
     const ticket = await this.ticketsRepository.findOne({ 

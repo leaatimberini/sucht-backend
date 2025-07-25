@@ -11,34 +11,39 @@ import { RedeemTicketDto } from './dto/redeem-ticket.dto';
 @Controller('tickets')
 @UseGuards(JwtAuthGuard)
 export class TicketsController {
-  constructor(private readonly ticketsService: TicketsService) {}
+constructor(private readonly ticketsService: TicketsService) {}
 
-  @Get('my-tickets')
-  findMyTickets(@Request() req) {
-    const userId = req.user.id;
-    return this.ticketsService.findTicketsByUser(userId);
-  }
+@Get('my-tickets')
+findMyTickets(@Request() req) {
+const userId = req.user.id;
+return this.ticketsService.findTicketsByUser(userId);
+}
 
-  // Endpoint para RRPP
-  @Post('generate-by-rrpp')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.RRPP)
-  createByRRPP(@Body() createTicketDto: CreateTicketDto) {
-    return this.ticketsService.createByRRPP(createTicketDto);
-  }
+// --- MÉTODO AÑADIDO ---
+// Este endpoint permite al verificador obtener los datos de un ticket antes de canjearlo.
+@Get(':id')
+@UseGuards(RolesGuard)
+@Roles(UserRole.ADMIN, UserRole.VERIFIER)
+findOne(@Param('id') id: string) {
+return this.ticketsService.findOne(id);
+}
 
-  // Nuevo endpoint para que clientes adquieran entradas
-  @Post('acquire')
-  acquireForClient(@Request() req, @Body() acquireTicketDto: AcquireTicketDto) {
-    // El 'user' viene del token JWT
-    return this.ticketsService.acquireForClient(req.user, acquireTicketDto);
-  }
+@Post('generate-by-rrpp')
+@UseGuards(RolesGuard)
+@Roles(UserRole.ADMIN, UserRole.RRPP)
+createByRRPP(@Body() createTicketDto: CreateTicketDto) {
+return this.ticketsService.createByRRPP(createTicketDto);
+}
 
-  // Endpoint de verificación actualizado, ahora lo llamaremos 'redeem'
-  @Post(':id/redeem')
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.VERIFIER)
-  redeemTicket(@Param('id') id: string, @Body() redeemTicketDto: RedeemTicketDto) {
-    return this.ticketsService.redeemTicket(id, redeemTicketDto.quantity);
-  }
+@Post('acquire')
+acquireForClient(@Request() req, @Body() acquireTicketDto: AcquireTicketDto) {
+return this.ticketsService.acquireForClient(req.user, acquireTicketDto);
+}
+
+@Post(':id/redeem')
+@UseGuards(RolesGuard)
+@Roles(UserRole.ADMIN, UserRole.VERIFIER)
+redeemTicket(@Param('id') id: string, @Body() redeemTicketDto: RedeemTicketDto) {
+return this.ticketsService.redeemTicket(id, redeemTicketDto.quantity);
+}
 }
