@@ -17,13 +17,17 @@ export class TicketTier {
   event: Event;
 
   @Column()
-  name: string; // Ejemplo: "General", "VIP", "Preventa 1"
+  name: string;
 
   @Column({ type: 'decimal', precision: 10, scale: 2 })
   price: number;
 
   @Column({ type: 'int' })
-  quantity: number; // Cantidad total de entradas de este tipo
+  quantity: number;
+
+  // --- NUEVO CAMPO ---
+  @Column({ type: 'timestamp', nullable: true })
+  validUntil: Date | null;
 
   @CreateDateColumn({ type: 'timestamp' })
   createdAt: Date;

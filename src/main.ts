@@ -5,9 +5,12 @@ import { join } from 'path';
 import { NestExpressApplication } from '@nestjs/platform-express';
 
 async function bootstrap() {
+  // --- AÑADIDO: CONFIGURACIÓN DE ZONA HORARIA ---
+  process.env.TZ = 'America/Argentina/Buenos_Aires';
+  // ---------------------------------------------
+
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
-  // AÑADIMOS UN PREFIJO GLOBAL A TODAS LAS RUTAS DE LA API
   app.setGlobalPrefix('api');
 
   app.enableCors({
