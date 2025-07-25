@@ -1,8 +1,3 @@
-// LÍNEAS DE IMPORTACIÓN AÑADIDAS
-import { UsersService } from './users/users.service';
-import { Role } from './auth/enums/role.enum';
-// FIN DE LÍNEAS AÑADIDAS
-
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
@@ -12,8 +7,15 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
-  app.enableCors();
-  app.setGlobalPrefix('api');
+  app.enableCors({
+    origin: [
+      'http://localhost:3000',
+      'https://sucht.com.ar',
+      'http://sucht.com.ar', // Añadir también la versión http por si acaso
+    ],
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    credentials: true,
+  });
 
   app.useStaticAssets(join(__dirname, '..', 'uploads'), {
     prefix: '/uploads/',
@@ -24,7 +26,7 @@ async function bootstrap() {
     forbidNonWhitelisted: true,
   }));
 
-  const port = process.env.APP_PORT || 3000;
+  const port = process.env.APP_PORT || 5000; // <-- CAMBIAR A 5000
   await app.listen(port);
   console.log(`Application is running on: http://localhost:${port}`);
 }
