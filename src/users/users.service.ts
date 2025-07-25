@@ -1,11 +1,12 @@
 import { ConflictException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Not, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 import { User, UserRole } from './user.entity';
 import { RegisterAuthDto } from 'src/auth/dto/register-auth.dto';
 import { randomBytes } from 'crypto';
 import { InviteStaffDto } from './dto/invite-staff.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { UpdateUserRoleDto } from './dto/update-user-role.dto';
 
 @Injectable()
 export class UsersService {
@@ -13,6 +14,15 @@ export class UsersService {
     @InjectRepository(User)
     private usersRepository: Repository<User>,
   ) {}
+
+  // --- FUNCIÓN AÑADIDA ---
+  async findOneById(id: string): Promise<User> {
+    const user = await this.usersRepository.findOneBy({ id });
+    if (!user) {
+      throw new NotFoundException(`User with ID "${id}" not found`);
+    }
+    return user;
+  }
 
   async findOneByEmail(email: string): Promise<User | null> {
     return this.usersRepository.findOne({ where: { email } });
@@ -33,17 +43,11 @@ export class UsersService {
   }
 
   async updateProfile(userId: string, updateProfileDto: UpdateProfileDto, profileImageUrl?: string): Promise<User> {
-    const user = await this.usersRepository.findOneBy({ id: userId });
-    if (!user) {
-      throw new NotFoundException(`User with ID "${userId}" not found`);
-    }
-    
+    const user = await this.findOneById(userId); // Usamos findOneById para reusar código
     Object.assign(user, updateProfileDto);
-
     if (profileImageUrl) {
       user.profileImageUrl = profileImageUrl;
     }
-
     return this.usersRepository.save(user);
   }
 
@@ -76,7 +80,6 @@ export class UsersService {
       const nameParts = email.split('@');
       const tempName = nameParts[0];
       const invitationToken = randomBytes(32).toString('hex');
-      
       const newUser = this.usersRepository.create({
         email,
         name: tempName,
@@ -84,7 +87,6 @@ export class UsersService {
         invitationToken,
         password: undefined,
       });
-
       console.log(`INVITATION TOKEN for ${email}: ${invitationToken}`);
       return this.usersRepository.save(newUser);
     }
@@ -95,28 +97,20 @@ export class UsersService {
   }
 
   async findStaff(): Promise<User[]> {
-    return this.usersRepository.createQueryBuilder("user")
-      .where("user.roles @> ARRAY[:...roles]", { roles: [UserRole.ADMIN, UserRole.RRPP, UserRole.VERIFIER] })
-      .orderBy("user.createdAt", "DESC")
-      .getMany();
+    const allUsers = await this.findAll();
+    return allUsers.filter(user => !(user.roles.length === 1 && user.roles[0] === UserRole.CLIENT));
   }
 
   async findClients(): Promise<User[]> {
-    return this.usersRepository.createQueryBuilder("user")
-      .where("user.roles = ARRAY[:role]", { role: UserRole.CLIENT })
-      .orderBy("user.createdAt", "DESC")
-      .getMany();
+    const allUsers = await this.findAll();
+    return allUsers.filter(user => user.roles.length === 1 && user.roles[0] === UserRole.CLIENT);
   }
-  
+
   async updateUserRoles(id: string, roles: UserRole[]): Promise<User> {
-    const user = await this.usersRepository.findOneBy({ id });
-    if (!user) {
-      throw new NotFoundException(`User with ID "${id}" not found`);
-    }
+    const user = await this.findOneById(id);
     const finalRoles = roles.includes(UserRole.ADMIN) 
         ? roles 
         : Array.from(new Set([...roles, UserRole.CLIENT]));
-
     user.roles = finalRoles;
     return this.usersRepository.save(user);
   }
