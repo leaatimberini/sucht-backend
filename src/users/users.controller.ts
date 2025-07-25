@@ -1,18 +1,57 @@
-import { Controller, Get, Param, Patch, Body, UseGuards, Post, NotFoundException } from '@nestjs/common';
+import { Controller, Get, Param, Body, UseGuards, Post, NotFoundException, Patch, UseInterceptors, UploadedFile, ParseFilePipe, MaxFileSizeValidator, FileTypeValidator, Request } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import { UserRole } from './user.entity';
 import { InviteStaffDto } from './dto/invite-staff.dto';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { extname } from 'path';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 
 @Controller('users')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.ADMIN)
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
+  // --- ENDPOINT AÑADIDO ---
+  // Este endpoint permite a cualquier usuario logueado actualizar su propio perfil.
+  @Patch('profile/me')
+  @UseGuards(JwtAuthGuard) // Solo requiere estar logueado
+  @UseInterceptors(FileInterceptor('profileImage', {
+    storage: diskStorage({
+      destination: './uploads/profiles',
+      filename: (req, file, cb) => {
+        const randomName = Array(32).fill(null).map(() => (Math.round(Math.random() * 16)).toString(16)).join('');
+        return cb(null, `${randomName}${extname(file.originalname)}`);
+      },
+    }),
+  }))
+  async updateProfile(
+    @Request() req,
+    @Body() updateProfileDto: UpdateProfileDto,
+    @UploadedFile(
+      new ParseFilePipe({
+        validators: [
+          new MaxFileSizeValidator({ maxSize: 1024 * 1024 * 2 }), // 2MB
+          new FileTypeValidator({ fileType: '.(png|jpeg|jpg)' }),
+        ],
+        fileIsRequired: false,
+      }),
+    )
+    profileImage?: Express.Multer.File,
+  ) {
+    const userId = req.user.id;
+    const profileImageUrl = profileImage ? `/uploads/profiles/${profileImage.filename}` : undefined;
+    const updatedUser = await this.usersService.updateProfile(userId, updateProfileDto, profileImageUrl);
+    const { password, ...result } = updatedUser;
+    return result;
+  }
+
+  // --- El resto de los endpoints requieren rol de ADMIN ---
   @Post('invite-staff')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
   async inviteStaff(@Body() inviteStaffDto: InviteStaffDto) {
     const user = await this.usersService.inviteOrUpdateStaff(inviteStaffDto);
     const { password, ...result } = user;
@@ -20,6 +59,8 @@ export class UsersController {
   }
 
   @Get('by-email/:email')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
   async findByEmail(@Param('email') email: string) {
     const user = await this.usersService.findOneByEmail(email);
     if (!user) {
@@ -28,8 +69,10 @@ export class UsersController {
     const { password, ...result } = user;
     return result;
   }
-
+  
   @Get()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
   async findAll() {
     const users = await this.usersService.findAll();
     return users.map(user => {
@@ -37,8 +80,10 @@ export class UsersController {
       return result;
     });
   }
-
+  
   @Get('staff')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
   async findStaff() {
     const users = await this.usersService.findStaff();
     return users.map(user => {
@@ -46,8 +91,10 @@ export class UsersController {
       return result;
     });
   }
-
+  
   @Get('clients')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
   async findClients() {
     const users = await this.usersService.findClients();
     return users.map(user => {

@@ -1,7 +1,4 @@
-// Añade IsEnum y IsOptional aquí
-import { IsEmail, IsNotEmpty, IsString, MinLength, IsEnum, IsOptional } from 'class-validator';
-// Importa el enum de Role que creamos
-import { Role } from '../enums/role.enum';
+import { IsEmail, IsNotEmpty, IsString, MinLength, IsDateString } from 'class-validator';
 
 export class RegisterAuthDto {
   @IsNotEmpty()
@@ -14,12 +11,11 @@ export class RegisterAuthDto {
 
   @IsNotEmpty()
   @IsString()
-  @MinLength(8, { message: 'Password must be at least 8 characters long' })
+  @MinLength(8, { message: 'La contraseña debe tener al menos 8 caracteres.' })
   password: string;
 
-  // --- AÑADE ESTAS LÍNEAS ---
-  @IsEnum(Role)
-  @IsOptional()
-  role?: Role;
-  // --------------------------
+  // --- NUEVO CAMPO ---
+  @IsNotEmpty({ message: 'La fecha de nacimiento es requerida.' })
+  @IsDateString()
+  dateOfBirth: string;
 }

@@ -41,6 +41,19 @@ export class User {
   @Column({ nullable: true })
   invitationToken: string;
   
+  @Column({ nullable: true })
+  profileImageUrl: string;
+
+  @Column({ nullable: true })
+  instagramHandle: string;
+
+  @Column({ nullable: true })
+  whatsappNumber: string;
+
+  // --- NUEVO CAMPO ---
+  @Column({ type: 'date', nullable: true })
+  dateOfBirth: Date;
+
   @OneToMany(() => Ticket, (ticket) => ticket.user)
   tickets: Ticket[];
 
