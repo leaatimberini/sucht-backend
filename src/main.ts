@@ -7,11 +7,14 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
+  // AÑADIMOS UN PREFIJO GLOBAL A TODAS LAS RUTAS DE LA API
+  app.setGlobalPrefix('api');
+
   app.enableCors({
     origin: [
       'http://localhost:3000',
       'https://sucht.com.ar',
-      'http://sucht.com.ar', // Añadir también la versión http por si acaso
+      'http://sucht.com.ar',
     ],
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
@@ -26,7 +29,7 @@ async function bootstrap() {
     forbidNonWhitelisted: true,
   }));
 
-  const port = process.env.APP_PORT || 5000; // <-- CAMBIAR A 5000
+  const port = process.env.APP_PORT || 5000;
   await app.listen(port);
   console.log(`Application is running on: http://localhost:${port}`);
 }
