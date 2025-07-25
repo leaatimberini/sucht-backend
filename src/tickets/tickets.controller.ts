@@ -5,31 +5,40 @@ import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import { UserRole } from 'src/users/user.entity';
+import { AcquireTicketDto } from './dto/acquire-ticket.dto';
+import { RedeemTicketDto } from './dto/redeem-ticket.dto';
 
 @Controller('tickets')
 @UseGuards(JwtAuthGuard)
 export class TicketsController {
   constructor(private readonly ticketsService: TicketsService) {}
 
-  // --- ENDPOINT AÑADIDO ---
   @Get('my-tickets')
   findMyTickets(@Request() req) {
-    // req.user contiene el payload del token (id, email, rol)
     const userId = req.user.id;
     return this.ticketsService.findTicketsByUser(userId);
   }
 
-  @Post()
+  // Endpoint para RRPP
+  @Post('generate-by-rrpp')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.RRPP)
-  create(@Body() createTicketDto: CreateTicketDto) {
-    return this.ticketsService.create(createTicketDto);
+  createByRRPP(@Body() createTicketDto: CreateTicketDto) {
+    return this.ticketsService.createByRRPP(createTicketDto);
   }
 
-  @Post(':id/verify')
+  // Nuevo endpoint para que clientes adquieran entradas
+  @Post('acquire')
+  acquireForClient(@Request() req, @Body() acquireTicketDto: AcquireTicketDto) {
+    // El 'user' viene del token JWT
+    return this.ticketsService.acquireForClient(req.user, acquireTicketDto);
+  }
+
+  // Endpoint de verificación actualizado, ahora lo llamaremos 'redeem'
+  @Post(':id/redeem')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.VERIFIER)
-  verifyTicket(@Param('id') id: string) {
-    return this.ticketsService.verifyTicket(id);
+  redeemTicket(@Param('id') id: string, @Body() redeemTicketDto: RedeemTicketDto) {
+    return this.ticketsService.redeemTicket(id, redeemTicketDto.quantity);
   }
 }

@@ -8,11 +8,12 @@ import {
 } from 'typeorm';
 import { User } from '../users/user.entity';
 import { Event } from '../events/event.entity';
-import { TicketTier } from 'src/ticket-tiers/ticket-tier.entity'; // 1. IMPORTAR
+import { TicketTier } from 'src/ticket-tiers/ticket-tier.entity';
 
 export enum TicketStatus {
   VALID = 'valid',
-  USED = 'used',
+  USED = 'used', // Este estado ahora significará "completamente usada"
+  PARTIALLY_USED = 'partially_used', // Nuevo estado para uso parcial
   INVALID = 'invalid',
 }
 
@@ -27,7 +28,6 @@ export class Ticket {
   @ManyToOne(() => Event, (event) => event.tickets)
   event: Event;
 
-  // 2. AÑADIR RELACIÓN CON EL TIPO DE ENTRADA
   @ManyToOne(() => TicketTier)
   tier: TicketTier;
 
@@ -37,6 +37,13 @@ export class Ticket {
     default: TicketStatus.VALID,
   })
   status: TicketStatus;
+
+  // NUEVOS CAMPOS
+  @Column({ type: 'int', default: 1 })
+  quantity: number; // Cuántas personas cubre esta entrada
+
+  @Column({ type: 'int', default: 0 })
+  redeemedCount: number; // Cuántas personas ya ingresaron con esta entrada
 
   @Column({ type: 'timestamp', nullable: true })
   validatedAt: Date | null;
