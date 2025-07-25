@@ -19,12 +19,11 @@ export class UsersService {
   }
 
   async create(registerAuthDto: RegisterAuthDto): Promise<User> {
-    const { email, name, password, dateOfBirth } = registerAuthDto; // <-- Se añade dateOfBirth
+    const { email, name, password, dateOfBirth } = registerAuthDto;
     const existingUser = await this.findOneByEmail(email);
     if (existingUser) {
       throw new ConflictException('Email already registered');
     }
-    // Se añade dateOfBirth a la creación del usuario
     const newUser = this.usersRepository.create({ email, name, password, dateOfBirth: new Date(dateOfBirth), roles: [UserRole.CLIENT] });
     try {
       return await this.usersRepository.save(newUser);
@@ -33,17 +32,14 @@ export class UsersService {
     }
   }
 
-  // --- NUEVA FUNCIÓN PARA ACTUALIZAR EL PERFIL ---
   async updateProfile(userId: string, updateProfileDto: UpdateProfileDto, profileImageUrl?: string): Promise<User> {
     const user = await this.usersRepository.findOneBy({ id: userId });
     if (!user) {
       throw new NotFoundException(`User with ID "${userId}" not found`);
     }
     
-    // Asigna los nuevos valores del DTO al usuario
     Object.assign(user, updateProfileDto);
 
-    // Si se subió una nueva imagen de perfil, se actualiza la URL
     if (profileImageUrl) {
       user.profileImageUrl = profileImageUrl;
     }
@@ -73,7 +69,6 @@ export class UsersService {
     let user = await this.findOneByEmail(email);
 
     if (user) {
-      // Combina los roles existentes con los nuevos, evitando duplicados
       const newRoles = Array.from(new Set([...user.roles, ...roles]));
       user.roles = newRoles;
       return this.usersRepository.save(user);
@@ -100,12 +95,29 @@ export class UsersService {
   }
 
   async findStaff(): Promise<User[]> {
-    const allUsers = await this.findAll();
-    return allUsers.filter(user => !(user.roles.length === 1 && user.roles[0] === UserRole.CLIENT));
+    return this.usersRepository.createQueryBuilder("user")
+      .where("user.roles @> ARRAY[:...roles]", { roles: [UserRole.ADMIN, UserRole.RRPP, UserRole.VERIFIER] })
+      .orderBy("user.createdAt", "DESC")
+      .getMany();
   }
 
   async findClients(): Promise<User[]> {
-    const allUsers = await this.findAll();
-    return allUsers.filter(user => user.roles.length === 1 && user.roles[0] === UserRole.CLIENT);
+    return this.usersRepository.createQueryBuilder("user")
+      .where("user.roles = ARRAY[:role]", { role: UserRole.CLIENT })
+      .orderBy("user.createdAt", "DESC")
+      .getMany();
+  }
+  
+  async updateUserRoles(id: string, roles: UserRole[]): Promise<User> {
+    const user = await this.usersRepository.findOneBy({ id });
+    if (!user) {
+      throw new NotFoundException(`User with ID "${id}" not found`);
+    }
+    const finalRoles = roles.includes(UserRole.ADMIN) 
+        ? roles 
+        : Array.from(new Set([...roles, UserRole.CLIENT]));
+
+    user.roles = finalRoles;
+    return this.usersRepository.save(user);
   }
 }

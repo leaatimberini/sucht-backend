@@ -9,15 +9,14 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { UpdateUserRoleDto } from './dto/update-user-role.dto';
 
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
-  // --- ENDPOINT AÑADIDO ---
-  // Este endpoint permite a cualquier usuario logueado actualizar su propio perfil.
   @Patch('profile/me')
-  @UseGuards(JwtAuthGuard) // Solo requiere estar logueado
+  @UseGuards(JwtAuthGuard)
   @UseInterceptors(FileInterceptor('profileImage', {
     storage: diskStorage({
       destination: './uploads/profiles',
@@ -48,7 +47,6 @@ export class UsersController {
     return result;
   }
 
-  // --- El resto de los endpoints requieren rol de ADMIN ---
   @Post('invite-staff')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
@@ -101,5 +99,17 @@ export class UsersController {
       const { password, ...result } = user;
       return result;
     });
+  }
+  
+  @Patch(':id/roles')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async updateUserRoles(
+    @Param('id') id: string,
+    @Body() updateUserRoleDto: UpdateUserRoleDto,
+  ) {
+    const user = await this.usersService.updateUserRoles(id, updateUserRoleDto.roles);
+    const { password, ...result } = user;
+    return result;
   }
 }
