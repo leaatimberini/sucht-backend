@@ -1,12 +1,11 @@
 import { ConflictException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Not, Repository } from 'typeorm';
 import { User, UserRole } from './user.entity';
 import { RegisterAuthDto } from 'src/auth/dto/register-auth.dto';
 import { randomBytes } from 'crypto';
 import { InviteStaffDto } from './dto/invite-staff.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
-import { UpdateUserRoleDto } from './dto/update-user-role.dto';
 
 @Injectable()
 export class UsersService {
@@ -15,7 +14,6 @@ export class UsersService {
     private usersRepository: Repository<User>,
   ) {}
 
-  // --- FUNCIÓN AÑADIDA ---
   async findOneById(id: string): Promise<User> {
     const user = await this.usersRepository.findOneBy({ id });
     if (!user) {
@@ -43,7 +41,7 @@ export class UsersService {
   }
 
   async updateProfile(userId: string, updateProfileDto: UpdateProfileDto, profileImageUrl?: string): Promise<User> {
-    const user = await this.findOneById(userId); // Usamos findOneById para reusar código
+    const user = await this.findOneById(userId);
     Object.assign(user, updateProfileDto);
     if (profileImageUrl) {
       user.profileImageUrl = profileImageUrl;
@@ -96,21 +94,27 @@ export class UsersService {
     return this.usersRepository.find({ order: { createdAt: 'DESC' } });
   }
 
+  // --- FUNCIONES CORREGIDAS CON QUERYBUILDER ---
   async findStaff(): Promise<User[]> {
-    const allUsers = await this.findAll();
-    return allUsers.filter(user => !(user.roles.length === 1 && user.roles[0] === UserRole.CLIENT));
+    return this.usersRepository.createQueryBuilder("user")
+      .where("user.roles <> ARRAY[:...roles]", { roles: [UserRole.CLIENT] })
+      .orderBy("user.createdAt", "DESC")
+      .getMany();
   }
 
   async findClients(): Promise<User[]> {
-    const allUsers = await this.findAll();
-    return allUsers.filter(user => user.roles.length === 1 && user.roles[0] === UserRole.CLIENT);
+    return this.usersRepository.createQueryBuilder("user")
+      .where("user.roles = ARRAY[:...roles]", { roles: [UserRole.CLIENT] })
+      .orderBy("user.createdAt", "DESC")
+      .getMany();
   }
-
+  
   async updateUserRoles(id: string, roles: UserRole[]): Promise<User> {
     const user = await this.findOneById(id);
     const finalRoles = roles.includes(UserRole.ADMIN) 
         ? roles 
         : Array.from(new Set([...roles, UserRole.CLIENT]));
+
     user.roles = finalRoles;
     return this.usersRepository.save(user);
   }
