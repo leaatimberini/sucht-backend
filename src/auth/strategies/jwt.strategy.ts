@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { UsersService } from 'src/users/users.service';
+import { UserRole } from 'src/users/user.entity';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
@@ -11,11 +12,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     private configService: ConfigService,
   ) {
     const secret = configService.get<string>('JWT_SECRET');
-    
     if (!secret) {
       throw new Error('JWT_SECRET no se encontró en las variables de entorno');
     }
-
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
@@ -23,12 +22,12 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  async validate(payload: { sub: string; email: string, roles: string[] }) {
+  async validate(payload: { sub: string; email: string; roles: UserRole[] }) {
     const user = await this.usersService.findOneByEmail(payload.email);
     if (!user) {
       throw new UnauthorizedException('User not found');
     }
-    // CORRECCIÓN: Devolvemos 'roles' (plural)
+    // Lógica correcta: devuelve el objeto con el array 'roles'
     return { id: payload.sub, email: payload.email, roles: user.roles };
   }
 }

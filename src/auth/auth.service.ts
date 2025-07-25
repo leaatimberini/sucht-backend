@@ -14,7 +14,6 @@ export class AuthService {
   async validateUser(email: string, pass: string): Promise<any> {
     const user = await this.usersService.findOneByEmail(email);
 
-    // CORRECCIÓN: Verificamos que el usuario exista y TENGA una contraseña antes de comparar
     if (user && user.password && (await bcrypt.compare(pass, user.password))) {
       const { password, ...result } = user;
       return result;
@@ -23,7 +22,7 @@ export class AuthService {
   }
 
   async login(user: User) {
-    // CORRECCIÓN: Usamos 'roles' (plural) en el payload del token
+    // Lógica correcta: usa 'roles' (plural) en el payload
     const payload = { email: user.email, sub: user.id, roles: user.roles };
     return {
       access_token: this.jwtService.sign(payload),
