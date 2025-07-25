@@ -25,16 +25,19 @@ export class User {
   @Column({ unique: true })
   email: string;
 
-  @Column({ nullable: true }) // La contraseña ahora puede ser nula para usuarios invitados
+  @Column({ nullable: true })
   password?: string;
 
   @Column()
   name: string;
       
-  @Column({ type: 'simple-array', default: [UserRole.CLIENT] }) // Cambiamos a un array para múltiples roles
+  @Column({ 
+    type: 'text',
+    array: true,
+    default: [UserRole.CLIENT] 
+  })
   roles: UserRole[];
 
-  // NUEVO CAMPO PARA INVITACIONES
   @Column({ nullable: true })
   invitationToken: string;
   
@@ -49,7 +52,7 @@ export class User {
 
   @BeforeInsert()
   async hashPassword() {
-    if (this.password) { // Solo hashea la contraseña si existe
+    if (this.password) {
       this.password = await bcrypt.hash(this.password, 10);
     }
   }
