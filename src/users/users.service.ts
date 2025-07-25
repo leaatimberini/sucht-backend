@@ -42,10 +42,17 @@ export class UsersService {
 
   async updateProfile(userId: string, updateProfileDto: UpdateProfileDto, profileImageUrl?: string): Promise<User> {
     const user = await this.findOneById(userId);
+    
+    // 1. Asignamos los datos de texto (nombre, instagram, etc.)
     Object.assign(user, updateProfileDto);
-    if (profileImageUrl) {
+
+    // 2. CORRECCIÓN: Solo actualizamos la URL de la imagen si se proporcionó una nueva.
+    //    La variable 'profileImageUrl' será 'undefined' si no se sube un archivo.
+    if (profileImageUrl !== undefined) {
+      // Aquí también podríamos añadir lógica para borrar la imagen antigua del disco
       user.profileImageUrl = profileImageUrl;
     }
+
     return this.usersRepository.save(user);
   }
 
@@ -94,19 +101,14 @@ export class UsersService {
     return this.usersRepository.find({ order: { createdAt: 'DESC' } });
   }
 
-  // --- FUNCIONES CORREGIDAS CON QUERYBUILDER ---
   async findStaff(): Promise<User[]> {
-    return this.usersRepository.createQueryBuilder("user")
-      .where("user.roles <> ARRAY[:...roles]", { roles: [UserRole.CLIENT] })
-      .orderBy("user.createdAt", "DESC")
-      .getMany();
+    const allUsers = await this.findAll();
+    return allUsers.filter(user => !(user.roles.length === 1 && user.roles[0] === UserRole.CLIENT));
   }
 
   async findClients(): Promise<User[]> {
-    return this.usersRepository.createQueryBuilder("user")
-      .where("user.roles = ARRAY[:...roles]", { roles: [UserRole.CLIENT] })
-      .orderBy("user.createdAt", "DESC")
-      .getMany();
+    const allUsers = await this.findAll();
+    return allUsers.filter(user => user.roles.length === 1 && user.roles[0] === UserRole.CLIENT);
   }
   
   async updateUserRoles(id: string, roles: UserRole[]): Promise<User> {
