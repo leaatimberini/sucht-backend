@@ -5,10 +5,10 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   BeforeInsert,
-  OneToMany, // 1. IMPORTAR
+  OneToMany,
 } from 'typeorm';
 import * as bcrypt from 'bcrypt';
-import { Ticket } from 'src/tickets/ticket.entity'; // 2. IMPORTAR
+import { Ticket } from 'src/tickets/ticket.entity';
 
 export enum UserRole {
   ADMIN = 'admin',
@@ -25,16 +25,19 @@ export class User {
   @Column({ unique: true })
   email: string;
 
-  @Column()
-  password: string;
+  @Column({ nullable: true }) // La contraseña ahora puede ser nula para usuarios invitados
+  password?: string;
 
   @Column()
   name: string;
+      
+  @Column({ type: 'simple-array', default: [UserRole.CLIENT] }) // Cambiamos a un array para múltiples roles
+  roles: UserRole[];
 
-  @Column({ type: 'enum', enum: UserRole, default: UserRole.CLIENT })
-  role: UserRole;
-
-  // 3. AÑADIR RELACIÓN
+  // NUEVO CAMPO PARA INVITACIONES
+  @Column({ nullable: true })
+  invitationToken: string;
+  
   @OneToMany(() => Ticket, (ticket) => ticket.user)
   tickets: Ticket[];
 
@@ -46,6 +49,8 @@ export class User {
 
   @BeforeInsert()
   async hashPassword() {
-    this.password = await bcrypt.hash(this.password, 10);
+    if (this.password) { // Solo hashea la contraseña si existe
+      this.password = await bcrypt.hash(this.password, 10);
+    }
   }
 }

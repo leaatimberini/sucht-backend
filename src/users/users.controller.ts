@@ -1,10 +1,10 @@
-import { Controller, Get, Param, Patch, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, Patch, Body, UseGuards, Post, NotFoundException } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import { UserRole } from './user.entity';
-import { UpdateUserRoleDto } from './dto/update-user-role.dto';
+import { InviteStaffDto } from './dto/invite-staff.dto';
 
 @Controller('users')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -12,7 +12,23 @@ import { UpdateUserRoleDto } from './dto/update-user-role.dto';
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
-  // Este endpoint ahora devuelve TODOS los usuarios
+  @Post('invite-staff')
+  async inviteStaff(@Body() inviteStaffDto: InviteStaffDto) {
+    const user = await this.usersService.inviteOrUpdateStaff(inviteStaffDto);
+    const { password, ...result } = user;
+    return result;
+  }
+
+  @Get('by-email/:email')
+  async findByEmail(@Param('email') email: string) {
+    const user = await this.usersService.findOneByEmail(email);
+    if (!user) {
+      throw new NotFoundException(`User with email "${email}" not found`);
+    }
+    const { password, ...result } = user;
+    return result;
+  }
+
   @Get()
   async findAll() {
     const users = await this.usersService.findAll();
@@ -21,8 +37,6 @@ export class UsersController {
       return result;
     });
   }
-
-  // --- NUEVOS ENDPOINTS ---
 
   @Get('staff')
   async findStaff() {
@@ -40,15 +54,5 @@ export class UsersController {
       const { password, ...result } = user;
       return result;
     });
-  }
-
-  @Patch(':id/role')
-  async updateUserRole(
-    @Param('id') id: string,
-    @Body() updateUserRoleDto: UpdateUserRoleDto,
-  ) {
-    const user = await this.usersService.updateUserRole(id, updateUserRoleDto.role);
-    const { password, ...result } = user;
-    return result;
   }
 }
