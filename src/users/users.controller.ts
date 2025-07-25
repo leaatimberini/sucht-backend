@@ -15,8 +15,6 @@ import { UpdateUserRoleDto } from './dto/update-user-role.dto';
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
-  // --- ENDPOINT FALTANTE AÑADIDO ---
-  // Permite a cualquier usuario logueado obtener sus propios datos.
   @Get('profile/me')
   @UseGuards(JwtAuthGuard)
   async getMyProfile(@Request() req) {
@@ -28,10 +26,33 @@ export class UsersController {
   
   @Patch('profile/me')
   @UseGuards(JwtAuthGuard)
-  @UseInterceptors(FileInterceptor('profileImage', { storage: diskStorage({ destination: './uploads/profiles', filename: (req, file, cb) => { const randomName = Array(32).fill(null).map(() => (Math.round(Math.random() * 16)).toString(16)).join(''); return cb(null, `${randomName}${extname(file.originalname)}`); }, }), }))
-  async updateProfile(@Request() req, @Body() updateProfileDto: UpdateProfileDto, @UploadedFile(new ParseFilePipe({ validators: [ new MaxFileSizeValidator({ maxSize: 1024 * 1024 * 2 }), new FileTypeValidator({ fileType: '.(png|jpeg|jpg)' }), ], fileIsRequired: false, })) profileImage?: Express.Multer.File,) { const userId = req.user.id; const profileImageUrl = profileImage ? `/uploads/profiles/${profileImage.filename}` : undefined; const updatedUser = await this.usersService.updateProfile(userId, updateProfileDto, profileImageUrl); const { password, ...result } = updatedUser; return result; }
+  @UseInterceptors(FileInterceptor('profileImage', {
+    storage: diskStorage({
+      destination: './uploads/profiles', // Debe coincidir con la carpeta creada en deploy.sh
+      filename: (req, file, cb) => {
+        const randomName = Array(32).fill(null).map(() => (Math.round(Math.random() * 16)).toString(16)).join('');
+        return cb(null, `${randomName}${extname(file.originalname)}`);
+      },
+    }),
+  }))
+  async updateProfile(
+    @Request() req, 
+    @Body() updateProfileDto: UpdateProfileDto, 
+    @UploadedFile(new ParseFilePipe({
+      validators: [
+        new MaxFileSizeValidator({ maxSize: 1024 * 1024 * 2 }), // 2MB
+        new FileTypeValidator({ fileType: '.(png|jpeg|jpg)' }),
+      ],
+      fileIsRequired: false,
+    })) profileImage?: Express.Multer.File,
+  ) {
+    const userId = req.user.id;
+    const profileImageUrl = profileImage ? `/uploads/profiles/${profileImage.filename}` : undefined;
+    const updatedUser = await this.usersService.updateProfile(userId, updateProfileDto, profileImageUrl);
+    const { password, ...result } = updatedUser;
+    return result;
+  }
 
-  // --- El resto de los endpoints requieren rol de ADMIN ---
   @Post('invite-staff')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
