@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Body, UseGuards, Post, NotFoundException, Patch, UseInterceptors, UploadedFile, ParseFilePipe, MaxFileSizeValidator, FileTypeValidator, Request } from '@nestjs/common';
+import { Controller, Get, Param, Body, UseGuards, Post, NotFoundException, Patch, UseInterceptors, UploadedFile, Request } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
@@ -14,15 +14,6 @@ import { UpdateUserRoleDto } from './dto/update-user-role.dto';
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
-
-  @Get('profile/me')
-  @UseGuards(JwtAuthGuard)
-  async getMyProfile(@Request() req) {
-    const userId = req.user.id;
-    const user = await this.usersService.findOneById(userId);
-    const { password, ...result } = user;
-    return result;
-  }
   
   @Patch('profile/me')
   @UseGuards(JwtAuthGuard)
@@ -36,18 +27,10 @@ export class UsersController {
     }),
   }))
   async updateProfile(
-    @Request() req,
-    @Body() updateProfileDto: UpdateProfileDto,
-    @UploadedFile(
-      new ParseFilePipe({
-        validators: [
-          new MaxFileSizeValidator({ maxSize: 1024 * 1024 * 2 }), // 2MB
-          new FileTypeValidator({ fileType: '.(png|jpeg|jpg)' }),
-        ],
-        fileIsRequired: false,
-      }),
-    )
-    profileImage?: Express.Multer.File,
+    @Request() req, 
+    @Body() updateProfileDto: UpdateProfileDto, 
+    // --- CORRECCIÓN DEFINITIVA: Hemos eliminado el 'ParseFilePipe' de aquí ---
+    @UploadedFile() profileImage?: Express.Multer.File,
   ) {
     const userId = req.user.id;
     const profileImageUrl = profileImage ? `/uploads/profiles/${profileImage.filename}` : undefined;
@@ -55,6 +38,11 @@ export class UsersController {
     const { password, ...result } = updatedUser;
     return result;
   }
+
+  // --- El resto de los endpoints requieren rol de ADMIN ---
+  @Get('profile/me')
+  @UseGuards(JwtAuthGuard)
+  async getMyProfile(@Request() req) { const userId = req.user.id; const user = await this.usersService.findOneById(userId); const { password, ...result } = user; return result; }
 
   @Post('invite-staff')
   @UseGuards(JwtAuthGuard, RolesGuard)
