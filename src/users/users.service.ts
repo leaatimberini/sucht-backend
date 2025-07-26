@@ -41,19 +41,21 @@ export class UsersService {
   }
 
   async updateProfile(userId: string, updateProfileDto: UpdateProfileDto, profileImageUrl?: string): Promise<User> {
-    const user = await this.findOneById(userId);
-    
-    // 1. Asignamos los datos de texto (nombre, instagram, etc.)
-    Object.assign(user, updateProfileDto);
+    // CORRECCIÓN: Manejamos la conversión de la fecha explícitamente
+    const { dateOfBirth, ...restOfDto } = updateProfileDto;
+    const updatePayload: Partial<User> = { ...restOfDto };
 
-    // 2. CORRECCIÓN: Solo actualizamos la URL de la imagen si se proporcionó una nueva.
-    //    La variable 'profileImageUrl' será 'undefined' si no se sube un archivo.
-    if (profileImageUrl !== undefined) {
-      // Aquí también podríamos añadir lógica para borrar la imagen antigua del disco
-      user.profileImageUrl = profileImageUrl;
+    if (dateOfBirth) {
+      updatePayload.dateOfBirth = new Date(dateOfBirth);
     }
 
-    return this.usersRepository.save(user);
+    if (profileImageUrl !== undefined) {
+      updatePayload.profileImageUrl = profileImageUrl;
+    }
+    
+    await this.usersRepository.update(userId, updatePayload);
+
+    return this.findOneById(userId);
   }
 
   async findOrCreateByEmail(email: string): Promise<User> {
