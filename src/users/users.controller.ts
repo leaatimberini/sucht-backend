@@ -29,9 +29,11 @@ export class UsersController {
   async updateProfile(
     @Request() req, 
     @Body() updateProfileDto: UpdateProfileDto, 
-    // --- CORRECCIÓN DEFINITIVA: Hemos eliminado el 'ParseFilePipe' de aquí ---
     @UploadedFile() profileImage?: Express.Multer.File,
   ) {
+    // --- LÍNEA AÑADIDA PARA DEBUG ---
+    console.log('--- DEBUG BACKEND --- Archivo recibido:', profileImage);
+
     const userId = req.user.id;
     const profileImageUrl = profileImage ? `/uploads/profiles/${profileImage.filename}` : undefined;
     const updatedUser = await this.usersService.updateProfile(userId, updateProfileDto, profileImageUrl);
