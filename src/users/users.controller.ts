@@ -28,7 +28,7 @@ export class UsersController {
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(FileInterceptor('profileImage', {
     storage: diskStorage({
-      destination: './uploads/profiles', // Debe coincidir con la carpeta creada en deploy.sh
+      destination: './uploads/profiles',
       filename: (req, file, cb) => {
         const randomName = Array(32).fill(null).map(() => (Math.round(Math.random() * 16)).toString(16)).join('');
         return cb(null, `${randomName}${extname(file.originalname)}`);
@@ -36,15 +36,18 @@ export class UsersController {
     }),
   }))
   async updateProfile(
-    @Request() req, 
-    @Body() updateProfileDto: UpdateProfileDto, 
-    @UploadedFile(new ParseFilePipe({
-      validators: [
-        new MaxFileSizeValidator({ maxSize: 1024 * 1024 * 2 }), // 2MB
-        new FileTypeValidator({ fileType: '.(png|jpeg|jpg)' }),
-      ],
-      fileIsRequired: false,
-    })) profileImage?: Express.Multer.File,
+    @Request() req,
+    @Body() updateProfileDto: UpdateProfileDto,
+    @UploadedFile(
+      new ParseFilePipe({
+        validators: [
+          new MaxFileSizeValidator({ maxSize: 1024 * 1024 * 2 }), // 2MB
+          new FileTypeValidator({ fileType: '.(png|jpeg|jpg)' }),
+        ],
+        fileIsRequired: false,
+      }),
+    )
+    profileImage?: Express.Multer.File,
   ) {
     const userId = req.user.id;
     const profileImageUrl = profileImage ? `/uploads/profiles/${profileImage.filename}` : undefined;
