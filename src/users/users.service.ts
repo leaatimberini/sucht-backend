@@ -1,6 +1,6 @@
 import { ConflictException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Not, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 import { User, UserRole } from './user.entity';
 import { RegisterAuthDto } from 'src/auth/dto/register-auth.dto';
 import { randomBytes } from 'crypto';
@@ -16,27 +16,25 @@ export class UsersService {
 
   async findOneById(id: string): Promise<User> {
     const user = await this.usersRepository.findOneBy({ id });
-    if (!user) {
-      throw new NotFoundException(`User with ID "${id}" not found`);
-    }
+    if (!user) { throw new NotFoundException(`User with ID "${id}" not found`); }
     return user;
   }
 
   async updateProfile(userId: string, updateProfileDto: UpdateProfileDto, profileImageUrl?: string): Promise<User> {
     const userToUpdate = await this.findOneById(userId);
 
-    if (updateProfileDto.name) userToUpdate.name = updateProfileDto.name;
-    if (updateProfileDto.instagramHandle) userToUpdate.instagramHandle = updateProfileDto.instagramHandle;
-    if (updateProfileDto.whatsappNumber) userToUpdate.whatsappNumber = updateProfileDto.whatsappNumber;
-    if (updateProfileDto.dateOfBirth) userToUpdate.dateOfBirth = new Date(updateProfileDto.dateOfBirth);
+    // Asignamos los datos del formulario de texto
+    Object.assign(userToUpdate, updateProfileDto);
 
+    // Asignamos la URL de la imagen explícitamente si se subió una nueva
     if (profileImageUrl !== undefined) {
       userToUpdate.profileImageUrl = profileImageUrl;
     }
-
+    
     return this.usersRepository.save(userToUpdate);
   }
 
+  // --- El resto de las funciones no cambian ---
   async findOneByEmail(email: string): Promise<User | null> { return this.usersRepository.findOne({ where: { email } }); }
   async create(registerAuthDto: RegisterAuthDto): Promise<User> {
     const { email, name, password, dateOfBirth } = registerAuthDto;
