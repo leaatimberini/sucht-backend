@@ -14,7 +14,7 @@ import { UpdateUserRoleDto } from './dto/update-user-role.dto';
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
-  
+
   @Patch('profile/me')
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(FileInterceptor('profileImage', {
@@ -27,13 +27,11 @@ export class UsersController {
     }),
   }))
   async updateProfile(
-    @Request() req, 
-    @Body() updateProfileDto: UpdateProfileDto, 
+    @Request() req,
+    @Body() updateProfileDto: UpdateProfileDto,
+    // --- CORRECCIÓN DEFINITIVA: Hemos eliminado el 'ParseFilePipe' de aquí ---
     @UploadedFile() profileImage?: Express.Multer.File,
   ) {
-    // --- LÍNEA AÑADIDA PARA DEBUG ---
-    console.log('--- DEBUG BACKEND --- Archivo recibido:', profileImage);
-
     const userId = req.user.id;
     const profileImageUrl = profileImage ? `/uploads/profiles/${profileImage.filename}` : undefined;
     const updatedUser = await this.usersService.updateProfile(userId, updateProfileDto, profileImageUrl);
@@ -41,7 +39,7 @@ export class UsersController {
     return result;
   }
 
-  // --- El resto de los endpoints requieren rol de ADMIN ---
+  // --- El resto de los endpoints no cambian ---
   @Get('profile/me')
   @UseGuards(JwtAuthGuard)
   async getMyProfile(@Request() req) { const userId = req.user.id; const user = await this.usersService.findOneById(userId); const { password, ...result } = user; return result; }
