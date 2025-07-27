@@ -10,7 +10,7 @@ cloudinary.config({
 export const cloudinaryStorage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: (req, file) => {
-    // Determina la carpeta de destino basado en el campo del archivo
+    // Determina la carpeta de destino basado en el nombre del campo del formulario
     const folder = file.fieldname === 'profileImage' ? 'sucht/profiles' : 'sucht/events';
     return {
       folder: folder,

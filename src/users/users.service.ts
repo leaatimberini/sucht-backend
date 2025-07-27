@@ -1,6 +1,6 @@
 import { ConflictException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Not, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 import { User, UserRole } from './user.entity';
 import { RegisterAuthDto } from 'src/auth/dto/register-auth.dto';
 import { randomBytes } from 'crypto';
@@ -22,7 +22,6 @@ export class UsersService {
     return user;
   }
 
-  // --- LÓGICA DE ACTUALIZACIÓN DE PERFIL CORREGIDA ---
   async updateProfile(userId: string, updateProfileDto: UpdateProfileDto, profileImageUrl?: string): Promise<User> {
     const userToUpdate = await this.findOneById(userId);
 
@@ -31,7 +30,7 @@ export class UsersService {
     if (updateProfileDto.instagramHandle) userToUpdate.instagramHandle = updateProfileDto.instagramHandle;
     if (updateProfileDto.whatsappNumber) userToUpdate.whatsappNumber = updateProfileDto.whatsappNumber;
     
-    // Verificamos que la fecha sea válida antes de asignarla
+    // CORRECCIÓN: Verificamos que la fecha sea válida antes de asignarla
     if (updateProfileDto.dateOfBirth && !isNaN(new Date(updateProfileDto.dateOfBirth).getTime())) {
       userToUpdate.dateOfBirth = new Date(updateProfileDto.dateOfBirth);
     }

@@ -7,7 +7,7 @@ import { Roles } from 'src/auth/decorators/roles.decorator';
 import { UserRole } from 'src/users/user.entity';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UpdateEventDto } from './dto/update-event.dto';
-import { cloudinaryStorage } from 'src/config/cloudinary.config';
+import { cloudinaryStorage } from 'src/config/cloudinary.config'; // <-- IMPORTANTE: Usa la configuración de Cloudinary
 
 @Controller('events')
 export class EventsController {
@@ -17,12 +17,13 @@ export class EventsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @UseInterceptors(FileInterceptor('flyerImage', {
-    storage: cloudinaryStorage, // <-- USANDO CLOUDINARY
+    storage: cloudinaryStorage, // <-- USA CLOUDINARY
   }))
   create(
     @Body() createEventDto: CreateEventDto,
     @UploadedFile() flyerImage?: Express.Multer.File,
   ) {
+    // Cloudinary devuelve la URL completa en la propiedad 'path'
     const flyerImageUrl = flyerImage ? flyerImage.path : undefined;
     return this.eventsService.create(createEventDto, flyerImageUrl);
   }
@@ -31,7 +32,7 @@ export class EventsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @UseInterceptors(FileInterceptor('flyerImage', {
-    storage: cloudinaryStorage, // <-- USANDO CLOUDINARY
+    storage: cloudinaryStorage, // <-- USA CLOUDINARY
   }))
   update(
     @Param('id') id: string,
