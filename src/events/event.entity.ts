@@ -7,7 +7,7 @@ import {
   OneToMany,
 } from 'typeorm';
 import { Ticket } from 'src/tickets/ticket.entity';
-import { TicketTier } from 'src/ticket-tiers/ticket-tier.entity'; // 1. IMPORTAR
+import { TicketTier } from 'src/ticket-tiers/ticket-tier.entity';
 
 @Entity('events')
 export class Event {
@@ -32,10 +32,13 @@ export class Event {
   @Column({ nullable: true })
   flyerImageUrl: string;
 
+  // --- NUEVO CAMPO ---
+  @Column({ type: 'timestamp', nullable: true })
+  confirmationSentAt: Date | null; // Para saber cuándo se pidió la confirmación
+
   @OneToMany(() => Ticket, (ticket) => ticket.event)
   tickets: Ticket[];
 
-  // 2. AÑADIR RELACIÓN
   @OneToMany(() => TicketTier, (ticketTier) => ticketTier.event, { cascade: true })
   ticketTiers: TicketTier[];
 

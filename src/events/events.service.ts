@@ -12,6 +12,13 @@ export class EventsService {
     private eventsRepository: Repository<Event>,
   ) {}
 
+  // --- NUEVA FUNCIÓN AÑADIDA ---
+  async requestConfirmation(eventId: string): Promise<Event> {
+    const event = await this.findOne(eventId);
+    event.confirmationSentAt = new Date();
+    return this.eventsRepository.save(event);
+  }
+
   async create(createEventDto: CreateEventDto, flyerImageUrl?: string): Promise<Event> {
     const event = this.eventsRepository.create({
       ...createEventDto,
@@ -25,28 +32,25 @@ export class EventsService {
   }
 
   async findOne(id: string): Promise<Event> {
-    const event = await this.eventsRepository.findOneBy({ id });
+    const event = await this.eventsRepository.findOne({ 
+      where: { id }, 
+      relations: ['ticketTiers'] 
+    });
     if (!event) {
       throw new NotFoundException(`Event with ID "${id}" not found`);
     }
     return event;
   }
 
-  // LÓGICA DE ACTUALIZACIÓN CORREGIDA
   async update(id: string, updateEventDto: UpdateEventDto, flyerImageUrl?: string): Promise<Event> {
-    // 1. Buscamos el evento existente
     const event = await this.findOne(id);
 
-    // 2. Usamos 'merge' para aplicar los cambios del DTO (title, location, etc.)
-    //    'merge' ignora de forma segura cualquier campo extra como 'flyerImage' del DTO.
     this.eventsRepository.merge(event, updateEventDto);
 
-    // 3. Manejamos la actualización de la imagen explícitamente
     if (flyerImageUrl !== undefined) {
       event.flyerImageUrl = flyerImageUrl;
     }
     
-    // 4. Guardamos la entidad 'event' ya actualizada
     return this.eventsRepository.save(event);
   }
 

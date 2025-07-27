@@ -12,8 +12,8 @@ import { TicketTier } from 'src/ticket-tiers/ticket-tier.entity';
 
 export enum TicketStatus {
   VALID = 'valid',
-  USED = 'used', // Este estado ahora significará "completamente usada"
-  PARTIALLY_USED = 'partially_used', // Nuevo estado para uso parcial
+  USED = 'used',
+  PARTIALLY_USED = 'partially_used',
   INVALID = 'invalid',
 }
 
@@ -38,12 +38,15 @@ export class Ticket {
   })
   status: TicketStatus;
 
-  // NUEVOS CAMPOS
   @Column({ type: 'int', default: 1 })
-  quantity: number; // Cuántas personas cubre esta entrada
+  quantity: number;
 
   @Column({ type: 'int', default: 0 })
-  redeemedCount: number; // Cuántas personas ya ingresaron con esta entrada
+  redeemedCount: number;
+
+  // --- NUEVO CAMPO ---
+  @Column({ type: 'timestamp', nullable: true })
+  confirmedAt: Date | null; // Para saber si el usuario confirmó
 
   @Column({ type: 'timestamp', nullable: true })
   validatedAt: Date | null;
