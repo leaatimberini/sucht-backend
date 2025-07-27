@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, LessThan, Not, Repository } from 'typeorm'; // <-- 1. IMPORTAR IsNull y LessThan
+import { IsNull, LessThan, Not, Repository } from 'typeorm';
 import { Ticket, TicketStatus } from './ticket.entity';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { UsersService } from 'src/users/users.service';
@@ -21,6 +21,16 @@ export class TicketsService {
     private eventsService: EventsService,
   ) {}
 
+  async createByRRPP(createTicketDto: CreateTicketDto): Promise<Ticket> {
+    const { userEmail, eventId, ticketTierId } = createTicketDto;
+    const user = await this.usersService.findOrCreateByEmail(userEmail);
+    return this.acquire(user, { eventId, ticketTierId, quantity: 1 });
+  }
+
+  async acquireForClient(user: User, acquireTicketDto: AcquireTicketDto): Promise<Ticket> {
+    return this.acquire(user, acquireTicketDto);
+  }
+
   private async acquire(user: User, data: { eventId: string, ticketTierId: string, quantity: number }): Promise<Ticket> {
     const { eventId, ticketTierId, quantity } = data;
     const event = await this.eventsService.findOne(eventId);
@@ -31,10 +41,30 @@ export class TicketsService {
     const tier = await this.ticketTiersRepository.findOneBy({ id: ticketTierId });
     if (!tier) throw new NotFoundException('Tipo de entrada no encontrado.');
     if (tier.quantity < quantity) throw new BadRequestException(`No quedan suficientes entradas de este tipo. Disponibles: ${tier.quantity}.`);
+    
     const newTicket = this.ticketsRepository.create({ user, event, tier, quantity });
+    
     tier.quantity -= quantity;
     await this.ticketTiersRepository.save(tier);
+
     return this.ticketsRepository.save(newTicket);
+  }
+  
+  async findTicketsByUser(userId: string): Promise<Ticket[]> {
+    return this.ticketsRepository.find({
+      where: { user: { id: userId } },
+      relations: ['event', 'tier'],
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  async findOne(ticketId: string): Promise<Ticket> {
+    const ticket = await this.ticketsRepository.findOne({ 
+      where: { id: ticketId },
+      relations: ['user', 'event', 'tier'],
+    });
+    if (!ticket) throw new NotFoundException('Entrada no válida o no encontrada.');
+    return ticket;
   }
 
   async confirmAttendance(ticketId: string, userId: string): Promise<Ticket> {
@@ -50,54 +80,67 @@ export class TicketsService {
   async handleUnconfirmedTickets() {
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
     
-    // --- CORRECCIÓN AQUÍ ---
     const unconfirmedTickets = await this.ticketsRepository.find({
       where: {
-        confirmedAt: IsNull(), // Usamos IsNull() en lugar de null
+        confirmedAt: IsNull(), // <-- CORRECCIÓN AQUÍ
+        status: TicketStatus.VALID,
         event: {
-          confirmationSentAt: Not(IsNull()) && LessThan(oneHourAgo), // Usamos Not(IsNull()) y LessThan
+          confirmationSentAt: Not(IsNull()) // Y AQUÍ
         }
       },
-      relations: ['tier', 'event'] // Asegúrate de incluir 'event' en las relaciones
+      relations: ['tier', 'event']
     });
 
     for (const ticket of unconfirmedTickets) {
-      const tier = ticket.tier;
-      if (tier) {
+      if(ticket.event.confirmationSentAt && new Date(ticket.event.confirmationSentAt) < oneHourAgo) {
+        const tier = ticket.tier;
         tier.quantity += ticket.quantity;
         await this.ticketTiersRepository.save(tier);
+        await this.ticketsRepository.remove(ticket);
+        console.log(`Ticket ${ticket.id} cancelado por falta de confirmación.`);
       }
-      await this.ticketsRepository.remove(ticket);
-      console.log(`Ticket ${ticket.id} cancelado por falta de confirmación.`);
     }
   }
 
-  async createByRRPP(createTicketDto: CreateTicketDto): Promise<Ticket> {
-    const { userEmail, eventId, ticketTierId } = createTicketDto;
-    const user = await this.usersService.findOrCreateByEmail(userEmail);
-    return this.acquire(user, { eventId, ticketTierId, quantity: 1 });
-  }
-  async acquireForClient(user: User, acquireTicketDto: AcquireTicketDto): Promise<Ticket> { return this.acquire(user, acquireTicketDto); }
-  async findTicketsByUser(userId: string): Promise<Ticket[]> { return this.ticketsRepository.find({ where: { user: { id: userId } }, relations: ['event', 'tier'], order: { createdAt: 'DESC' }, }); }
-  async findOne(ticketId: string): Promise<Ticket> {
-    const ticket = await this.ticketsRepository.findOne({ where: { id: ticketId }, relations: ['user', 'event', 'tier'], });
-    if (!ticket) throw new NotFoundException('Entrada no válida o no encontrada.');
-    return ticket;
-  }
   async redeemTicket(ticketId: string, quantityToRedeem: number) {
-    const ticket = await this.ticketsRepository.findOne({ where: { id: ticketId }, relations: ['user', 'event', 'tier'], });
+    const ticket = await this.ticketsRepository.findOne({ 
+      where: { id: ticketId },
+      relations: ['user', 'event', 'tier'],
+    });
+
     if (!ticket) throw new NotFoundException('Entrada no válida o no encontrada.');
-    if (ticket.tier.validUntil && new Date() > new Date(ticket.tier.validUntil)) { throw new BadRequestException('Esta entrada ha expirado.'); }
-    if (ticket.status === TicketStatus.USED) throw new BadRequestException('Esta entrada ya fue completamente utilizada.');
-    const remainingEntries = ticket.quantity - ticket.redeemedCount;
-    if (quantityToRedeem > remainingEntries) { throw new BadRequestException(`Intento de canje inválido. Quedan ${remainingEntries} ingresos disponibles.`); }
-    ticket.redeemedCount += quantityToRedeem;
+    if (ticket.tier.validUntil && new Date() > new Date(ticket.tier.validUntil)) {
+      throw new BadRequestException('Esta entrada ha expirado.');
+    }
+    
+    if (ticket.status !== TicketStatus.VALID) { 
+        throw new BadRequestException(`Esta entrada ya fue utilizada o invalidada.`);
+    }
+    
+    if (quantityToRedeem > ticket.quantity) {
+      throw new BadRequestException(`Intento de canje inválido. Esta entrada es para un máximo de ${ticket.quantity} personas.`);
+    }
+
     const validationTime = new Date();
+    
+    ticket.redeemedCount = quantityToRedeem;
     ticket.validatedAt = validationTime;
-    if (ticket.redeemedCount >= ticket.quantity) { ticket.status = TicketStatus.USED; } else { ticket.status = TicketStatus.PARTIALLY_USED; }
+    ticket.status = TicketStatus.USED;
+    
+    const unusedQuantity = ticket.quantity - quantityToRedeem;
+
+    if (unusedQuantity > 0) {
+      const tier = ticket.tier;
+      tier.quantity += unusedQuantity;
+      await this.ticketTiersRepository.save(tier);
+    }
+    
     await this.ticketsRepository.save(ticket);
+    
+    const responseMessage = `${quantityToRedeem} Ingreso(s) Autorizado(s). ${unusedQuantity > 0 ? `${unusedQuantity} entrada(s) devuelta(s) al evento.` : ''}`.trim();
+
     return {
-      message: `${quantityToRedeem} Ingreso(s) Autorizado(s)`,
+      message: responseMessage,
       status: ticket.status,
       userName: ticket.user.name,
       userEmail: ticket.user.email,
