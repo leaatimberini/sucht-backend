@@ -1,6 +1,6 @@
 import { ConflictException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Not, Repository } from 'typeorm';
 import { User, UserRole } from './user.entity';
 import { RegisterAuthDto } from 'src/auth/dto/register-auth.dto';
 import { randomBytes } from 'crypto';
@@ -22,17 +22,18 @@ export class UsersService {
     return user;
   }
 
+  // --- LÓGICA DE ACTUALIZACIÓN DE PERFIL CORREGIDA ---
   async updateProfile(userId: string, updateProfileDto: UpdateProfileDto, profileImageUrl?: string): Promise<User> {
     const userToUpdate = await this.findOneById(userId);
 
-    // Actualizamos los campos de texto del DTO, excluyendo la fecha por ahora
-    const { dateOfBirth, ...restOfDto } = updateProfileDto;
-    Object.assign(userToUpdate, restOfDto);
-
-    // CORRECCIÓN: Manejamos la fecha de nacimiento de forma segura
-    // Solo la actualizamos si se proporciona un valor válido
-    if (dateOfBirth) {
-      userToUpdate.dateOfBirth = new Date(dateOfBirth);
+    // Actualizamos los campos de texto del DTO
+    if (updateProfileDto.name) userToUpdate.name = updateProfileDto.name;
+    if (updateProfileDto.instagramHandle) userToUpdate.instagramHandle = updateProfileDto.instagramHandle;
+    if (updateProfileDto.whatsappNumber) userToUpdate.whatsappNumber = updateProfileDto.whatsappNumber;
+    
+    // Verificamos que la fecha sea válida antes de asignarla
+    if (updateProfileDto.dateOfBirth && !isNaN(new Date(updateProfileDto.dateOfBirth).getTime())) {
+      userToUpdate.dateOfBirth = new Date(updateProfileDto.dateOfBirth);
     }
 
     if (profileImageUrl !== undefined) {
