@@ -9,6 +9,7 @@ import { TicketTiersModule } from './ticket-tiers/ticket-tiers.module';
 // --- 1. IMPORTA ESTOS DOS MÓDULOS ---
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
+import { DashboardModule } from './dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { join } from 'path';
     EventsModule,
     TicketsModule,
     TicketTiersModule,
+    DashboardModule,
   ],
   controllers: [],
   providers: [],
