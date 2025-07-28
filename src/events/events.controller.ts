@@ -13,13 +13,6 @@ import { cloudinaryStorage } from 'src/config/cloudinary.config';
 export class EventsController {
   constructor(private readonly eventsService: EventsService) {}
 
-  @Post(':id/request-confirmation')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN)
-  requestConfirmation(@Param('id') id: string) {
-    return this.eventsService.requestConfirmation(id);
-  }
-
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
@@ -28,7 +21,7 @@ export class EventsController {
   }))
   create(
     @Body() createEventDto: CreateEventDto,
-    @UploadedFile() flyerImage?: Express.Multer.File,
+    @UploadedFile() flyerImage?: Express.Multer.File & { path: string },
   ) {
     const flyerImageUrl = flyerImage ? flyerImage.path : undefined;
     return this.eventsService.create(createEventDto, flyerImageUrl);
@@ -43,7 +36,7 @@ export class EventsController {
   update(
     @Param('id') id: string,
     @Body() updateEventDto: UpdateEventDto,
-    @UploadedFile() flyerImage?: Express.Multer.File,
+    @UploadedFile() flyerImage?: Express.Multer.File & { path: string },
   ) {
     const flyerImageUrl = flyerImage ? flyerImage.path : undefined;
     return this.eventsService.update(id, updateEventDto, flyerImageUrl);

@@ -17,21 +17,19 @@ export class UsersController {
   @Patch('profile/me')
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(FileInterceptor('profileImage', {
-    storage: cloudinaryStorage, // <-- USANDO CLOUDINARY
+    storage: cloudinaryStorage,
   }))
   async updateProfile(
     @Request() req, 
     @Body() updateProfileDto: UpdateProfileDto, 
-    @UploadedFile() profileImage?: Express.Multer.File,
+    @UploadedFile() profileImage?: Express.Multer.File & { path: string },
   ) {
     const userId = req.user.id;
-    // Cloudinary nos da la URL completa en la propiedad 'path' del archivo
     const profileImageUrl = profileImage ? profileImage.path : undefined;
     const updatedUser = await this.usersService.updateProfile(userId, updateProfileDto, profileImageUrl);
     const { password, ...result } = updatedUser;
     return result;
   }
-
   // --- El resto de los endpoints no se modifican ---
   @Get('profile/me')
   @UseGuards(JwtAuthGuard)
