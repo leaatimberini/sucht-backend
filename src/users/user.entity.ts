@@ -22,6 +22,10 @@ export class User {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  // --- NUEVO CAMPO: USERNAME ---
+  @Column({ unique: true, nullable: true })
+  username: string;
+
   @Column({ unique: true })
   email: string;
 
@@ -50,7 +54,6 @@ export class User {
   @Column({ nullable: true })
   whatsappNumber: string;
 
-  // --- NUEVO CAMPO ---
   @Column({ type: 'date', nullable: true })
   dateOfBirth: Date;
 

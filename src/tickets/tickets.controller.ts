@@ -37,13 +37,15 @@ export class TicketsController {
   @Post('generate-by-rrpp')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.RRPP)
-  createByRRPP(@Body() createTicketDto: CreateTicketDto) {
-    return this.ticketsService.createByRRPP(createTicketDto);
+  createByRRPP(@Request() req, @Body() createTicketDto: CreateTicketDto) {
+    // Pasamos el usuario RRPP completo para obtener su username
+    return this.ticketsService.createByRRPP(createTicketDto, req.user);
   }
 
   @Post('acquire')
-  acquireForClient(@Request() req, @Body() acquireTicketDto: AcquireTicketDto) {
-    return this.ticketsService.acquireForClient(req.user, acquireTicketDto);
+  acquireForClient(@Request() req, @Body() acquireTicketDto: AcquireTicketDto & { promoterUsername?: string }) {
+    // El 'user' viene del token JWT
+    return this.ticketsService.acquireForClient(req.user, acquireTicketDto, acquireTicketDto.promoterUsername);
   }
 
   @Post(':id/redeem')

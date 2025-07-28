@@ -31,6 +31,10 @@ export class Ticket {
   @ManyToOne(() => TicketTier)
   tier: TicketTier;
 
+  // --- CAMPO REQUERIDO ---
+  @ManyToOne(() => User, { nullable: true, eager: true }) // eager: true para cargar siempre el promotor
+  promoter: User | null;
+
   @Column({
     type: 'enum',
     enum: TicketStatus,
@@ -44,9 +48,8 @@ export class Ticket {
   @Column({ type: 'int', default: 0 })
   redeemedCount: number;
 
-  // --- NUEVO CAMPO ---
   @Column({ type: 'timestamp', nullable: true })
-  confirmedAt: Date | null; // Para saber si el usuario confirmó
+  confirmedAt: Date | null;
 
   @Column({ type: 'timestamp', nullable: true })
   validatedAt: Date | null;

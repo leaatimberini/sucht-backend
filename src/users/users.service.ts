@@ -22,19 +22,47 @@ export class UsersService {
     return user;
   }
 
-  async updateProfile(userId: string, updateProfileDto: UpdateProfileDto, profileImageUrl?: string): Promise<User> {
-    const userToUpdate = await this.findOneById(userId);
+  async findOneByEmail(email: string): Promise<User | null> {
+    return this.usersRepository.findOne({ where: { email } });
+  }
+  
+  // --- NUEVA FUNCIÓN ---
+  async findOneByUsername(username: string): Promise<User | null> {
+    return this.usersRepository.findOne({ where: { username } });
+  }
 
-    // Actualizamos los campos de texto del DTO
-    if (updateProfileDto.name) userToUpdate.name = updateProfileDto.name;
-    if (updateProfileDto.instagramHandle) userToUpdate.instagramHandle = updateProfileDto.instagramHandle;
-    if (updateProfileDto.whatsappNumber) userToUpdate.whatsappNumber = updateProfileDto.whatsappNumber;
-    
-    // CORRECCIÓN: Verificamos que la fecha sea válida antes de asignarla
-    if (updateProfileDto.dateOfBirth && !isNaN(new Date(updateProfileDto.dateOfBirth).getTime())) {
-      userToUpdate.dateOfBirth = new Date(updateProfileDto.dateOfBirth);
+  async create(registerAuthDto: RegisterAuthDto): Promise<User> {
+    const { email, name, password, dateOfBirth } = registerAuthDto;
+    const existingUser = await this.findOneByEmail(email);
+    if (existingUser) {
+      throw new ConflictException('Email already registered');
+    }
+    const newUser = this.usersRepository.create({ email, name, password, dateOfBirth: new Date(dateOfBirth), roles: [UserRole.CLIENT] });
+    try {
+      return await this.usersRepository.save(newUser);
+    } catch (error) {
+      throw new InternalServerErrorException('Something went wrong, user not created');
+    }
+  }
+
+  // --- LÓGICA DE ACTUALIZACIÓN DE PERFIL ACTUALIZADA ---
+  async updateProfile(userId: string, updateProfileDto: UpdateProfileDto, profileImageUrl?: string): Promise<User> {
+    if (updateProfileDto.username) {
+      const existing = await this.findOneByUsername(updateProfileDto.username);
+      if (existing && existing.id !== userId) {
+        throw new ConflictException('El nombre de usuario ya está en uso.');
+      }
     }
 
+    const userToUpdate = await this.findOneById(userId);
+
+    const { dateOfBirth, ...restOfDto } = updateProfileDto;
+    Object.assign(userToUpdate, restOfDto);
+    
+    if (dateOfBirth) {
+      userToUpdate.dateOfBirth = new Date(dateOfBirth);
+    }
+    
     if (profileImageUrl !== undefined) {
       userToUpdate.profileImageUrl = profileImageUrl;
     }
@@ -42,27 +70,27 @@ export class UsersService {
     return this.usersRepository.save(userToUpdate);
   }
 
-  // --- El resto de las funciones no cambian ---
-  async findOneByEmail(email: string): Promise<User | null> { return this.usersRepository.findOne({ where: { email } }); }
-  async create(registerAuthDto: RegisterAuthDto): Promise<User> {
-    const { email, name, password, dateOfBirth } = registerAuthDto;
-    const existingUser = await this.findOneByEmail(email);
-    if (existingUser) { throw new ConflictException('Email already registered'); }
-    const newUser = this.usersRepository.create({ email, name, password, dateOfBirth: new Date(dateOfBirth), roles: [UserRole.CLIENT] });
-    try { return await this.usersRepository.save(newUser); } catch (error) { throw new InternalServerErrorException('Something went wrong, user not created'); }
-  }
   async findOrCreateByEmail(email: string): Promise<User> {
     let user = await this.findOneByEmail(email);
-    if (user) { return user; }
+    if (user) {
+      return user;
+    }
     const tempPassword = randomBytes(16).toString('hex');
     const nameParts = email.split('@');
     const tempName = nameParts[0];
-    const newUser = this.usersRepository.create({ email, name: tempName, password: tempPassword, roles: [UserRole.CLIENT], });
+    const newUser = this.usersRepository.create({
+      email,
+      name: tempName,
+      password: tempPassword,
+      roles: [UserRole.CLIENT],
+    });
     return this.usersRepository.save(newUser);
   }
+
   async inviteOrUpdateStaff(inviteStaffDto: InviteStaffDto): Promise<User> {
     const { email, roles } = inviteStaffDto;
     let user = await this.findOneByEmail(email);
+
     if (user) {
       const newRoles = Array.from(new Set([...user.roles, ...roles]));
       user.roles = newRoles;
@@ -71,17 +99,38 @@ export class UsersService {
       const nameParts = email.split('@');
       const tempName = nameParts[0];
       const invitationToken = randomBytes(32).toString('hex');
-      const newUser = this.usersRepository.create({ email, name: tempName, roles, invitationToken, password: undefined });
+      const newUser = this.usersRepository.create({
+        email,
+        name: tempName,
+        roles,
+        invitationToken,
+        password: undefined,
+      });
       console.log(`INVITATION TOKEN for ${email}: ${invitationToken}`);
       return this.usersRepository.save(newUser);
     }
   }
-  async findAll(): Promise<User[]> { return this.usersRepository.find({ order: { createdAt: 'DESC' } }); }
-  async findStaff(): Promise<User[]> { const allUsers = await this.findAll(); return allUsers.filter(user => !(user.roles.length === 1 && user.roles[0] === UserRole.CLIENT)); }
-  async findClients(): Promise<User[]> { const allUsers = await this.findAll(); return allUsers.filter(user => user.roles.length === 1 && user.roles[0] === UserRole.CLIENT); }
+
+  async findAll(): Promise<User[]> {
+    return this.usersRepository.find({ order: { createdAt: 'DESC' } });
+  }
+
+  async findStaff(): Promise<User[]> {
+    const allUsers = await this.findAll();
+    return allUsers.filter(user => !(user.roles.length === 1 && user.roles[0] === UserRole.CLIENT));
+  }
+
+  async findClients(): Promise<User[]> {
+    const allUsers = await this.findAll();
+    return allUsers.filter(user => user.roles.length === 1 && user.roles[0] === UserRole.CLIENT);
+  }
+  
   async updateUserRoles(id: string, roles: UserRole[]): Promise<User> {
     const user = await this.findOneById(id);
-    const finalRoles = roles.includes(UserRole.ADMIN) ? roles : Array.from(new Set([...roles, UserRole.CLIENT]));
+    const finalRoles = roles.includes(UserRole.ADMIN) 
+        ? roles 
+        : Array.from(new Set([...roles, UserRole.CLIENT]));
+
     user.roles = finalRoles;
     return this.usersRepository.save(user);
   }

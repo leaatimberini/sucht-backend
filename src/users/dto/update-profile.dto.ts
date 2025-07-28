@@ -1,10 +1,19 @@
-import { IsOptional, IsString, Length, IsDateString } from 'class-validator';
+import { IsOptional, IsString, Length, IsDateString, Matches } from 'class-validator';
 
 export class UpdateProfileDto {
   @IsOptional()
   @IsString()
   @Length(3, 50)
   name?: string;
+
+  // --- NUEVO CAMPO CON VALIDACIÓN ---
+  @IsOptional()
+  @IsString()
+  @Length(3, 20)
+  @Matches(/^[a-zA-Z0-9_.]+$/, {
+    message: 'El nombre de usuario solo puede contener letras, números, guiones bajos y puntos.',
+  })
+  username?: string;
 
   @IsOptional()
   @IsString()
@@ -14,7 +23,6 @@ export class UpdateProfileDto {
   @IsString()
   whatsappNumber?: string;
 
-  // --- NUEVO CAMPO ---
   @IsOptional()
   @IsDateString()
   dateOfBirth?: string;
