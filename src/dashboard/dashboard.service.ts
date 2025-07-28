@@ -2,8 +2,16 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Event } from 'src/events/event.entity';
 import { Ticket } from 'src/tickets/ticket.entity';
-import { User } from 'src/users/user.entity';
+import { User, UserRole } from 'src/users/user.entity';
 import { Repository } from 'typeorm';
+
+// CORRECCIÓN: Exportamos la interfaz para hacerla pública
+export interface RRPPPerformanceData {
+  rrppId: string;
+  rrppName: string;
+  ticketsGenerated: number;
+  peopleAdmitted: number;
+}
 
 @Injectable()
 export class DashboardService {
@@ -12,16 +20,67 @@ export class DashboardService {
     private ticketsRepository: Repository<Ticket>,
     @InjectRepository(Event)
     private eventsRepository: Repository<Event>,
+    @InjectRepository(User)
+    private usersRepository: Repository<User>,
   ) {}
 
+  async getRRPPPerformance(): Promise<RRPPPerformanceData[]> {
+    const rrpps = await this.usersRepository.createQueryBuilder("user")
+      .where("user.roles @> ARRAY[:role]", { role: UserRole.RRPP })
+      .getMany();
+
+    const performanceData: RRPPPerformanceData[] = [];
+
+    for (const rrpp of rrpps) {
+      const stats = await this.ticketsRepository.createQueryBuilder("ticket")
+        .select("SUM(ticket.quantity)", "ticketsGenerated")
+        .addSelect("SUM(ticket.redeemedCount)", "peopleAdmitted")
+        .where("ticket.promoterId = :promoterId", { promoterId: rrpp.id })
+        .getRawOne();
+      
+      performanceData.push({
+        rrppId: rrpp.id,
+        rrppName: rrpp.name,
+        ticketsGenerated: parseInt(stats.ticketsGenerated, 10) || 0,
+        peopleAdmitted: parseInt(stats.peopleAdmitted, 10) || 0,
+      });
+    }
+    return performanceData;
+  }
+
+  async getMyRRPPStats(promoterId: string) {
+    const stats = await this.ticketsRepository.createQueryBuilder("ticket")
+      .select("SUM(ticket.quantity)", "ticketsGenerated")
+      .addSelect("SUM(ticket.redeemedCount)", "peopleAdmitted")
+      .where("ticket.promoterId = :promoterId", { promoterId })
+      .getRawOne();
+    
+    const guestList = await this.ticketsRepository.find({
+      where: { promoter: { id: promoterId } },
+      relations: ['user', 'event', 'tier'],
+      select: {
+        id: true,
+        status: true,
+        redeemedCount: true,
+        user: { name: true, email: true },
+        event: { title: true },
+        tier: { name: true },
+      }
+    });
+
+    return {
+      ticketsGenerated: parseInt(stats.ticketsGenerated, 10) || 0,
+      peopleAdmitted: parseInt(stats.peopleAdmitted, 10) || 0,
+      guestList,
+    };
+  }
+
   async getSummaryMetrics() {
-    // Contar todas las entradas generadas (suma de las cantidades de cada ticket)
     const totalTicketsGenerated = await this.ticketsRepository
       .createQueryBuilder('ticket')
       .select('SUM(ticket.quantity)', 'total')
       .getRawOne();
 
-    // Contar todas las personas que realmente ingresaron (suma de los canjeados)
     const totalPeopleAdmitted = await this.ticketsRepository
       .createQueryBuilder('ticket')
       .select('SUM(ticket.redeemedCount)', 'total')
@@ -37,12 +96,10 @@ export class DashboardService {
   }
 
   async getEventPerformance() {
-    // Obtenemos todos los eventos con sus tickets relacionados
     const events = await this.eventsRepository.find({
       relations: ['tickets'],
     });
 
-    // Calculamos las estadísticas para cada evento
     const eventPerformance = events.map(event => {
       const ticketsGenerated = event.tickets.reduce((sum, ticket) => sum + ticket.quantity, 0);
       const peopleAdmitted = event.tickets.reduce((sum, ticket) => sum + ticket.redeemedCount, 0);
