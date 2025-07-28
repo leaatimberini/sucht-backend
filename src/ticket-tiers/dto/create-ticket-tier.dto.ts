@@ -15,7 +15,6 @@ export class CreateTicketTierDto {
   @Min(1)
   quantity: number;
 
-  // --- NUEVO CAMPO ---
   @IsOptional()
   @IsDateString()
   validUntil?: Date;

@@ -26,8 +26,14 @@ export class TicketTiersService {
     return this.ticketTiersRepository.save(ticketTier);
   }
 
+  async findByEvent(eventId: string): Promise<TicketTier[]> {
+    return this.ticketTiersRepository.find({
+      where: { event: { id: eventId } },
+      order: { createdAt: 'ASC' },
+    });
+  }
+
   async update(tierId: string, updateTicketTierDto: UpdateTicketTierDto): Promise<TicketTier> {
-    // La función 'preload' busca el tier por ID y lo fusiona con los nuevos datos.
     const tier = await this.ticketTiersRepository.preload({
       id: tierId,
       ...updateTicketTierDto,
@@ -38,10 +44,10 @@ export class TicketTiersService {
     return this.ticketTiersRepository.save(tier);
   }
 
-  async findByEvent(eventId: string): Promise<TicketTier[]> {
-    return this.ticketTiersRepository.find({
-      where: { event: { id: eventId } },
-      order: { createdAt: 'ASC' },
-    });
+  async remove(tierId: string): Promise<void> {
+    const result = await this.ticketTiersRepository.delete(tierId);
+    if (result.affected === 0) {
+      throw new NotFoundException(`Ticket Tier with ID "${tierId}" not found`);
+    }
   }
 }
