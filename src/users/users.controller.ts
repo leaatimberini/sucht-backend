@@ -73,4 +73,15 @@ export class UsersController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   async updateUserRoles(@Param('id') id: string, @Body() updateUserRoleDto: UpdateUserRoleDto,) { const user = await this.usersService.updateUserRoles(id, updateUserRoleDto.roles); const { password, ...result } = user; return result; }
+  @Get('by-username/:username')
+  async findByUsername(@Param('username') username: string) {
+    const user = await this.usersService.findOneByUsername(username);
+    if (!user) {
+      throw new NotFoundException(`User with username "${username}" not found`);
+    }
+    const { password, ...result } = user;
+    return result;
+  }
+
 }
+
