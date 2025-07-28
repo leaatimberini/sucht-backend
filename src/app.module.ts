@@ -6,26 +6,22 @@ import { AuthModule } from './auth/auth.module';
 import { EventsModule } from './events/events.module';
 import { TicketsModule } from './tickets/tickets.module';
 import { TicketTiersModule } from './ticket-tiers/ticket-tiers.module';
-// --- 1. IMPORTA ESTOS DOS MÓDULOS ---
-import { ServeStaticModule } from '@nestjs/serve-static';
-import { join } from 'path';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { CloudinaryModule } from './cloudinary/cloudinary.module';
+import { ScheduleModule } from '@nestjs/schedule'; // 1. IMPORTAR SCHEDULE
 
 @Module({
   imports: [
-    // 1. Módulo de Configuración
+    // Módulo de Tareas Programadas
+    ScheduleModule.forRoot(), // <-- 2. AÑADIR
+
+    // Módulo de Configuración
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
     }),
     
-    // --- 2. AGREGA ESTE MÓDULO AQUÍ ---
-    ServeStaticModule.forRoot({
-      rootPath: join(__dirname, '..', 'uploads'), // La carpeta donde se guardan las imágenes
-      serveRoot: '/uploads', // La ruta URL pública
-    }),
-
-    // 2. Módulo de TypeORM
+    // Módulo de TypeORM (Base de Datos)
     TypeOrmModule.forRoot({
       type: 'postgres',
       host: process.env.DB_HOST,
@@ -37,12 +33,14 @@ import { DashboardModule } from './dashboard/dashboard.module';
       synchronize: true,
     }),
     
+    // Módulos de la Aplicación
     UsersModule,
     AuthModule,
     EventsModule,
     TicketsModule,
     TicketTiersModule,
     DashboardModule,
+    CloudinaryModule,
   ],
   controllers: [],
   providers: [],
