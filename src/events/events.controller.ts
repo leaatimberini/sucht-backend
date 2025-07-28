@@ -49,7 +49,6 @@ export class EventsController {
     return this.eventsService.update(id, updateEventDto, flyerImageUrl);
   }
   
-  // --- ENDPOINT AÑADIDO ---
   @Post(':id/request-confirmation')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
@@ -57,7 +56,6 @@ export class EventsController {
     return this.eventsService.requestConfirmation(id);
   }
 
-  // --- El resto de los endpoints no se modifican ---
   @Get()
   findAll() { return this.eventsService.findAll(); }
 

@@ -26,8 +26,6 @@ export class CreateEventDto {
   @IsNotEmpty()
   endDate: string;
 
-  // Le decimos al validador que este campo puede existir, pero que no se preocupe por él.
-  // El FileInterceptor se encargará.
-  @IsOptional()
-  flyerImage?: any;
+  // El campo para la imagen se maneja por separado y no necesita estar en el DTO
+  // cuando se usa FileInterceptor de la manera en que lo hemos configurado.
 }
