@@ -12,46 +12,49 @@ export class EventsService {
     private eventsRepository: Repository<Event>,
   ) {}
 
-  // --- NUEVA FUNCIÓN AÑADIDA ---
-  async requestConfirmation(eventId: string): Promise<Event> {
-    const event = await this.findOne(eventId);
-    event.confirmationSentAt = new Date();
-    return this.eventsRepository.save(event);
-  }
-
+  // --- LÓGICA DE CREACIÓN CORREGIDA ---
   async create(createEventDto: CreateEventDto, flyerImageUrl?: string): Promise<Event> {
-    const event = this.eventsRepository.create({
-      ...createEventDto,
+    // Corregimos el DTO para que no intente acceder a 'validUntil'
+    const { startDate, endDate, ...restOfDto } = createEventDto;
+
+    const eventData: Partial<Event> = {
+      ...restOfDto,
       flyerImageUrl: flyerImageUrl,
-    });
+      startDate: new Date(startDate),
+      endDate: new Date(endDate),
+    };
+
+    const event = this.eventsRepository.create(eventData);
     return this.eventsRepository.save(event);
   }
 
+  async update(id: string, updateEventDto: UpdateEventDto, flyerImageUrl?: string): Promise<Event> {
+    const event = await this.findOne(id);
+    const { startDate, endDate, ...restOfDto } = updateEventDto;
+    
+    const updatePayload: Partial<Event> = { ...restOfDto };
+
+    if (startDate) updatePayload.startDate = new Date(startDate);
+    if (endDate) updatePayload.endDate = new Date(endDate);
+
+    if (flyerImageUrl !== undefined) {
+      updatePayload.flyerImageUrl = flyerImageUrl;
+    }
+    
+    this.eventsRepository.merge(event, updatePayload);
+    return this.eventsRepository.save(event);
+  }
+  
   async findAll(): Promise<Event[]> {
     return this.eventsRepository.find({ order: { startDate: 'DESC' } });
   }
 
   async findOne(id: string): Promise<Event> {
-    const event = await this.eventsRepository.findOne({ 
-      where: { id }, 
-      relations: ['ticketTiers'] 
-    });
+    const event = await this.eventsRepository.findOne({ where: { id }, relations: ['ticketTiers'] });
     if (!event) {
       throw new NotFoundException(`Event with ID "${id}" not found`);
     }
     return event;
-  }
-
-  async update(id: string, updateEventDto: UpdateEventDto, flyerImageUrl?: string): Promise<Event> {
-    const event = await this.findOne(id);
-
-    this.eventsRepository.merge(event, updateEventDto);
-
-    if (flyerImageUrl !== undefined) {
-      event.flyerImageUrl = flyerImageUrl;
-    }
-    
-    return this.eventsRepository.save(event);
   }
 
   async remove(id: string): Promise<void> {
@@ -59,5 +62,11 @@ export class EventsService {
     if (result.affected === 0) {
       throw new NotFoundException(`Event with ID "${id}" not found`);
     }
+  }
+
+  async requestConfirmation(eventId: string): Promise<Event> {
+    const event = await this.findOne(eventId);
+    event.confirmationSentAt = new Date();
+    return this.eventsRepository.save(event);
   }
 }
