@@ -12,6 +12,7 @@ import { CloudinaryModule } from './cloudinary/cloudinary.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { ConfigurationModule } from './configuration/configuration.module';
 import { PaymentsModule } from './payments/payments.module';
+import { MailModule } from './mail/mail.module';
 
 @Module({
   imports: [
@@ -47,6 +48,7 @@ import { PaymentsModule } from './payments/payments.module';
     NotificationsModule,
     ConfigurationModule,
     PaymentsModule,
+    MailModule,
   ],
   controllers: [],
   providers: [],

@@ -9,6 +9,7 @@ import { TicketTier } from 'src/ticket-tiers/ticket-tier.entity';
 import { AcquireTicketDto } from './dto/acquire-ticket.dto';
 import { User, UserRole } from 'src/users/user.entity';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { MailService } from 'src/mail/mail.service';
 
 @Injectable()
 export class TicketsService {
@@ -19,6 +20,7 @@ export class TicketsService {
     private ticketTiersRepository: Repository<TicketTier>,
     private usersService: UsersService,
     private eventsService: EventsService,
+    private mailService: MailService,
   ) {}
 
   private async acquire(
@@ -52,10 +54,36 @@ export class TicketsService {
   async createByRRPP(createTicketDto: CreateTicketDto, promoter: User): Promise<Ticket> {
     const { userEmail, eventId, ticketTierId } = createTicketDto;
     const user = await this.usersService.findOrCreateByEmail(userEmail);
+    const ticket = await this.acquire(user, { eventId, ticketTierId, quantity: 1 }, promoter.username);
+  
+  // Enviar correo
+  await this.mailService.sendMail(
+    user.email,
+    '🎟️ Entrada creada por RRPP',
+    `
+    <h2>Hola ${user.name || ''} 👋</h2>
+    <p>El RRPP <strong>@${promoter.username}</strong> te generó una entrada para <strong>${ticket.event.title}</strong>.</p>
+    <p>Tipo: ${ticket.tier.name} — Cantidad: ${ticket.quantity}</p>
+    <p>¡Te esperamos! 🎉</p>
+    `
+  );  
     return this.acquire(user, { eventId, ticketTierId, quantity: 1 }, promoter.username);
   }
 
   async acquireForClient(user: User, acquireTicketDto: AcquireTicketDto, promoterUsername?: string): Promise<Ticket> {
+      const ticket = await this.acquire(user, acquireTicketDto, promoterUsername);
+
+  // Enviar correo
+  await this.mailService.sendMail(
+    user.email,
+    '🎟️ Entrada adquirida con éxito',
+    `
+    <h2>Hola ${user.name || ''} 👋</h2>
+    <p>Tu entrada para <strong>${ticket.event.title}</strong> fue registrada correctamente.</p>
+    <p>Tipo: ${ticket.tier.name} — Cantidad: ${ticket.quantity}</p>
+    <p>Nos vemos el ${new Date(ticket.event.startDate).toLocaleDateString('es-AR')} 🎉</p>
+    `
+  );
     return this.acquire(user, acquireTicketDto, promoterUsername);
   }
   

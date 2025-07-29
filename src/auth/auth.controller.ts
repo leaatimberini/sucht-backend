@@ -1,10 +1,10 @@
-import { Controller, Post, Body, UseGuards, Request, Get } from '@nestjs/common'; // <-- AÑADIR Get
+import { Controller, Post, Body, UseGuards, Request, Get } from '@nestjs/common';
 import { UsersService } from 'src/users/users.service';
 import { RegisterAuthDto } from './dto/register-auth.dto';
 import { AuthGuard } from '@nestjs/passport';
 import { AuthService } from './auth.service';
 import { User } from 'src/users/user.entity';
-import { JwtAuthGuard } from './guards/jwt-auth.guard'; // <-- IMPORTAR EL GUARDIA
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
 @Controller('auth')
 export class AuthController {
@@ -18,6 +18,10 @@ export class AuthController {
     const user = await this.usersService.create(registerAuthDto);
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { password, ...result } = user;
+
+    // Enviar correo de bienvenida
+    await this.authService.sendWelcomeEmail(user);
+
     return result;
   }
 
@@ -28,9 +32,22 @@ export class AuthController {
   }
 
   // NUEVA RUTA PROTEGIDA
-  @UseGuards(JwtAuthGuard) // <-- Este es el portero. Solo deja pasar si el token es válido.
+  @UseGuards(JwtAuthGuard)
   @Get('profile')
   getProfile(@Request() req) {
-    return req.user; // req.user es el payload que retornamos en JwtStrategy.validate
+    return req.user;
   }
+
+  // ✅ NUEVO ENDPOINT TEMPORAL PARA TEST DE MAIL
+  @Post('test-mail')
+async sendTestMail(@Body() body: { email: string }) {
+  const fakeUser: Partial<User> = {
+    email: body.email,
+    name: 'Tester',
+  };
+
+  await this.authService.sendWelcomeEmail(fakeUser as User);
+
+  return { message: `Correo enviado a ${body.email}` };
+}
 }
