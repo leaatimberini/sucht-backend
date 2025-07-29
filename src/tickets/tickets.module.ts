@@ -5,15 +5,16 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Ticket } from './ticket.entity';
 import { UsersModule } from 'src/users/users.module';
 import { EventsModule } from 'src/events/events.module';
-import { TicketTier } from 'src/ticket-tiers/ticket-tier.entity'; // <-- IMPORTAR
+import { TicketTier } from 'src/ticket-tiers/ticket-tier.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Ticket, TicketTier]), // <-- AÑADIR TicketTier
+    TypeOrmModule.forFeature([Ticket, TicketTier]),
     UsersModule,
     EventsModule,
   ],
   controllers: [TicketsController],
   providers: [TicketsService],
+  exports: [TicketsService], // <-- 👈 ¡ESTO ES LO QUE FALTABA!
 })
 export class TicketsModule {}
