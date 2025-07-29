@@ -7,16 +7,18 @@ import { EventsModule } from './events/events.module';
 import { TicketsModule } from './tickets/tickets.module';
 import { TicketTiersModule } from './ticket-tiers/ticket-tiers.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { ScheduleModule } from '@nestjs/schedule';
 import { CloudinaryModule } from './cloudinary/cloudinary.module';
-import { ScheduleModule } from '@nestjs/schedule'; // 1. IMPORTAR SCHEDULE
 import { NotificationsModule } from './notifications/notifications.module';
+import { ConfigurationModule } from './configuration/configuration.module';
+import { PaymentsModule } from './payments/payments.module';
 
 @Module({
   imports: [
-    // Módulo de Tareas Programadas
-    ScheduleModule.forRoot(), // <-- 2. AÑADIR
+    // Módulo de Tareas Programadas (para cancelación de entradas)
+    ScheduleModule.forRoot(),
 
-    // Módulo de Configuración
+    // Módulo de Configuración (para leer .env)
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
@@ -43,6 +45,8 @@ import { NotificationsModule } from './notifications/notifications.module';
     DashboardModule,
     CloudinaryModule,
     NotificationsModule,
+    ConfigurationModule,
+    PaymentsModule,
   ],
   controllers: [],
   providers: [],

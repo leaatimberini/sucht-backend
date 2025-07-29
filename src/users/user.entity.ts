@@ -11,6 +11,7 @@ import * as bcrypt from 'bcrypt';
 import { Ticket } from 'src/tickets/ticket.entity';
 
 export enum UserRole {
+  OWNER = 'owner', // <-- NUEVO ROL
   ADMIN = 'admin',
   RRPP = 'rrpp',
   VERIFIER = 'verifier',
@@ -22,7 +23,6 @@ export class User {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  // --- NUEVO CAMPO: USERNAME ---
   @Column({ unique: true, nullable: true })
   username: string;
 
@@ -56,6 +56,14 @@ export class User {
 
   @Column({ type: 'date', nullable: true })
   dateOfBirth: Date;
+
+  // --- NUEVOS CAMPOS PARA PAGOS ---
+  @Column({ nullable: true, select: false }) // 'select: false' evita que se devuelva en las consultas por defecto
+  mercadoPagoAccessToken: string;
+
+  @Column({ type: 'decimal', precision: 5, scale: 2, nullable: true })
+  rrppCommissionRate: number; // Porcentaje de comisión para este RRPP (ej. 10.5 para 10.5%)
+
 
   @OneToMany(() => Ticket, (ticket) => ticket.user)
   tickets: Ticket[];

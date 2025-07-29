@@ -33,6 +33,15 @@ export class TicketTiersService {
     });
   }
 
+  // --- FUNCIÓN AÑADIDA ---
+  async findOne(tierId: string): Promise<TicketTier> {
+    const tier = await this.ticketTiersRepository.findOneBy({ id: tierId });
+    if (!tier) {
+      throw new NotFoundException(`Ticket Tier with ID "${tierId}" not found`);
+    }
+    return tier;
+  }
+
   async update(tierId: string, updateTicketTierDto: UpdateTicketTierDto): Promise<TicketTier> {
     const tier = await this.ticketTiersRepository.preload({
       id: tierId,
