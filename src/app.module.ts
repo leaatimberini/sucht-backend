@@ -16,16 +16,11 @@ import { MailModule } from './mail/mail.module';
 
 @Module({
   imports: [
-    // Módulo de Tareas Programadas (para cancelación de entradas)
     ScheduleModule.forRoot(),
-
-    // Módulo de Configuración (para leer .env)
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
     }),
-    
-    // Módulo de TypeORM (Base de Datos)
     TypeOrmModule.forRoot({
       type: 'postgres',
       host: process.env.DB_HOST,

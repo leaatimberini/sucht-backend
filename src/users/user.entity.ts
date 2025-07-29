@@ -11,7 +11,7 @@ import * as bcrypt from 'bcrypt';
 import { Ticket } from 'src/tickets/ticket.entity';
 
 export enum UserRole {
-  OWNER = 'owner', // <-- NUEVO ROL
+  OWNER = 'owner', // <-- NUEVO ROL AÑADIDO
   ADMIN = 'admin',
   RRPP = 'rrpp',
   VERIFIER = 'verifier',
@@ -63,7 +63,6 @@ export class User {
 
   @Column({ type: 'decimal', precision: 5, scale: 2, nullable: true })
   rrppCommissionRate: number; // Porcentaje de comisión para este RRPP (ej. 10.5 para 10.5%)
-
 
   @OneToMany(() => Ticket, (ticket) => ticket.user)
   tickets: Ticket[];
