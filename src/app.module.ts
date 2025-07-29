@@ -9,6 +9,7 @@ import { TicketTiersModule } from './ticket-tiers/ticket-tiers.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { CloudinaryModule } from './cloudinary/cloudinary.module';
 import { ScheduleModule } from '@nestjs/schedule'; // 1. IMPORTAR SCHEDULE
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { ScheduleModule } from '@nestjs/schedule'; // 1. IMPORTAR SCHEDULE
     TicketTiersModule,
     DashboardModule,
     CloudinaryModule,
+    NotificationsModule,
   ],
   controllers: [],
   providers: [],
