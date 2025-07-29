@@ -55,38 +55,40 @@ export class TicketsService {
     const { userEmail, eventId, ticketTierId } = createTicketDto;
     const user = await this.usersService.findOrCreateByEmail(userEmail);
     const ticket = await this.acquire(user, { eventId, ticketTierId, quantity: 1 }, promoter.username);
-  
-  // Enviar correo
-  await this.mailService.sendMail(
-    user.email,
-    '🎟️ Entrada creada por RRPP',
-    `
-    <h2>Hola ${user.name || ''} 👋</h2>
-    <p>El RRPP <strong>@${promoter.username}</strong> te generó una entrada para <strong>${ticket.event.title}</strong>.</p>
-    <p>Tipo: ${ticket.tier.name} — Cantidad: ${ticket.quantity}</p>
-    <p>¡Te esperamos! 🎉</p>
-    `
-  );  
-    return this.acquire(user, { eventId, ticketTierId, quantity: 1 }, promoter.username);
+
+    // Enviar correo
+    await this.mailService.sendMail(
+      user.email,
+      '🎟️ Entrada creada por RRPP',
+      `
+      <h2>Hola ${user.name || ''} 👋</h2>
+      <p>El RRPP <strong>@${promoter.username}</strong> te generó una entrada para <strong>${ticket.event.title}</strong>.</p>
+      <p>Tipo: ${ticket.tier.name} — Cantidad: ${ticket.quantity}</p>
+      <p>¡Te esperamos! 🎉</p>
+      `
+    );
+
+    return ticket;
   }
 
   async acquireForClient(user: User, acquireTicketDto: AcquireTicketDto, promoterUsername?: string): Promise<Ticket> {
-      const ticket = await this.acquire(user, acquireTicketDto, promoterUsername);
+    const ticket = await this.acquire(user, acquireTicketDto, promoterUsername);
 
-  // Enviar correo
-  await this.mailService.sendMail(
-    user.email,
-    '🎟️ Entrada adquirida con éxito',
-    `
-    <h2>Hola ${user.name || ''} 👋</h2>
-    <p>Tu entrada para <strong>${ticket.event.title}</strong> fue registrada correctamente.</p>
-    <p>Tipo: ${ticket.tier.name} — Cantidad: ${ticket.quantity}</p>
-    <p>Nos vemos el ${new Date(ticket.event.startDate).toLocaleDateString('es-AR')} 🎉</p>
-    `
-  );
-    return this.acquire(user, acquireTicketDto, promoterUsername);
+    // Enviar correo
+    await this.mailService.sendMail(
+      user.email,
+      '🎟️ Entrada adquirida con éxito',
+      `
+      <h2>Hola ${user.name || ''} 👋</h2>
+      <p>Tu entrada para <strong>${ticket.event.title}</strong> fue registrada correctamente.</p>
+      <p>Tipo: ${ticket.tier.name} — Cantidad: ${ticket.quantity}</p>
+      <p>Nos vemos el ${new Date(ticket.event.startDate).toLocaleDateString('es-AR')} 🎉</p>
+      `
+    );
+
+    return ticket;
   }
-  
+
   async findTicketsByUser(userId: string): Promise<Ticket[]> {
     return this.ticketsRepository.find({
       where: { user: { id: userId } },
@@ -116,26 +118,52 @@ export class TicketsService {
   @Cron(CronExpression.EVERY_MINUTE)
   async handleUnconfirmedTickets() {
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-    
+
     const unconfirmedTickets = await this.ticketsRepository.find({
       where: {
         confirmedAt: IsNull(),
         status: TicketStatus.VALID,
         event: {
           confirmationSentAt: Not(IsNull()) && LessThan(oneHourAgo),
-        }
+        },
       },
-      relations: ['tier', 'event']
+      relations: ['tier', 'event', 'user'],
     });
 
     for (const ticket of unconfirmedTickets) {
-      const tier = ticket.tier;
-      if (tier) {
-        tier.quantity += ticket.quantity;
-        await this.ticketTiersRepository.save(tier);
+      // 📩 Enviar recordatorio solo si aún no fue enviado
+      if (!ticket.reminderSentAt && ticket.user.email) {
+        await this.mailService.sendMail(
+          ticket.user.email,
+          `⏰ Recordatorio - Confirmá tu entrada para ${ticket.event.title}`,
+          `
+          <h2>Hola ${ticket.user.name || ''} 👋</h2>
+          <p>🚨 Aún no confirmaste tu asistencia al evento <strong>${ticket.event.title}</strong>.</p>
+          <p>Por favor, ingresá a <a href="https://sucht.com.ar">sucht.com.ar</a> para confirmar tu entrada.</p>
+          <p>Tenés tiempo hasta 1 hora después del aviso inicial.</p>
+          `
+        );
+
+        ticket.reminderSentAt = new Date();
+        await this.ticketsRepository.save(ticket);
+
+        console.log(`📧 Recordatorio enviado para ticket ${ticket.id}`);
       }
-      await this.ticketsRepository.remove(ticket);
-      console.log(`Ticket ${ticket.id} para el evento ${ticket.event.title} cancelado por falta de confirmación.`);
+
+      if (ticket.event.confirmationSentAt) {
+        const confirmationDeadline = new Date(ticket.event.confirmationSentAt);
+        confirmationDeadline.setHours(confirmationDeadline.getHours() + 1);
+
+        if (new Date() > confirmationDeadline) {
+          const tier = ticket.tier;
+          if (tier) {
+            tier.quantity += ticket.quantity;
+            await this.ticketTiersRepository.save(tier);
+          }
+          await this.ticketsRepository.remove(ticket);
+          console.log(`❌ Ticket ${ticket.id} cancelado por falta de confirmación.`);
+        }
+      }
     }
   }
 
@@ -149,34 +177,28 @@ export class TicketsService {
     if (ticket.tier.validUntil && new Date() > new Date(ticket.tier.validUntil)) {
       throw new BadRequestException('Esta entrada ha expirado.');
     }
-    
-    // CORRECCIÓN: Se permite el canje en estado VALID o PARTIALLY_USED
-    if (ticket.status !== TicketStatus.VALID && ticket.status !== TicketStatus.PARTIALLY_USED) { 
-        throw new BadRequestException(`Esta entrada ya fue utilizada completamente o ha sido invalidada.`);
+
+    if (ticket.status !== TicketStatus.VALID && ticket.status !== TicketStatus.PARTIALLY_USED) {
+      throw new BadRequestException(`Esta entrada ya fue utilizada completamente o ha sido invalidada.`);
     }
-    
+
     const remainingEntries = ticket.quantity - ticket.redeemedCount;
     if (quantityToRedeem > remainingEntries) {
       throw new BadRequestException(`Intento de canje inválido. Quedan ${remainingEntries} ingresos disponibles.`);
     }
 
     const validationTime = new Date();
-    
-    // CORRECCIÓN: Sumamos la cantidad a canjear a los ya canjeados
     ticket.redeemedCount += quantityToRedeem;
     ticket.validatedAt = validationTime;
-    
-    // CORRECCIÓN: Se actualiza el estado basado en si se canjearon todas las entradas
+
     if (ticket.redeemedCount >= ticket.quantity) {
       ticket.status = TicketStatus.USED;
     } else {
       ticket.status = TicketStatus.PARTIALLY_USED;
     }
-    
-    // La devolución de entradas no utilizadas ya no se hace aquí, sino que el ticket se mantiene parcialmente usado.
-    
+
     await this.ticketsRepository.save(ticket);
-    
+
     const responseMessage = `${quantityToRedeem} Ingreso(s) Autorizado(s).`;
 
     return {

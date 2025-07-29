@@ -59,4 +59,7 @@ export class Ticket {
 
   @UpdateDateColumn({ type: 'timestamp' })
   updatedAt: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+reminderSentAt?: Date;
 }
