@@ -29,13 +29,7 @@ export class UsersService {
   async findOneByUsername(username: string): Promise<User | null> {
     return this.usersRepository.findOne({ where: { username } });
   }
-  
-  async findOwner(): Promise<User | null> {
-    return this.usersRepository.createQueryBuilder("user")
-      .where(":role = ANY(user.roles)", { role: UserRole.OWNER })
-      .getOne();
-  }
-  
+
   async create(registerAuthDto: RegisterAuthDto): Promise<User> {
     const { email, name, password, dateOfBirth } = registerAuthDto;
     const existingUser = await this.findOneByEmail(email);
@@ -91,21 +85,8 @@ export class UsersService {
   }
 
   async findAll(): Promise<User[]> { return this.usersRepository.find({ order: { createdAt: 'DESC' } }); }
-  
-  // --- CORRECCIÓN CON QUERYBUILDER ---
-  async findStaff(): Promise<User[]> {
-    return this.usersRepository.createQueryBuilder("user")
-      .where("user.roles <> ARRAY[:...clientRole]", { clientRole: [UserRole.CLIENT] })
-      .orderBy("user.createdAt", "DESC")
-      .getMany();
-  }
-
-  async findClients(): Promise<User[]> {
-    return this.usersRepository.createQueryBuilder("user")
-      .where("user.roles = ARRAY[:...clientRole]", { clientRole: [UserRole.CLIENT] })
-      .orderBy("user.createdAt", "DESC")
-      .getMany();
-  }
+  async findStaff(): Promise<User[]> { const allUsers = await this.findAll(); return allUsers.filter(user => !(user.roles.length === 1 && user.roles[0] === UserRole.CLIENT)); }
+  async findClients(): Promise<User[]> { const allUsers = await this.findAll(); return allUsers.filter(user => user.roles.length === 1 && user.roles[0] === UserRole.CLIENT); }
   
   async updateUserRoles(id: string, roles: UserRole[]): Promise<User> {
     const user = await this.findOneById(id);
@@ -114,9 +95,10 @@ export class UsersService {
     return this.usersRepository.save(user);
   }
   
+  // --- FUNCIONES AÑADIDAS PARA PAGOS ---
   async getAdminConfig(): Promise<{ serviceFee: number; accessToken: string | null }> {
     const serviceFeeStr = await this.configService.get('adminServiceFee');
-    const adminUser = await this.usersRepository.createQueryBuilder("user").where(":role = ANY(user.roles)", { role: UserRole.ADMIN }).getOne();
+    const adminUser = await this.findAdmin();
     return {
       serviceFee: serviceFeeStr ? parseFloat(serviceFeeStr) : 0,
       accessToken: adminUser?.mercadoPagoAccessToken || null,
@@ -127,5 +109,19 @@ export class UsersService {
     return this.usersRepository.createQueryBuilder("user")
       .where(":role = ANY(user.roles)", { role: UserRole.ADMIN })
       .getOne();
+  }
+  
+  async findOwner(): Promise<User | null> {
+    return this.usersRepository.createQueryBuilder("user")
+      .where(":role = ANY(user.roles)", { role: UserRole.OWNER })
+      .getOne();
+  }
+  
+  async findUpcomingBirthdays(days: number): Promise<User[]> {
+    return this.usersRepository.createQueryBuilder('user')
+      .where("to_char(\"dateOfBirth\", 'MM-DD') BETWEEN to_char(current_date, 'MM-DD') AND to_char(current_date + interval '15 day', 'MM-DD')")
+      .andWhere(":role = ANY(user.roles)", { role: UserRole.CLIENT })
+      .orderBy("to_char(\"dateOfBirth\", 'MM-DD')")
+      .getMany();
   }
 }

@@ -10,7 +10,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { CloudinaryModule } from './cloudinary/cloudinary.module';
 import { NotificationsModule } from './notifications/notifications.module';
-import { ConfigurationModule } from './configuration/configuration.module';
+import { ConfigurationModule } from './configuration/configuration.module'; // 1. IMPORTAR
 import { PaymentsModule } from './payments/payments.module';
 import { MailModule } from './mail/mail.module';
 
@@ -41,7 +41,7 @@ import { MailModule } from './mail/mail.module';
     DashboardModule,
     CloudinaryModule,
     NotificationsModule,
-    ConfigurationModule,
+    ConfigurationModule, // 2. AÑADIR A LA LISTA
     PaymentsModule,
     MailModule,
   ],

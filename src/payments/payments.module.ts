@@ -7,6 +7,7 @@ import { UsersModule } from 'src/users/users.module';
 import { TicketTiersModule } from 'src/ticket-tiers/ticket-tiers.module';
 
 @Module({
+  // Importamos todos los módulos que nuestro PaymentsService necesita
   imports: [
     ConfigModule,
     TicketsModule,

@@ -35,7 +35,7 @@ export class TicketTiersService {
 
   // --- FUNCIÓN AÑADIDA ---
   async findOne(tierId: string): Promise<TicketTier> {
-    const tier = await this.ticketTiersRepository.findOneBy({ id: tierId });
+    const tier = await this.ticketTiersRepository.findOne({ where: { id: tierId }, relations: ['event'] });
     if (!tier) {
       throw new NotFoundException(`Ticket Tier with ID "${tierId}" not found`);
     }

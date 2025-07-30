@@ -22,7 +22,7 @@ export class PaymentsService {
     buyer: User,
     data: AcquireTicketDto & { promoterUsername?: string },
   ) {
-    const { ticketTierId, quantity, promoterUsername } = data;
+    const { eventId, ticketTierId, quantity, promoterUsername } = data;
 
     const tier = await this.ticketTiersService.findOne(ticketTierId);
     if (!tier) throw new NotFoundException('Tipo de entrada no encontrado.');
@@ -49,16 +49,18 @@ export class PaymentsService {
     const adminFee = adminConfig.serviceFee > 0 ? (totalAmount * adminConfig.serviceFee) / 100 : 0;
     const promoterFee = promoter && promoter.rrppCommissionRate > 0 ? (totalAmount * promoter.rrppCommissionRate) / 100 : 0;
     
+    const totalFee = adminFee + promoterFee;
+
     const preference = await this.client.create({
       body: {
         items: [{
           id: tier.id,
-          title: `Entrada: ${tier.name} x ${quantity}`,
+          title: `Entrada: ${tier.name} x ${quantity} - ${tier.event.title}`,
           quantity: 1,
           unit_price: totalAmount,
           currency_id: 'ARS',
         }],
-        marketplace_fee: adminFee + promoterFee,
+        application_fee: totalFee > 0 ? parseFloat(totalFee.toFixed(2)) : undefined,
         back_urls: {
           success: `${this.configService.get('FRONTEND_URL')}/payment/success`,
           failure: `${this.configService.get('FRONTEND_URL')}/payment/failure`,
@@ -66,14 +68,25 @@ export class PaymentsService {
         auto_return: 'approved',
         external_reference: JSON.stringify({ 
           buyerId: buyer.id, 
-          eventId: data.eventId,
+          eventId,
           ticketTierId,
           quantity,
           promoterUsername,
         }),
-      }
+      } as any, // <-- CORRECCIÓN: Usamos 'as any' para evitar el error de tipado del SDK
     });
 
     return { type: 'paid', preferenceId: preference.id };
+  }
+
+  async finalizePurchase(externalReference: string) {
+    const data = JSON.parse(externalReference);
+    
+    const buyer = await this.usersService.findOneById(data.buyerId);
+    if (!buyer) {
+      throw new NotFoundException('Comprador no encontrado.');
+    }
+
+    return this.ticketsService.acquireForClient(buyer, data, data.promoterUsername);
   }
 }
