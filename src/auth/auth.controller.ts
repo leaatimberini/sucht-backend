@@ -1,4 +1,6 @@
-import { Controller, Post, Body, UseGuards, Request, Get } from '@nestjs/common';
+// src/auth/auth.controller.ts
+
+import { Controller, Post, Body, UseGuards, Request, Get, HttpCode, HttpStatus } from '@nestjs/common';
 import { UsersService } from 'src/users/users.service';
 import { RegisterAuthDto } from './dto/register-auth.dto';
 import { AuthGuard } from '@nestjs/passport';
@@ -19,7 +21,6 @@ export class AuthController {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { password, ...result } = user;
 
-    // Enviar correo de bienvenida
     await this.authService.sendWelcomeEmail(user);
 
     return result;
@@ -27,27 +28,27 @@ export class AuthController {
 
   @UseGuards(AuthGuard('local'))
   @Post('login')
+  @HttpCode(HttpStatus.OK) // MEJORA: Se establece el código de estado 200 para el login.
   async login(@Request() req: { user: User }) {
     return this.authService.login(req.user);
   }
 
-  // NUEVA RUTA PROTEGIDA
   @UseGuards(JwtAuthGuard)
   @Get('profile')
   getProfile(@Request() req) {
     return req.user;
   }
 
-  // ✅ NUEVO ENDPOINT TEMPORAL PARA TEST DE MAIL
+  // ADVERTENCIA: Este endpoint es público y debería ser eliminado en producción.
   @Post('test-mail')
-async sendTestMail(@Body() body: { email: string }) {
-  const fakeUser: Partial<User> = {
-    email: body.email,
-    name: 'Tester',
-  };
+  async sendTestMail(@Body() body: { email: string }) {
+    const fakeUser: Partial<User> = {
+      email: body.email,
+      name: 'Tester',
+    };
 
-  await this.authService.sendWelcomeEmail(fakeUser as User);
+    await this.authService.sendWelcomeEmail(fakeUser as User);
 
-  return { message: `Correo enviado a ${body.email}` };
-}
+    return { message: `Correo enviado a ${body.email}` };
+  }
 }
