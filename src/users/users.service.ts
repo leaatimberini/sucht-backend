@@ -95,7 +95,6 @@ export class UsersService {
     return this.usersRepository.save(user);
   }
   
-  // --- FUNCIONES AÑADIDAS PARA PAGOS ---
   async getAdminConfig(): Promise<{ serviceFee: number; accessToken: string | null }> {
     const serviceFeeStr = await this.configService.get('adminServiceFee');
     const adminUser = await this.findAdmin();

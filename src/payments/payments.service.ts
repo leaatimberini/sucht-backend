@@ -6,6 +6,7 @@ import { UsersService } from 'src/users/users.service';
 import { User } from 'src/users/user.entity';
 import { TicketTiersService } from 'src/ticket-tiers/ticket-tiers.service';
 import { AcquireTicketDto } from 'src/tickets/dto/acquire-ticket.dto';
+import { ConfigurationService } from 'src/configuration/configuration.service'; // 1. IMPORTAR
 
 @Injectable()
 export class PaymentsService {
@@ -16,6 +17,7 @@ export class PaymentsService {
     private readonly usersService: UsersService,
     private readonly ticketsService: TicketsService,
     private readonly ticketTiersService: TicketTiersService,
+    private readonly configurationService: ConfigurationService, // 2. INYECTAR
   ) {}
 
   async createPreference(
@@ -28,13 +30,17 @@ export class PaymentsService {
     if (!tier) throw new NotFoundException('Tipo de entrada no encontrado.');
     if (tier.quantity < quantity) throw new BadRequestException('No quedan suficientes entradas.');
     
-    // --- LÓGICA PARA ENTRADAS GRATUITAS ---
-    if (tier.price === 0) {
+    // --- LÓGICA ACTUALIZADA ---
+    // 3. Verificamos si los pagos están habilitados globalmente
+    const paymentsEnabled = await this.configurationService.get('paymentsEnabled');
+
+    // Si la entrada es gratis O los pagos están deshabilitados, la generamos directamente
+    if (tier.price === 0 || paymentsEnabled !== 'true') {
       const ticket = await this.ticketsService.acquireForClient(buyer, data, promoterUsername);
-      return { type: 'free', ticketId: ticket.id, message: 'Entrada gratuita generada con éxito.' };
+      return { type: 'free', ticketId: ticket.id, message: 'Entrada generada con éxito.' };
     }
     
-    // --- LÓGICA PARA ENTRADAS PAGAS CON SPLIT ---
+    // --- LÓGICA PARA ENTRADAS PAGAS (solo se ejecuta si los pagos están habilitados) ---
     const owner = await this.usersService.findOwner();
     if (!owner?.mercadoPagoAccessToken) {
       throw new Error("La cuenta del dueño no tiene un Access Token de Mercado Pago configurado.");
@@ -48,7 +54,6 @@ export class PaymentsService {
     const totalAmount = tier.price * quantity;
     const adminFee = adminConfig.serviceFee > 0 ? (totalAmount * adminConfig.serviceFee) / 100 : 0;
     const promoterFee = promoter && promoter.rrppCommissionRate > 0 ? (totalAmount * promoter.rrppCommissionRate) / 100 : 0;
-    
     const totalFee = adminFee + promoterFee;
 
     const preference = await this.client.create({
@@ -73,7 +78,7 @@ export class PaymentsService {
           quantity,
           promoterUsername,
         }),
-      } as any, // <-- CORRECCIÓN: Usamos 'as any' para evitar el error de tipado del SDK
+      } as any,
     });
 
     return { type: 'paid', preferenceId: preference.id };
@@ -81,12 +86,10 @@ export class PaymentsService {
 
   async finalizePurchase(externalReference: string) {
     const data = JSON.parse(externalReference);
-    
     const buyer = await this.usersService.findOneById(data.buyerId);
     if (!buyer) {
       throw new NotFoundException('Comprador no encontrado.');
     }
-
     return this.ticketsService.acquireForClient(buyer, data, data.promoterUsername);
   }
 }
