@@ -1,6 +1,6 @@
 // src/configuration/dto/update-configuration.dto.ts
 
-import { IsOptional, IsString } from 'class-validator';
+import { IsOptional, IsString, IsNotEmpty } from 'class-validator';
 
 export class UpdateConfigurationDto {
   @IsOptional()
@@ -11,9 +11,9 @@ export class UpdateConfigurationDto {
   @IsString()
   googleAnalyticsId?: string;
 
-  // Aquí podrían ir otras configuraciones que ya existan
-  // Ejemplo:
-  // @IsOptional()
-  // @IsNumberString()
-  // adminServiceFee?: string;
+  // --- NUEVA PROPIEDAD PARA TÉRMINOS Y CONDICIONES ---
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty() // No debería ser un string vacío
+  termsAndConditionsText?: string;
 }

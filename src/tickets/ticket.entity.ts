@@ -22,17 +22,20 @@ export class Ticket {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @ManyToOne(() => User, (user) => user.tickets)
+  @ManyToOne(() => User, (user) => user.tickets, { eager: false })
   user: User;
 
-  @ManyToOne(() => Event, (event) => event.tickets)
+  @ManyToOne(() => Event, (event) => event.tickets, { eager: false })
   event: Event;
 
-  @ManyToOne(() => TicketTier)
+  @ManyToOne(() => TicketTier, { eager: false })
   tier: TicketTier;
 
-  // --- CAMPO REQUERIDO ---
-  @ManyToOne(() => User, { nullable: true, eager: true }) // eager: true para cargar siempre el promotor
+  // Promotor del ticket (opcional)
+  @ManyToOne(() => User, (user) => user.promotedTickets, {
+    nullable: true,
+    eager: true,
+  })
   promoter: User | null;
 
   @Column({
@@ -54,12 +57,12 @@ export class Ticket {
   @Column({ type: 'timestamp', nullable: true })
   validatedAt: Date | null;
 
+  @Column({ type: 'timestamp', nullable: true })
+  reminderSentAt?: Date;
+
   @CreateDateColumn({ type: 'timestamp' })
   createdAt: Date;
 
   @UpdateDateColumn({ type: 'timestamp' })
   updatedAt: Date;
-
-  @Column({ type: 'timestamp', nullable: true })
-reminderSentAt?: Date;
 }

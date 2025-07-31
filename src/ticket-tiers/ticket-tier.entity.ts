@@ -13,7 +13,9 @@ export class TicketTier {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @ManyToOne(() => Event, (event) => event.ticketTiers)
+  @ManyToOne(() => Event, (event) => event.ticketTiers, {
+    onDelete: 'CASCADE',
+  })
   event: Event;
 
   @Column()
@@ -25,7 +27,7 @@ export class TicketTier {
   @Column({ type: 'int' })
   quantity: number;
 
-  // --- NUEVO CAMPO ---
+  // Fecha límite de validez del ticket tier (opcional)
   @Column({ type: 'timestamp', nullable: true })
   validUntil: Date | null;
 

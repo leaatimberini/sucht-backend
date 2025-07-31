@@ -28,18 +28,24 @@ export class Event {
 
   @Column({ type: 'timestamp' })
   endDate: Date;
-      
+
   @Column({ nullable: true })
   flyerImageUrl: string;
 
   @Column({ type: 'timestamp', nullable: true })
   confirmationSentAt: Date | null;
 
-  // --- CORRECCIÓN: Se añade la opción de borrado en cascada ---
-  @OneToMany(() => Ticket, (ticket) => ticket.event, { cascade: true, onDelete: 'CASCADE' })
+  // Borrado en cascada para mantener la integridad referencial
+  @OneToMany(() => Ticket, (ticket) => ticket.event, {
+    cascade: true,
+    onDelete: 'CASCADE',
+  })
   tickets: Ticket[];
 
-  @OneToMany(() => TicketTier, (ticketTier) => ticketTier.event, { cascade: true, onDelete: 'CASCADE' })
+  @OneToMany(() => TicketTier, (ticketTier) => ticketTier.event, {
+    cascade: true,
+    onDelete: 'CASCADE',
+  })
   ticketTiers: TicketTier[];
 
   @CreateDateColumn({ type: 'timestamp' })
