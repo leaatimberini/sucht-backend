@@ -10,7 +10,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { CloudinaryModule } from './cloudinary/cloudinary.module';
 import { NotificationsModule } from './notifications/notifications.module';
-import { ConfigurationModule } from './configuration/configuration.module'; // 1. IMPORTAR
+import { ConfigurationModule } from './configuration/configuration.module';
 import { PaymentsModule } from './payments/payments.module';
 import { MailModule } from './mail/mail.module';
 
@@ -29,7 +29,7 @@ import { MailModule } from './mail/mail.module';
       password: process.env.DB_PASSWORD,
       database: process.env.DB_DATABASE,
       autoLoadEntities: true,
-      synchronize: true,
+      synchronize: false, // <-- CAMBIO MUY IMPORTANTE
     }),
     
     // Módulos de la Aplicación
@@ -41,7 +41,7 @@ import { MailModule } from './mail/mail.module';
     DashboardModule,
     CloudinaryModule,
     NotificationsModule,
-    ConfigurationModule, // 2. AÑADIR A LA LISTA
+    ConfigurationModule,
     PaymentsModule,
     MailModule,
   ],
