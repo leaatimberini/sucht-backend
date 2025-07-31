@@ -66,4 +66,10 @@ export class EventsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   remove(@Param('id') id: string) { return this.eventsService.remove(id); }
+
+  @Get('list/for-select')
+  @UseGuards(JwtAuthGuard) // Aseguramos que solo usuarios logueados puedan verlo
+  findAllForSelect() {
+    return this.eventsService.findAllForSelect();
+  }
 }

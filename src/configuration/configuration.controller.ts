@@ -1,31 +1,35 @@
-import { Controller, Post, Body, UseGuards, Get, Param } from '@nestjs/common';
+import { Controller, Body, UseGuards, Get, Patch, HttpCode, HttpStatus } from '@nestjs/common';
 import { ConfigurationService } from './configuration.service';
+import { UpdateConfigurationDto } from './dto/update-configuration.dto'; // Importamos el DTO
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import { UserRole } from 'src/users/user.entity';
 
 @Controller('configuration')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.ADMIN) // <-- Importante: Solo los Admins pueden acceder a estas rutas
+@UseGuards(JwtAuthGuard, RolesGuard) // Protegemos todo el controlador
 export class ConfigurationController {
   constructor(private readonly configService: ConfigurationService) {}
 
   /**
-   * Endpoint para establecer o actualizar una configuración.
-   * Espera un body como: { "key": "adminServiceFee", "value": "2.5" }
+   * Endpoint para que el Admin obtenga TODAS las configuraciones a la vez.
+   * Devuelve un objeto como: { "metaPixelId": "123", "googleAnalyticsId": "G-XYZ" }
    */
-  @Post()
-  setConfiguration(@Body() body: { key: string; value: string }) {
-    return this.configService.set(body.key, body.value);
+  @Get()
+  @Roles(UserRole.ADMIN, UserRole.OWNER) // El Dueño también debería poder ver la config
+  getAllConfigurations() {
+    return this.configService.getFormattedConfig();
   }
 
   /**
-   * Endpoint para obtener una configuración por su clave.
-   * Ejemplo de ruta: GET /configuration/adminServiceFee
+   * Endpoint para que el Admin actualice una o más configuraciones.
+   * Usamos PATCH porque es una actualización parcial.
+   * Espera un body como: { "metaPixelId": "...", "googleAnalyticsId": "..." }
    */
-  @Get(':key')
-  getConfiguration(@Param('key') key: string) {
-    return this.configService.get(key);
+  @Patch()
+  @Roles(UserRole.ADMIN, UserRole.OWNER)
+  @HttpCode(HttpStatus.NO_CONTENT) // Devuelve un 204 en lugar de 200 para indicar éxito sin contenido
+  updateConfigurations(@Body() updateConfigurationDto: UpdateConfigurationDto) {
+    return this.configService.updateConfiguration(updateConfigurationDto);
   }
 }

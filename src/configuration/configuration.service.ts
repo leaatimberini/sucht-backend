@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Configuration } from './configuration.entity';
+import { UpdateConfigurationDto } from './dto/update-configuration.dto';
 
 @Injectable()
 export class ConfigurationService {
@@ -11,30 +12,44 @@ export class ConfigurationService {
   ) {}
 
   /**
-   * Guarda o actualiza un valor de configuración en la base de datos.
-   * @param key La clave de la configuración (ej. 'adminServiceFee')
-   * @param value El valor a guardar
-   * @returns La entidad de configuración guardada.
+   * Actualiza una o más configuraciones usando el DTO.
+   * Utiliza "upsert" para crear o actualizar las claves de forma eficiente.
+   * @param updateConfigurationDto Los datos a actualizar (ej. { metaPixelId: '123' }).
    */
-  async set(key: string, value: string): Promise<Configuration> {
-    let config = await this.configRepository.findOne({ where: { key } });
-    if (config) {
-      // Si la clave ya existe, actualiza su valor
-      config.value = value;
-    } else {
-      // Si no existe, crea una nueva entrada
-      config = this.configRepository.create({ key, value });
-    }
-    return this.configRepository.save(config);
+  async updateConfiguration(updateConfigurationDto: UpdateConfigurationDto): Promise<void> {
+    const updatePromises = Object.entries(updateConfigurationDto).map(
+      ([key, value]) => {
+        if (value !== null && value !== undefined) {
+          return this.configRepository.upsert(
+            { key, value: String(value) },
+            ['key'], // Si la 'key' ya existe, se actualiza el 'value'.
+          );
+        }
+      },
+    );
+    await Promise.all(updatePromises);
   }
 
   /**
-   * Obtiene un valor de configuración de la base de datos.
+   * Obtiene un valor de configuración específico.
    * @param key La clave de la configuración a buscar.
    * @returns El valor como string, o null si no se encuentra.
    */
   async get(key: string): Promise<string | null> {
     const config = await this.configRepository.findOne({ where: { key } });
     return config ? config.value : null;
+  }
+
+  /**
+   * Obtiene todas las configuraciones y las devuelve como un único objeto.
+   * Ideal para que el frontend obtenga todos los settings de una vez.
+   * @returns Un objeto como { metaPixelId: '123', googleAnalyticsId: 'G-XYZ' }.
+   */
+  async getFormattedConfig(): Promise<{ [key: string]: string }> {
+    const configurations = await this.configRepository.find();
+    return configurations.reduce((acc, config) => {
+      acc[config.key] = config.value;
+      return acc;
+    }, {});
   }
 }

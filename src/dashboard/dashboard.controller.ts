@@ -1,4 +1,4 @@
-import { Controller, Get, UseGuards, Request, Query } from '@nestjs/common';
+import { Controller, Get, UseGuards, Request, Query, ParseIntPipe } from '@nestjs/common';
 import { DashboardService, DashboardFilters } from './dashboard.service';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
@@ -22,18 +22,31 @@ export class DashboardController {
     return this.dashboardService.getEventPerformance(filters);
   }
 
-  // --- NUEVO ENDPOINT PARA ADMIN ---
   @Get('rrpp-performance')
   @Roles(UserRole.ADMIN)
   getRRPPPerformance(@Query() filters: DashboardFilters) {
     return this.dashboardService.getRRPPPerformance(filters);
   }
   
-  // --- NUEVO ENDPOINT PARA RRPP ---
   @Get('my-rrpp-stats')
   @Roles(UserRole.ADMIN, UserRole.RRPP)
   getMyRRPPStats(@Request() req) {
     const promoterId = req.user.id;
     return this.dashboardService.getMyRRPPStats(promoterId);
+  }
+
+  @Get('no-shows')
+  @Roles(UserRole.ADMIN, UserRole.OWNER)
+  getNoShows() {
+    return this.dashboardService.getNoShows();
+  }
+
+
+  @Get('loyalty/attendance-ranking')
+  @Roles(UserRole.ADMIN, UserRole.OWNER)
+  getAttendanceRanking(
+    @Query('limit', new ParseIntPipe({ optional: true })) limit?: number,
+  ) {
+    return this.dashboardService.getAttendanceRanking(limit);
   }
 }

@@ -27,7 +27,6 @@ export class UsersController {
     return result;
   }
 
-  // --- ENDPOINT AÑADIDO PARA CUMPLEAÑOS ---
   @Get('birthdays')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.RRPP)
@@ -60,7 +59,10 @@ export class UsersController {
   
   @Get('profile/me')
   @UseGuards(JwtAuthGuard)
-  async getMyProfile(@Request() req) { const userId = req.user.id; const user = await this.usersService.findOneById(userId); const { password, ...result } = user; return result; }
+  async getMyProfile(@Request() req) {
+    // 👇 ESTA LÍNEA ES LA QUE CAMBIÓ
+    return this.usersService.getProfile(req.user.id);
+  }
   
   @Post('invite-staff')
   @UseGuards(JwtAuthGuard, RolesGuard)

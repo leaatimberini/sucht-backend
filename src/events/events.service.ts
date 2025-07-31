@@ -69,4 +69,12 @@ export class EventsService {
     event.confirmationSentAt = new Date();
     return this.eventsRepository.save(event);
   }
+  async findAllForSelect(): Promise<{ id: string; title: string }[]> {
+    return this.eventsRepository.find({
+      select: ['id', 'title'],
+      order: {
+        startDate: 'DESC',
+      },
+    });
+  }
 }

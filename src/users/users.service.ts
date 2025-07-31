@@ -7,6 +7,7 @@ import { randomBytes } from 'crypto';
 import { InviteStaffDto } from './dto/invite-staff.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ConfigurationService } from 'src/configuration/configuration.service';
+import { NotificationsService } from 'src/notifications/notifications.service'; // 1. IMPORTAR
 
 @Injectable()
 export class UsersService {
@@ -14,7 +15,29 @@ export class UsersService {
     @InjectRepository(User)
     private usersRepository: Repository<User>,
     private readonly configService: ConfigurationService,
+    private readonly notificationsService: NotificationsService, // 2. INYECTAR
   ) {}
+
+  // --- NUEVO MÉTODO PARA OBTENER EL PERFIL COMPLETO ---
+  /**
+   * Obtiene el perfil de un usuario y añade el estado de su suscripción a notificaciones.
+   * @param userId El ID del usuario.
+   * @returns El perfil del usuario con el flag `isPushSubscribed`.
+   */
+  async getProfile(userId: string) {
+    const user = await this.findOneById(userId);
+    const isPushSubscribed = await this.notificationsService.isUserSubscribed(userId);
+
+    // Excluimos datos sensibles como el password del objeto que devolvemos
+    const { password, invitationToken, ...profileData } = user;
+
+    return {
+      ...profileData,
+      isPushSubscribed,
+    };
+  }
+
+  // --- RESTO DE MÉTODOS SIN CAMBIOS ---
 
   async findOneById(id: string): Promise<User> {
     const user = await this.usersRepository.findOneBy({ id });

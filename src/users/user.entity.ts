@@ -9,6 +9,8 @@ import {
 } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { Ticket } from 'src/tickets/ticket.entity';
+import { PushSubscription } from 'src/notifications/entities/subscription.entity';
+
 
 export enum UserRole {
   OWNER = 'owner', // <-- NUEVO ROL AÑADIDO
@@ -79,4 +81,7 @@ export class User {
       this.password = await bcrypt.hash(this.password, 10);
     }
   }
+  @OneToMany(() => PushSubscription, subscription => subscription.user)
+  pushSubscriptions: PushSubscription[];
+  
 }

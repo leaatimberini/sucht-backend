@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Event } from 'src/events/event.entity';
 import { Ticket } from 'src/tickets/ticket.entity';
 import { User, UserRole } from 'src/users/user.entity';
-import { Between, Repository } from 'typeorm';
+import { LessThan, Repository } from 'typeorm';
 
 export interface RRPPPerformanceData {
   rrppId: string;
@@ -12,11 +12,18 @@ export interface RRPPPerformanceData {
   peopleAdmitted: number;
 }
 
-// Interfaz para los filtros que recibiremos del frontend
 export interface DashboardFilters {
   eventId?: string;
   startDate?: string;
   endDate?: string;
+}
+
+// --- NUEVA INTERFAZ PARA EL RANKING ---
+export interface AttendanceRankingData {
+  userId: string;
+  userName: string;
+  userEmail: string;
+  totalAttendance: number;
 }
 
 @Injectable()
@@ -31,39 +38,34 @@ export class DashboardService {
   ) {}
 
   async getRRPPPerformance(filters: DashboardFilters): Promise<RRPPPerformanceData[]> {
-    const rrpps = await this.usersRepository.createQueryBuilder("user")
-      .where("user.roles @> ARRAY[:role]", { role: UserRole.RRPP })
-      .getMany();
+    const query = this.usersRepository.createQueryBuilder("user")
+      .leftJoin('user.promotedTickets', 'ticket')
+      .select('user.id', 'rrppId')
+      .addSelect('user.name', 'rrppName')
+      .addSelect('COALESCE(SUM(ticket.quantity), 0)', 'ticketsGenerated')
+      .addSelect('COALESCE(SUM(ticket.redeemedCount), 0)', 'peopleAdmitted')
+      .where("user.roles @> ARRAY[:role]", { role: UserRole.RRPP });
 
-    const performanceData: RRPPPerformanceData[] = [];
-
-    for (const rrpp of rrpps) {
-      const query = this.ticketsRepository.createQueryBuilder("ticket")
-        .select("SUM(ticket.quantity)", "ticketsGenerated")
-        .addSelect("SUM(ticket.redeemedCount)", "peopleAdmitted")
-        .where("ticket.promoterId = :promoterId", { promoterId: rrpp.id });
-      
-      // Aplicar filtros
-      if (filters.eventId) {
-        query.andWhere("ticket.eventId = :eventId", { eventId: filters.eventId });
-      }
-      if (filters.startDate && filters.endDate) {
-        query.andWhere("ticket.createdAt BETWEEN :startDate AND :endDate", { 
-          startDate: filters.startDate, 
-          endDate: filters.endDate 
-        });
-      }
-
-      const stats = await query.getRawOne();
-      
-      performanceData.push({
-        rrppId: rrpp.id,
-        rrppName: rrpp.name,
-        ticketsGenerated: parseInt(stats.ticketsGenerated, 10) || 0,
-        peopleAdmitted: parseInt(stats.peopleAdmitted, 10) || 0,
+    if (filters.eventId) {
+      query.andWhere('ticket.eventId = :eventId', { eventId: filters.eventId });
+    }
+    if (filters.startDate && filters.endDate) {
+      query.andWhere('ticket.createdAt BETWEEN :startDate AND :endDate', {
+        startDate: filters.startDate,
+        endDate: filters.endDate,
       });
     }
-    return performanceData;
+
+    query.groupBy('user.id, user.name');
+    query.orderBy('user.name', 'ASC');
+
+    const results = await query.getRawMany();
+    
+    return results.map(r => ({
+      ...r,
+      ticketsGenerated: parseInt(r.ticketsGenerated, 10),
+      peopleAdmitted: parseInt(r.peopleAdmitted, 10),
+    }));
   }
 
   async getMyRRPPStats(promoterId: string) {
@@ -94,60 +96,137 @@ export class DashboardService {
   }
 
   async getSummaryMetrics(filters: DashboardFilters) {
-    const baseQuery = this.ticketsRepository.createQueryBuilder('ticket');
-    
+    const query = this.ticketsRepository.createQueryBuilder('ticket')
+      .select('COALESCE(SUM(ticket.quantity), 0)', 'totalTicketsGenerated')
+      .addSelect('COALESCE(SUM(ticket.redeemedCount), 0)', 'totalPeopleAdmitted');
+
+    let hasWhere = false;
     if (filters.eventId) {
-      baseQuery.where("ticket.eventId = :eventId", { eventId: filters.eventId });
+      query.where("ticket.eventId = :eventId", { eventId: filters.eventId });
+      hasWhere = true;
     }
     if (filters.startDate && filters.endDate) {
-      baseQuery.where("ticket.createdAt BETWEEN :startDate AND :endDate", { 
-        startDate: filters.startDate, 
-        endDate: filters.endDate 
-      });
+      const condition = "ticket.createdAt BETWEEN :startDate AND :endDate";
+      const params = { startDate: filters.startDate, endDate: filters.endDate };
+      if (hasWhere) {
+        query.andWhere(condition, params);
+      } else {
+        query.where(condition, params);
+      }
     }
 
-    const totalTicketsGenerated = await baseQuery.select('SUM(ticket.quantity)', 'total').getRawOne();
-    const totalPeopleAdmitted = await baseQuery.select('SUM(ticket.redeemedCount)', 'total').getRawOne();
-    
-    const totalEvents = await this.eventsRepository.count({
-      where: filters.eventId ? { id: filters.eventId } : {}
-    });
+    const stats = await query.getRawOne();
+    const totalEvents = await this.eventsRepository.count();
 
     return {
-      totalTicketsGenerated: parseInt(totalTicketsGenerated.total, 10) || 0,
-      totalPeopleAdmitted: parseInt(totalPeopleAdmitted.total, 10) || 0,
+      totalTicketsGenerated: parseInt(stats.totalTicketsGenerated, 10),
+      totalPeopleAdmitted: parseInt(stats.totalPeopleAdmitted, 10),
       totalEvents,
     };
   }
 
   async getEventPerformance(filters: DashboardFilters) {
     const query = this.eventsRepository.createQueryBuilder('event')
-      .leftJoinAndSelect('event.tickets', 'ticket');
+      .leftJoin('event.tickets', 'ticket')
+      .select('event.id', 'id')
+      .addSelect('event.title', 'title')
+      .addSelect('event.startDate', 'startDate')
+      .addSelect('COALESCE(SUM(ticket.quantity), 0)', 'ticketsGenerated')
+      .addSelect('COALESCE(SUM(ticket.redeemedCount), 0)', 'peopleAdmitted');
 
+    let hasWhere = false;
     if (filters.eventId) {
       query.where("event.id = :eventId", { eventId: filters.eventId });
+      hasWhere = true;
     }
     if (filters.startDate && filters.endDate) {
-      query.where("event.startDate BETWEEN :startDate AND :endDate", { 
-        startDate: filters.startDate, 
-        endDate: filters.endDate 
-      });
+      const condition = "event.startDate BETWEEN :startDate AND :endDate";
+      const params = { startDate: filters.startDate, endDate: filters.endDate };
+      if (hasWhere) {
+        query.andWhere(condition, params);
+      } else {
+        query.where(condition, params);
+      }
     }
 
-    const events = await query.getMany();
+    query.groupBy('event.id, event.title, event.startDate');
+    query.orderBy('event.startDate', 'DESC');
+    
+    const results = await query.getRawMany();
+    
+    return results.map(r => ({
+      ...r,
+      ticketsGenerated: parseInt(r.ticketsGenerated, 10),
+      peopleAdmitted: parseInt(r.peopleAdmitted, 10),
+    }));
+  }
 
-    const eventPerformance = events.map(event => {
-      const ticketsGenerated = event.tickets.reduce((sum, ticket) => sum + ticket.quantity, 0);
-      const peopleAdmitted = event.tickets.reduce((sum, ticket) => sum + ticket.redeemedCount, 0);
-      return {
-        id: event.id,
-        title: event.title,
-        startDate: event.startDate,
-        ticketsGenerated,
-        peopleAdmitted,
-      };
+  async getNoShows(): Promise<Ticket[]> {
+    const now = new Date();
+
+    const noShows = await this.ticketsRepository.find({
+      where: {
+        redeemedCount: 0,
+        event: {
+          endDate: LessThan(now), 
+        },
+      },
+      relations: {
+        user: true,
+        event: true,
+        tier: true,
+      },
+      select: {
+        id: true,
+        createdAt: true,
+        user: {
+          id: true,
+          name: true,
+          email: true,
+        },
+        event: {
+          id: true,
+          title: true,
+          endDate: true,
+        },
+        tier: {
+          name: true,
+        }
+      },
+      order: {
+        event: {
+          endDate: "DESC"
+        }
+      }
     });
 
-    return eventPerformance.sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
+    return noShows;
+  }
+
+  // --- NUEVO MÉTODO PARA RANKING DE ASISTENCIA ---
+  /**
+   * Obtiene un ranking de usuarios basado en el total de asistencias (suma de redeemedCount).
+   * @param limit - El número de usuarios a devolver en el ranking (Top N).
+   */
+  async getAttendanceRanking(limit: number = 25): Promise<AttendanceRankingData[]> {
+    const query = this.usersRepository.createQueryBuilder("user")
+      .leftJoin("user.tickets", "ticket")
+      .select("user.id", "userId")
+      .addSelect("user.name", "userName")
+      .addSelect("user.email", "userEmail")
+      .addSelect("COALESCE(SUM(ticket.redeemedCount), 0)", "totalAttendance")
+      // Nos aseguramos de contar solo clientes
+      .where("user.roles @> ARRAY[:role]", { role: UserRole.CLIENT })
+      .groupBy("user.id, user.name, user.email")
+      .orderBy("\"totalAttendance\"", "DESC")
+      .limit(limit);
+
+    const results = await query.getRawMany();
+
+    // Convertimos el resultado de la suma a número
+    return results.map(r => ({
+      ...r,
+      totalAttendance: parseInt(r.totalAttendance, 10)
+    }));
   }
 }
