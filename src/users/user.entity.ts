@@ -35,14 +35,16 @@ export class User {
 
   @Column()
   name: string;
-
+  
+  // ==================================================================
+  // CAMBIO CLAVE: Cambiamos la configuración de esta columna.
+  // Esto soluciona el error "TypeError: value.slice is not a function".
   @Column({
-    type: 'enum',
-    enum: UserRole,
-    array: true,
+    type: 'simple-array',
     default: [UserRole.CLIENT],
   })
   roles: UserRole[];
+  // ==================================================================
 
   @Column({ nullable: true })
   invitationToken: string;
