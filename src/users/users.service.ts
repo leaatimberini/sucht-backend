@@ -55,9 +55,10 @@ export class UsersService {
 
   async create(registerAuthDto: RegisterAuthDto): Promise<User> {
     const { email, name, password, dateOfBirth } = registerAuthDto;
+    const lowerCaseEmail = email.toLowerCase();
     const existingUser = await this.findOneByEmail(email);
     if (existingUser) { throw new ConflictException('Email already registered'); }
-    const newUser = this.usersRepository.create({ email, name, password, dateOfBirth: new Date(dateOfBirth), roles: [UserRole.CLIENT] });
+    const newUser = this.usersRepository.create({ email: lowerCaseEmail, name, password, dateOfBirth: new Date(dateOfBirth), roles: [UserRole.CLIENT] });
     try { return await this.usersRepository.save(newUser); } catch (error) { throw new InternalServerErrorException('Something went wrong, user not created'); }
   }
 
