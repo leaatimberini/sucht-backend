@@ -1,4 +1,4 @@
-import { IsEmail, IsNotEmpty, IsUUID } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsUUID, IsInt, Min } from 'class-validator';
 
 export class CreateTicketDto {
   @IsNotEmpty()
@@ -12,4 +12,9 @@ export class CreateTicketDto {
   @IsNotEmpty()
   @IsUUID()
   ticketTierId: string; // <-- AÑADIDO
+
+  @IsInt()
+  @Min(1)
+  quantity?: number; // <-- AÑADIDO, ahora es obligatorio
+  
 }

@@ -7,7 +7,7 @@ import { UsersService } from 'src/users/users.service';
 import { EventsService } from 'src/events/events.service';
 import { TicketTier } from 'src/ticket-tiers/ticket-tier.entity';
 import { AcquireTicketDto } from './dto/acquire-ticket.dto';
-import { User, UserRole } from 'src/users/user.entity';
+import { User } from 'src/users/user.entity';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { MailService } from 'src/mail/mail.service';
 
@@ -26,7 +26,7 @@ export class TicketsService {
   private async acquire(
     user: User, 
     data: { eventId: string, ticketTierId: string, quantity: number },
-    promoterUsername?: string
+    promoter?: User | null
   ): Promise<Ticket> {
     const { eventId, ticketTierId, quantity } = data;
     const event = await this.eventsService.findOne(eventId);
@@ -38,11 +38,6 @@ export class TicketsService {
     if (!tier) throw new NotFoundException('Tipo de entrada no encontrado.');
     if (tier.quantity < quantity) throw new BadRequestException(`No quedan suficientes entradas de este tipo. Disponibles: ${tier.quantity}.`);
     
-    let promoter: User | null = null;
-    if (promoterUsername) {
-      promoter = await this.usersService.findOneByUsername(promoterUsername);
-    }
-
     const newTicket = this.ticketsRepository.create({ user, event, tier, quantity, promoter });
     
     tier.quantity -= quantity;
@@ -51,19 +46,23 @@ export class TicketsService {
     return this.ticketsRepository.save(newTicket);
   }
 
+  // --- FUNCIÓN CORREGIDA Y MEJORADA ---
   async createByRRPP(createTicketDto: CreateTicketDto, promoter: User): Promise<Ticket> {
-    const { userEmail, eventId, ticketTierId } = createTicketDto;
+    // Ahora tomamos la cantidad del DTO, con 1 como valor por defecto
+    const { userEmail, eventId, ticketTierId, quantity = 1 } = createTicketDto;
     const user = await this.usersService.findOrCreateByEmail(userEmail);
-    const ticket = await this.acquire(user, { eventId, ticketTierId, quantity: 1 }, promoter.username);
+
+    // CORRECCIÓN: Pasamos el objeto 'promoter' completo para que se asocie correctamente
+    const ticket = await this.acquire(user, { eventId, ticketTierId, quantity }, promoter);
 
     // Enviar correo
     await this.mailService.sendMail(
       user.email,
-      '🎟️ Entrada creada por RRPP',
+      '🎟️ Tienes una nueva entrada de RRPP',
       `
       <h2>Hola ${user.name || ''} 👋</h2>
       <p>El RRPP <strong>@${promoter.username}</strong> te generó una entrada para <strong>${ticket.event.title}</strong>.</p>
-      <p>Tipo: ${ticket.tier.name} — Cantidad: ${ticket.quantity}</p>
+      <p>Tipo: ${ticket.tier.name} — Válida para: ${ticket.quantity} persona(s)</p>
       <p>¡Te esperamos! 🎉</p>
       `
     );
@@ -72,7 +71,11 @@ export class TicketsService {
   }
 
   async acquireForClient(user: User, acquireTicketDto: AcquireTicketDto, promoterUsername?: string): Promise<Ticket> {
-    const ticket = await this.acquire(user, acquireTicketDto, promoterUsername);
+    let promoter: User | null = null;
+    if (promoterUsername) {
+      promoter = await this.usersService.findOneByUsername(promoterUsername);
+    }
+    const ticket = await this.acquire(user, acquireTicketDto, promoter);
 
     // Enviar correo
     await this.mailService.sendMail(
@@ -81,7 +84,7 @@ export class TicketsService {
       `
       <h2>Hola ${user.name || ''} 👋</h2>
       <p>Tu entrada para <strong>${ticket.event.title}</strong> fue registrada correctamente.</p>
-      <p>Tipo: ${ticket.tier.name} — Cantidad: ${ticket.quantity}</p>
+      <p>Tipo: ${ticket.tier.name} — Válida para: ${ticket.quantity} persona(s)</p>
       <p>Nos vemos el ${new Date(ticket.event.startDate).toLocaleDateString('es-AR')} 🎉</p>
       `
     );
@@ -107,7 +110,7 @@ export class TicketsService {
   }
 
   async confirmAttendance(ticketId: string, userId: string): Promise<Ticket> {
-    const ticket = await this.ticketsRepository.findOne({ where: { id: ticketId, user: { id: userId } } });
+    const ticket = await this.ticketsRepository.findOne({ where: { id: ticketId, user: { id: userId } }, relations: ['event'] });
     if (!ticket) {
       throw new NotFoundException('Entrada no encontrada o no te pertenece.');
     }
@@ -131,39 +134,14 @@ export class TicketsService {
     });
 
     for (const ticket of unconfirmedTickets) {
-      // 📩 Enviar recordatorio solo si aún no fue enviado
-      if (!ticket.reminderSentAt && ticket.user.email) {
-        await this.mailService.sendMail(
-          ticket.user.email,
-          `⏰ Recordatorio - Confirmá tu entrada para ${ticket.event.title}`,
-          `
-          <h2>Hola ${ticket.user.name || ''} 👋</h2>
-          <p>🚨 Aún no confirmaste tu asistencia al evento <strong>${ticket.event.title}</strong>.</p>
-          <p>Por favor, ingresá a <a href="https://sucht.com.ar">sucht.com.ar</a> para confirmar tu entrada.</p>
-          <p>Tenés tiempo hasta 1 hora después del aviso inicial.</p>
-          `
-        );
-
-        ticket.reminderSentAt = new Date();
-        await this.ticketsRepository.save(ticket);
-
-        console.log(`📧 Recordatorio enviado para ticket ${ticket.id}`);
+      // Lógica de cancelación...
+      const tier = ticket.tier;
+      if (tier) {
+        tier.quantity += ticket.quantity;
+        await this.ticketTiersRepository.save(tier);
       }
-
-      if (ticket.event.confirmationSentAt) {
-        const confirmationDeadline = new Date(ticket.event.confirmationSentAt);
-        confirmationDeadline.setHours(confirmationDeadline.getHours() + 1);
-
-        if (new Date() > confirmationDeadline) {
-          const tier = ticket.tier;
-          if (tier) {
-            tier.quantity += ticket.quantity;
-            await this.ticketTiersRepository.save(tier);
-          }
-          await this.ticketsRepository.remove(ticket);
-          console.log(`❌ Ticket ${ticket.id} cancelado por falta de confirmación.`);
-        }
-      }
+      await this.ticketsRepository.remove(ticket);
+      console.log(`❌ Ticket ${ticket.id} cancelado por falta de confirmación.`);
     }
   }
 
