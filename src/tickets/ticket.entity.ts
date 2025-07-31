@@ -15,6 +15,7 @@ export enum TicketStatus {
   USED = 'used',
   PARTIALLY_USED = 'partially_used',
   INVALID = 'invalid',
+  PARTIALLY_PAID = 'partially_paid', // <-- NUEVO ESTADO
 }
 
 @Entity('tickets')
@@ -31,7 +32,6 @@ export class Ticket {
   @ManyToOne(() => TicketTier, { eager: false })
   tier: TicketTier;
 
-  // Promotor del ticket (opcional)
   @ManyToOne(() => User, (user) => user.promotedTickets, {
     nullable: true,
     eager: true,
@@ -50,6 +50,11 @@ export class Ticket {
 
   @Column({ type: 'int', default: 0 })
   redeemedCount: number;
+  
+  // --- NUEVO CAMPO PARA REGISTRAR EL PAGO ---
+  @Column({ type: 'decimal', precision: 10, scale: 2, default: 0.00 })
+  amountPaid: number;
+  // --- FIN DE NUEVO CAMPO ---
 
   @Column({ type: 'timestamp', nullable: true })
   confirmedAt: Date | null;
