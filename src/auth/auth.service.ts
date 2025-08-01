@@ -31,18 +31,21 @@ export class AuthService {
   }
 
   /**
-   * CORRECCIÓN: Se procesan los roles antes de crear el payload del JWT.
+   * CORRECCIÓN DEFINITIVA: Se ajusta la lógica de 'cleanRoles' para que sea más robusta.
    */
   async login(user: User) {
-    // La base de datos devuelve los roles como un string tipo '{OWNER,ADMIN,CLIENT}'
-    // Esta función lo convierte en un array limpio: ['OWNER', 'ADMIN', 'CLIENT']
     const cleanRoles = (roles: any): string[] => {
-      if (Array.isArray(roles) && typeof roles[0] === 'string' && roles[0].startsWith('{')) {
-        return roles[0]
-          .replace(/[{}"\s]/g, '') // Elimina llaves, comillas y espacios
-          .split(','); // Divide por la coma
+      // Verifica si 'roles' es el string de array de PostgreSQL (ej: '{OWNER,ADMIN,CLIENT}')
+      if (typeof roles === 'string' && roles.startsWith('{')) {
+        return roles
+          .slice(1, -1) // 1. Elimina las llaves '{' y '}' del principio y el final
+          .split(',');  // 2. Divide el string en un array por las comas
       }
-      return roles; // Si ya es un array limpio, lo devuelve tal cual
+      // Si ya es un array normal, lo devuelve tal cual
+      if (Array.isArray(roles)) {
+        return roles;
+      }
+      return []; // Devuelve un array vacío como fallback seguro
     };
 
     const payload = { 

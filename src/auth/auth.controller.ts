@@ -1,12 +1,11 @@
 // src/auth/auth.controller.ts
 
-import { Controller, Post, Body, UseGuards, Request, Get, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Request, HttpCode, HttpStatus } from '@nestjs/common';
 import { UsersService } from 'src/users/users.service';
 import { RegisterAuthDto } from './dto/register-auth.dto';
 import { AuthGuard } from '@nestjs/passport';
 import { AuthService } from './auth.service';
 import { User } from 'src/users/user.entity';
-import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
 @Controller('auth')
 export class AuthController {
@@ -28,16 +27,12 @@ export class AuthController {
 
   @UseGuards(AuthGuard('local'))
   @Post('login')
-  @HttpCode(HttpStatus.OK) // MEJORA: Se establece el código de estado 200 para el login.
+  @HttpCode(HttpStatus.OK)
   async login(@Request() req: { user: User }) {
     return this.authService.login(req.user);
   }
 
-  @UseGuards(JwtAuthGuard)
-  @Get('profile')
-  getProfile(@Request() req) {
-    return req.user;
-  }
+  // Se eliminó el endpoint GET /profile para evitar redundancia con GET /users/profile/me
 
   // ADVERTENCIA: Este endpoint es público y debería ser eliminado en producción.
   @Post('test-mail')
