@@ -12,11 +12,11 @@ import { Ticket } from 'src/tickets/ticket.entity';
 import { PushSubscription } from 'src/notifications/entities/subscription.entity';
 
 export enum UserRole {
-  OWNER = 'OWNER',
-  ADMIN = 'ADMIN',
-  RRPP = 'RRPP',
-  VERIFIER = 'VERIFIER',
-  CLIENT = 'CLIENT',
+  OWNER = 'owner',
+  ADMIN = 'admin',
+  RRPP = 'rrpp',
+  VERIFIER = 'verifier',
+  CLIENT = 'client',
 }
 
 @Entity('users')
