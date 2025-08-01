@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common'; // <-- Importar Logger
 import { UsersService } from 'src/users/users.service';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
@@ -7,6 +7,9 @@ import { MailService } from 'src/mail/mail.service';
 
 @Injectable()
 export class AuthService {
+  // Añadimos un logger para ver los mensajes en PM2
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private usersService: UsersService,
     private jwtService: JwtService,
@@ -15,57 +18,48 @@ export class AuthService {
 
   async validateUser(email: string, pass: string): Promise<any> {
     const user = await this.usersService.findOneByEmail(email);
-
     if (!user || !user.password) {
       return null;
     }
-
     const isPasswordMatching = await bcrypt.compare(pass, user.password);
-
     if (isPasswordMatching) {
       const { password, ...result } = user;
       return result;
     }
-    
     return null;
   }
 
   async login(user: User) {
-    /**
-     * FUNCIÓN DEFINITIVA Y ROBUSTA PARA LIMPIAR ROLES
-     * Esta función maneja múltiples formatos para asegurar que siempre devuelva un array limpio.
-     */
+    // --- INICIO DE LA PRUEBA DE FUEGO ---
+    this.logger.log('--- INICIANDO PROCESO DE LOGIN PARA VERIFICAR ROLES ---');
+    this.logger.log(`1. ROLES CRUDOS RECIBIDOS DEL OBJETO USER: ${JSON.stringify(user.roles)}`);
+    // --- FIN DE LA PRUEBA ---
+
     const cleanRoles = (roles: any): string[] => {
       let rolesString: string;
-
-      // Caso 1: El formato problemático ['{role1,role2}']
       if (Array.isArray(roles) && roles.length > 0 && typeof roles[0] === 'string') {
         rolesString = roles[0];
-      } 
-      // Caso 2: El formato ideal de 'simple-array' o el formato de array de PG "crudo"
-      else if (typeof roles === 'string') {
+      } else if (typeof roles === 'string') {
         rolesString = roles;
-      } 
-      // Caso 3: Ya es un array limpio (poco probable pero seguro)
-      else if (Array.isArray(roles)) {
+      } else if (Array.isArray(roles)) {
         return roles;
-      }
-      // Si no es un formato reconocible, devuelve un array vacío
-      else {
+      } else {
         return [];
       }
-
-      // Limpia el string de cualquier caracter de array ('{}', '"') y lo convierte en un array
-      return rolesString
-        .replace(/[{}"\s]/g, '') // Elimina llaves, comillas y espacios
-        .split(',')           // Divide por la coma
-        .filter(role => role);  // Elimina elementos vacíos si los hubiera
+      return rolesString.replace(/[{}"\s]/g, '').split(',').filter(role => role);
     };
+
+    const finalRoles = cleanRoles(user.roles);
+
+    // --- INICIO DE LA PRUEBA DE FUEGO ---
+    this.logger.log(`2. ROLES LIMPIOS QUE SE INCLUIRÁN EN EL TOKEN: ${JSON.stringify(finalRoles)}`);
+    this.logger.log('--- FIN DEL PROCESO DE LOGIN ---');
+    // --- FIN DE LA PRUEBA ---
 
     const payload = { 
       email: user.email, 
       sub: user.id, 
-      roles: cleanRoles(user.roles) 
+      roles: finalRoles 
     };
 
     return {
