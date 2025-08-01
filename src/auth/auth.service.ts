@@ -1,5 +1,3 @@
-// src/auth/auth.service.ts
-
 import { Injectable } from '@nestjs/common';
 import { UsersService } from 'src/users/users.service';
 import { JwtService } from '@nestjs/jwt';
@@ -18,13 +16,8 @@ export class AuthService {
   async validateUser(email: string, pass: string): Promise<any> {
     const user = await this.usersService.findOneByEmail(email);
 
-    // FIX: Se separan las validaciones para evitar errores con objetos nulos.
-    // Esto es más seguro que encadenar todo en un solo 'if'.
-    if (!user) {
-      return null; // Usuario no encontrado
-    }
-    if (!user.password) {
-      return null; // Usuario existe pero no tiene contraseña
+    if (!user || !user.password) {
+      return null;
     }
 
     const isPasswordMatching = await bcrypt.compare(pass, user.password);
@@ -34,17 +27,35 @@ export class AuthService {
       return result;
     }
     
-    return null; // Contraseña incorrecta
+    return null;
   }
 
+  /**
+   * CORRECCIÓN: Se procesan los roles antes de crear el payload del JWT.
+   */
   async login(user: User) {
-    const payload = { email: user.email, sub: user.id, roles: user.roles };
+    // La base de datos devuelve los roles como un string tipo '{OWNER,ADMIN,CLIENT}'
+    // Esta función lo convierte en un array limpio: ['OWNER', 'ADMIN', 'CLIENT']
+    const cleanRoles = (roles: any): string[] => {
+      if (Array.isArray(roles) && typeof roles[0] === 'string' && roles[0].startsWith('{')) {
+        return roles[0]
+          .replace(/[{}"\s]/g, '') // Elimina llaves, comillas y espacios
+          .split(','); // Divide por la coma
+      }
+      return roles; // Si ya es un array limpio, lo devuelve tal cual
+    };
+
+    const payload = { 
+      email: user.email, 
+      sub: user.id, 
+      roles: cleanRoles(user.roles) 
+    };
+
     return {
       access_token: this.jwtService.sign(payload),
     };
   }
   
-  // MANTENIDO: Tu lógica de envío de correos es correcta.
   async sendWelcomeEmail(user: User) {
     if (!user.email) return;
 
