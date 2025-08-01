@@ -141,29 +141,31 @@ export class UsersService {
   }
   
   async findUpcomingBirthdays(days: number): Promise<User[]> {
-    const today = new Date();
-    const futureDate = new Date();
-    futureDate.setDate(today.getDate() + days);
+  const today = new Date();
+  const futureDate = new Date();
+  futureDate.setDate(today.getDate() + days);
 
-    const todayMonthDay = `${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-    const futureMonthDay = `${String(futureDate.getMonth() + 1).padStart(2, '0')}-${String(futureDate.getDate()).padStart(2, '0')}`;
-
-    let queryBuilder = this.usersRepository.createQueryBuilder('user');
-    
-    if (todayMonthDay <= futureMonthDay) {
-      queryBuilder = queryBuilder.where("to_char(\"dateOfBirth\", 'MM-DD') BETWEEN :today AND :future", { today: todayMonthDay, future: futureMonthDay });
-    } else {
-      queryBuilder = queryBuilder.where(
-        "(to_char(\"dateOfBirth\", 'MM-DD') >= :today OR to_char(\"dateOfBirth\", 'MM-DD') <= :future)",
-        { today: todayMonthDay, future: futureMonthDay }
-      );
-    }
-    
-    queryBuilder = queryBuilder
-      .andWhere(':clientRole = ANY(user.roles)', { clientRole: 'CLIENT' })
-      .orderBy("to_char(\"dateOfBirth\", 'MM-DD')");
-    
-    return queryBuilder.getMany();
+  const todayMonthDay = `${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const futureMonthDay = `${String(futureDate.getMonth() + 1).padStart(2, '0')}-${String(futureDate.getDate()).padStart(2, '0')}`;
+  
+  let queryBuilder = this.usersRepository.createQueryBuilder('user');
+  
+  if (todayMonthDay <= futureMonthDay) {
+    queryBuilder = queryBuilder.where("to_char(\"dateOfBirth\", 'MM-DD') BETWEEN :today AND :future", { today: todayMonthDay, future: futureMonthDay });
+  } else {
+    queryBuilder = queryBuilder.where(
+      "(to_char(\"dateOfBirth\", 'MM-DD') >= :today OR to_char(\"dateOfBirth\", 'MM-DD') <= :future)",
+      { today: todayMonthDay, future: futureMonthDay }
+    );
   }
+  
+  // ¡CORRECCIÓN FINAL Y SEGURA!
+  // Usamos un filtro más robusto que TypeORM puede interpretar mejor
+  queryBuilder = queryBuilder
+    .andWhere('user.roles @> ARRAY[:clientRole]', { clientRole: 'CLIENT' })
+    .orderBy("to_char(\"dateOfBirth\", 'MM-DD')");
+  
+  return queryBuilder.getMany();
+}
 }
 
