@@ -158,14 +158,23 @@ export class UsersService {
       { today: todayMonthDay, future: futureMonthDay }
     );
   }
-  
-  // ¡CORRECCIÓN FINAL!
-  // Buscamos si el arreglo de roles contiene el valor 'CLIENT'
-  queryBuilder = queryBuilder
-    .andWhere(`:clientRole = ANY("user"."roles")`, { clientRole: UserRole.CLIENT })
-    .orderBy("to_char(\"dateOfBirth\", 'MM-DD')");
-  
-  return queryBuilder.getMany();
+
+  queryBuilder = queryBuilder.andWhere(`(
+    user.roles = :role OR 
+    user.roles LIKE :rolePrefix OR 
+    user.roles LIKE :roleInfix OR 
+    user.roles LIKE :roleSuffix
+  )`, {
+    role: UserRole.CLIENT,
+    rolePrefix: `${UserRole.CLIENT},%`,
+    roleInfix: `%,${UserRole.CLIENT},%`,
+    roleSuffix: `%,${UserRole.CLIENT}`,
+  });
+
+  return queryBuilder
+    .orderBy("to_char(\"dateOfBirth\", 'MM-DD')")
+    .getMany();
 }
+
 }
 
