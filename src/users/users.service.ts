@@ -141,29 +141,29 @@ export class UsersService {
   }
   
   async findUpcomingBirthdays(days: number): Promise<User[]> {
-  // Aquí la lógica de fechas
-  const today = new Date();
-  const futureDate = new Date();
-  futureDate.setDate(today.getDate() + days);
+    const today = new Date();
+    const futureDate = new Date();
+    futureDate.setDate(today.getDate() + days);
 
-  const todayMonthDay = `${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-  const futureMonthDay = `${String(futureDate.getMonth() + 1).padStart(2, '0')}-${String(futureDate.getDate()).padStart(2, '0')}`;
-  
-  let queryBuilder = this.usersRepository.createQueryBuilder('user')
-    // CORRECCIÓN: el valor del rol debe estar a la izquierda de ANY
-    .where(':clientRole = ANY(user.roles)', { clientRole: 'CLIENT' });
+    const todayMonthDay = `${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    const futureMonthDay = `${String(futureDate.getMonth() + 1).padStart(2, '0')}-${String(futureDate.getDate()).padStart(2, '0')}`;
 
-  if (todayMonthDay <= futureMonthDay) {
-    queryBuilder = queryBuilder.andWhere("to_char(\"dateOfBirth\", 'MM-DD') BETWEEN :today AND :future", { today: todayMonthDay, future: futureMonthDay });
-  } else {
-    queryBuilder = queryBuilder.andWhere(
-      "(to_char(\"dateOfBirth\", 'MM-DD') >= :today OR to_char(\"dateOfBirth\", 'MM-DD') <= :future)",
-      { today: todayMonthDay, future: futureMonthDay }
-    );
+    let queryBuilder = this.usersRepository.createQueryBuilder('user');
+    
+    if (todayMonthDay <= futureMonthDay) {
+      queryBuilder = queryBuilder.where("to_char(\"dateOfBirth\", 'MM-DD') BETWEEN :today AND :future", { today: todayMonthDay, future: futureMonthDay });
+    } else {
+      queryBuilder = queryBuilder.where(
+        "(to_char(\"dateOfBirth\", 'MM-DD') >= :today OR to_char(\"dateOfBirth\", 'MM-DD') <= :future)",
+        { today: todayMonthDay, future: futureMonthDay }
+      );
+    }
+    
+    queryBuilder = queryBuilder
+      .andWhere(':clientRole = ANY(user.roles)', { clientRole: 'CLIENT' })
+      .orderBy("to_char(\"dateOfBirth\", 'MM-DD')");
+    
+    return queryBuilder.getMany();
   }
-  
-  queryBuilder = queryBuilder.orderBy("to_char(\"dateOfBirth\", 'MM-DD')");
-  
-  return queryBuilder.getMany();
 }
-}
+
