@@ -140,29 +140,29 @@ export class UsersService {
       .getOne();
   }
   
-async findUpcomingBirthdays(days: number): Promise<User[]> {
+  async findUpcomingBirthdays(days: number): Promise<User[]> {
+  // Aquí la lógica de fechas
   const today = new Date();
   const futureDate = new Date();
   futureDate.setDate(today.getDate() + days);
 
   const todayMonthDay = `${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
   const futureMonthDay = `${String(futureDate.getMonth() + 1).padStart(2, '0')}-${String(futureDate.getDate()).padStart(2, '0')}`;
-
-  let queryBuilder = this.usersRepository.createQueryBuilder('user');
   
+  let queryBuilder = this.usersRepository.createQueryBuilder('user')
+    // CORRECCIÓN: el valor del rol debe estar a la izquierda de ANY
+    .where(':clientRole = ANY(user.roles)', { clientRole: 'CLIENT' });
+
   if (todayMonthDay <= futureMonthDay) {
-    queryBuilder = queryBuilder.where("to_char(\"dateOfBirth\", 'MM-DD') BETWEEN :today AND :future", { today: todayMonthDay, future: futureMonthDay });
+    queryBuilder = queryBuilder.andWhere("to_char(\"dateOfBirth\", 'MM-DD') BETWEEN :today AND :future", { today: todayMonthDay, future: futureMonthDay });
   } else {
-    queryBuilder = queryBuilder.where(
+    queryBuilder = queryBuilder.andWhere(
       "(to_char(\"dateOfBirth\", 'MM-DD') >= :today OR to_char(\"dateOfBirth\", 'MM-DD') <= :future)",
       { today: todayMonthDay, future: futureMonthDay }
     );
   }
   
-  // ¡CORRECCIÓN AQUÍ!
-  queryBuilder = queryBuilder
-    .andWhere(":clientRole = ANY(user.roles)", { clientRole: UserRole.CLIENT })
-    .orderBy("to_char(\"dateOfBirth\", 'MM-DD')");
+  queryBuilder = queryBuilder.orderBy("to_char(\"dateOfBirth\", 'MM-DD')");
   
   return queryBuilder.getMany();
 }
