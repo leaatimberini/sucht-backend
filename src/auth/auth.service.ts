@@ -30,22 +30,17 @@ export class AuthService {
     return null;
   }
 
-  /**
-   * CORRECCIÓN DEFINITIVA: Se ajusta la lógica de 'cleanRoles' para que sea más robusta.
-   */
   async login(user: User) {
+    // FUNCIÓN CORREGIDA Y SIMPLIFICADA
     const cleanRoles = (roles: any): string[] => {
-      // Verifica si 'roles' es el string de array de PostgreSQL (ej: '{OWNER,ADMIN,CLIENT}')
-      if (typeof roles === 'string' && roles.startsWith('{')) {
-        return roles
-          .slice(1, -1) // 1. Elimina las llaves '{' y '}' del principio y el final
-          .split(',');  // 2. Divide el string en un array por las comas
+      // Con `type: 'simple-array'`, TypeORM devuelve un string separado por comas.
+      if (typeof roles === 'string') {
+        return roles.split(','); // Simplemente dividimos el string por la coma.
       }
-      // Si ya es un array normal, lo devuelve tal cual
       if (Array.isArray(roles)) {
-        return roles;
+        return roles; // Si ya es un array, lo usamos.
       }
-      return []; // Devuelve un array vacío como fallback seguro
+      return []; // Fallback de seguridad.
     };
 
     const payload = { 
