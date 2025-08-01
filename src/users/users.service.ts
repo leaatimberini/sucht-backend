@@ -159,10 +159,10 @@ export class UsersService {
     );
   }
   
-  // ¡CORRECCIÓN FINAL Y SEGURA!
-  // Usamos un filtro más robusto que TypeORM puede interpretar mejor
+  // ¡CORRECCIÓN FINAL!
+  // Buscamos si el arreglo de roles contiene el valor 'CLIENT'
   queryBuilder = queryBuilder
-    .andWhere('user.roles @> ARRAY[:clientRole]', { clientRole: 'CLIENT' })
+    .andWhere(`:clientRole = ANY("user"."roles")`, { clientRole: UserRole.CLIENT })
     .orderBy("to_char(\"dateOfBirth\", 'MM-DD')");
   
   return queryBuilder.getMany();
