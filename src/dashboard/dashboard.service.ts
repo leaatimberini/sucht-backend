@@ -1,23 +1,13 @@
-// src/dashboard/service.ts
-
 import { Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Event } from 'src/events/event.entity';
 import { Ticket } from 'src/tickets/ticket.entity';
 import { User, UserRole } from 'src/users/user.entity';
 import { LessThan, Repository } from 'typeorm';
-// CAMBIO: Importamos el DTO que creamos para la validación de query params.
 import { DashboardQueryDto } from './dto/dashboard-query.dto';
-
-// NOTA: Estas interfaces se eliminan del archivo. 
-// Las reemplazamos por los DTO o tipos de retorno inferidos por TypeScript.
-// export interface RRPPPerformanceData { ... }
-// export interface DashboardFilters { ... }
-// export interface AttendanceRankingData { ... }
 
 @Injectable()
 export class DashboardService {
-  // MEJORA: Añadimos un logger para un mejor seguimiento de errores.
   private readonly logger = new Logger('DashboardService');
 
   constructor(
@@ -29,21 +19,18 @@ export class DashboardService {
     private readonly usersRepository: Repository<User>,
   ) {}
   
-  // CAMBIO: El método ahora recibe 'DashboardQueryDto' en lugar de 'DashboardFilters'.
   async getRRPPPerformance(queryDto: DashboardQueryDto) {
     const { eventId, startDate, endDate } = queryDto;
 
     try {
-      // MEJORA: La consulta ahora es más robusta. Usamos subconsultas para evitar
-      // problemas con los LEFT JOINs cuando se aplican filtros. Esto asegura que
-      // siempre listemos a todos los RRPP, incluso si tienen 0 tickets para los filtros dados.
       const query = this.usersRepository
         .createQueryBuilder('user')
         .select([
           'user.id as "rrppId"',
           'user.name as "rrppName"',
         ])
-        .where('user.roles @> ARRAY[:role]', { role: UserRole.RRPP });
+        // CORRECCIÓN: Se cambia el operador @> por LIKE para buscar en el string
+        .where("user.roles LIKE :role", { role: `%${UserRole.RRPP}%` });
 
       query.addSelect(
         (subQuery) => {
@@ -100,9 +87,7 @@ export class DashboardService {
     }
   }
 
-  // MANTENIDO: Este método no usa filtros globales y su lógica es correcta.
   async getMyRRPPStats(promoterId: string) {
-    // ... tu código original es correcto, lo mantenemos ...
     const stats = await this.ticketsRepository.createQueryBuilder("ticket")
       .select("SUM(ticket.quantity)", "ticketsGenerated")
       .addSelect("SUM(ticket.redeemedCount)", "peopleAdmitted")
@@ -112,7 +97,14 @@ export class DashboardService {
     const guestList = await this.ticketsRepository.find({
       where: { promoter: { id: promoterId } },
       relations: ['user', 'event', 'tier'],
-      select: { /* ... */ }
+      select: { 
+        id: true,
+        status: true,
+        redeemedCount: true,
+        user: { name: true, email: true },
+        event: { title: true },
+        tier: { name: true },
+       }
     });
 
     return {
@@ -122,7 +114,6 @@ export class DashboardService {
     };
   }
 
-  // CAMBIO: El método ahora recibe 'DashboardQueryDto'.
   async getSummaryMetrics(queryDto: DashboardQueryDto) {
     const { eventId, startDate, endDate } = queryDto;
 
@@ -130,7 +121,6 @@ export class DashboardService {
       .select('COALESCE(SUM(ticket.quantity), 0)', 'totalTicketsGenerated')
       .addSelect('COALESCE(SUM(ticket.redeemedCount), 0)', 'totalPeopleAdmitted');
 
-    // MEJORA: Lógica de filtrado simplificada y estandarizada.
     if (eventId) {
       query.andWhere("ticket.eventId = :eventId", { eventId });
     }
@@ -148,7 +138,6 @@ export class DashboardService {
     };
   }
 
-  // CAMBIO: El método ahora recibe 'DashboardQueryDto'.
   async getEventPerformance(queryDto: DashboardQueryDto) {
     const { eventId, startDate, endDate } = queryDto;
 
@@ -160,7 +149,6 @@ export class DashboardService {
       .addSelect('COALESCE(SUM(ticket.quantity), 0)', 'ticketsGenerated')
       .addSelect('COALESCE(SUM(ticket.redeemedCount), 0)', 'peopleAdmitted');
 
-    // MEJORA: Lógica de filtrado simplificada y estandarizada.
     if (eventId) {
       query.andWhere("event.id = :eventId", { eventId });
     }
@@ -180,9 +168,7 @@ export class DashboardService {
     }));
   }
 
-  // MANTENIDO: Los siguientes métodos no requerían cambios en su lógica.
   async getNoShows(): Promise<Ticket[]> {
-    // ... tu código original es correcto, lo mantenemos ...
     const now = new Date();
     return this.ticketsRepository.find({
         where: {
@@ -190,19 +176,28 @@ export class DashboardService {
             event: { endDate: LessThan(now) },
         },
         relations: { user: true, event: true, tier: true },
-        // ... select y order
+        select: {
+          id: true,
+          createdAt: true,
+          user: { id: true, name: true, email: true },
+          event: { id: true, title: true, endDate: true },
+          tier: { name: true }
+        },
+        order: {
+          event: { endDate: "DESC" }
+        }
     });
   }
 
   async getAttendanceRanking(limit: number = 25) {
-    // ... tu código original es correcto, lo mantenemos ...
     const query = this.usersRepository.createQueryBuilder("user")
         .leftJoin("user.tickets", "ticket")
         .select("user.id", "userId")
         .addSelect("user.name", "userName")
         .addSelect("user.email", "userEmail")
         .addSelect("COALESCE(SUM(ticket.redeemedCount), 0)", "totalAttendance")
-        .where("user.roles @> ARRAY[:role]", { role: UserRole.CLIENT })
+        // CORRECCIÓN: Se cambia el operador @> por LIKE para buscar en el string
+        .where("user.roles LIKE :role", { role: `%${UserRole.CLIENT}%` })
         .groupBy("user.id, user.name, user.email")
         .orderBy('"totalAttendance"', 'DESC')
         .limit(limit);
