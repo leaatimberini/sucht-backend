@@ -31,16 +31,35 @@ export class AuthService {
   }
 
   async login(user: User) {
-    // FUNCIÓN CORREGIDA Y SIMPLIFICADA
+    /**
+     * FUNCIÓN DEFINITIVA Y ROBUSTA PARA LIMPIAR ROLES
+     * Esta función maneja múltiples formatos para asegurar que siempre devuelva un array limpio.
+     */
     const cleanRoles = (roles: any): string[] => {
-      // Con `type: 'simple-array'`, TypeORM devuelve un string separado por comas.
-      if (typeof roles === 'string') {
-        return roles.split(','); // Simplemente dividimos el string por la coma.
+      let rolesString: string;
+
+      // Caso 1: El formato problemático ['{role1,role2}']
+      if (Array.isArray(roles) && roles.length > 0 && typeof roles[0] === 'string') {
+        rolesString = roles[0];
+      } 
+      // Caso 2: El formato ideal de 'simple-array' o el formato de array de PG "crudo"
+      else if (typeof roles === 'string') {
+        rolesString = roles;
+      } 
+      // Caso 3: Ya es un array limpio (poco probable pero seguro)
+      else if (Array.isArray(roles)) {
+        return roles;
       }
-      if (Array.isArray(roles)) {
-        return roles; // Si ya es un array, lo usamos.
+      // Si no es un formato reconocible, devuelve un array vacío
+      else {
+        return [];
       }
-      return []; // Fallback de seguridad.
+
+      // Limpia el string de cualquier caracter de array ('{}', '"') y lo convierte en un array
+      return rolesString
+        .replace(/[{}"\s]/g, '') // Elimina llaves, comillas y espacios
+        .split(',')           // Divide por la coma
+        .filter(role => role);  // Elimina elementos vacíos si los hubiera
     };
 
     const payload = { 
