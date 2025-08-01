@@ -140,11 +140,11 @@ export class UsersService {
       .getOne();
   }
   
-  async findUpcomingBirthdays(days: number): Promise<User[]> {
-    return this.usersRepository.createQueryBuilder('user')
-      .where("to_char(\"dateOfBirth\", 'MM-DD') BETWEEN to_char(current_date, 'MM-DD') AND to_char(current_date + interval '15 day', 'MM-DD')")
-      .andWhere(":role = ANY(user.roles)", { role: UserRole.CLIENT })
-      .orderBy("to_char(\"dateOfBirth\", 'MM-DD')")
-      .getMany();
-  }
+async findUpcomingBirthdays(days: number): Promise<User[]> {
+  return this.usersRepository.createQueryBuilder('user')
+    .where("to_char(\"dateOfBirth\", 'MM-DD') BETWEEN to_char(current_date AT TIME ZONE 'America/Argentina/Buenos_Aires', 'MM-DD') AND to_char(current_date AT TIME ZONE 'America/Argentina/Buenos_Aires' + interval '15 day', 'MM-DD')")
+    .andWhere(":role = ANY(user.roles)", { role: UserRole.CLIENT })
+    .orderBy("to_char(\"dateOfBirth\", 'MM-DD')")
+    .getMany();
+}
 }
