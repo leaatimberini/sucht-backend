@@ -1,3 +1,5 @@
+// backend/src/users/user.entity.ts
+
 import {
   Entity,
   PrimaryGeneratedColumn,
@@ -36,16 +38,12 @@ export class User {
 
   @Column()
   name: string;
-  
-  // ==================================================================
-  // CAMBIO CLAVE: Cambiamos la configuración de esta columna.
-  // Esto soluciona el error "TypeError: value.slice is not a function".
+
   @Column({
     type: 'simple-array',
     default: [UserRole.CLIENT],
   })
   roles: UserRole[];
-  // ==================================================================
 
   @Column({ nullable: true })
   invitationToken: string;
@@ -63,8 +61,13 @@ export class User {
   dateOfBirth: Date;
 
   // --- NUEVOS CAMPOS PARA PAGOS ---
+  // CORRECCIÓN: Cambiamos el nombre de la propiedad a 'mpAccessToken'
   @Column({ nullable: true, select: false })
-  mercadoPagoAccessToken: string;
+  mpAccessToken: string;
+
+  // NUEVO CAMPO: Agregamos el mpUserId para el split de pagos
+  @Column({ nullable: true, select: false })
+  mpUserId: string;
 
   @Column({ type: 'decimal', precision: 5, scale: 2, nullable: true })
   rrppCommissionRate: number;
@@ -87,8 +90,10 @@ export class User {
       this.password = await bcrypt.hash(this.password, 10);
     }
   }
+
   @OneToMany(() => Notification, notification => notification.user)
   notifications: Notification[];
+
   @OneToMany(() => PushSubscription, (subscription) => subscription.user)
   pushSubscriptions: PushSubscription[];
 }
