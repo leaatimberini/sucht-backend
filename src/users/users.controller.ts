@@ -1,4 +1,6 @@
-import { Controller, Get, Param, Body, UseGuards, Post, NotFoundException, Patch, UseInterceptors, UploadedFile, Request } from '@nestjs/common';
+// backend/src/users/users.controller.ts
+
+import { Controller, Get, Param, Body, UseGuards, Post, NotFoundException, Patch, UseInterceptors, UploadedFile, Request, HttpCode, HttpStatus, ConflictException } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
@@ -9,6 +11,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UpdateUserRoleDto } from './dto/update-user-role.dto';
 import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
+import { unlink } from 'fs/promises';
 
 @Controller('users')
 export class UsersController {
@@ -16,7 +19,90 @@ export class UsersController {
     private readonly usersService: UsersService,
     private readonly cloudinaryService: CloudinaryService,
   ) {}
+
+  @Get('profile/me')
+  @UseGuards(JwtAuthGuard)
+  async getMyProfile(@Request() req) {
+    return this.usersService.getProfile(req.user.id);
+  }
+
+  @Patch('profile/me')
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(FileInterceptor('profileImage'))
+  async updateMyProfile(
+    @Request() req,
+    @Body() updateProfileDto: UpdateProfileDto,
+    @UploadedFile() profileImage?: Express.Multer.File,
+  ) {
+    const userId = req.user.id;
+    if (profileImage) {
+      const uploadResult = await this.cloudinaryService.uploadImage(profileImage, 'sucht/profiles');
+      updateProfileDto.profileImageUrl = uploadResult.secure_url;
+      // Opcional: Eliminar la imagen temporal si se guardó en el servidor local
+      try {
+        await unlink(profileImage.path);
+      } catch (err) {
+        console.error('Error removing temporary file:', err);
+      }
+    }
+    const updatedUser = await this.usersService.updateProfile(userId, updateProfileDto);
+    const { password, invitationToken, ...result } = updatedUser;
+    return result;
+  }
   
+  @Post('invite-staff')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async inviteStaff(@Body() inviteStaffDto: InviteStaffDto) {
+    const user = await this.usersService.inviteOrUpdateStaff(inviteStaffDto);
+    const { password, ...result } = user;
+    return result;
+  }
+  
+  @Get('by-email/:email')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async findByEmail(@Param('email') email: string) {
+    const user = await this.usersService.findOneByEmail(email);
+    if (!user) {
+      throw new NotFoundException(`User with email "${email}" not found`);
+    }
+    const { password, ...result } = user;
+    return result;
+  }
+
+  @Get('staff')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async findStaff() {
+    const users = await this.usersService.findStaff();
+    return users.map(user => {
+      const { password, ...result } = user;
+      return result;
+    });
+  }
+
+  @Get('clients')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async findClients() {
+    const users = await this.usersService.findClients();
+    return users.map(user => {
+      const { password, ...result } = user;
+      return result;
+    });
+  }
+
+  @Patch(':id/roles')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async updateUserRoles(@Param('id') id: string, @Body() updateUserRoleDto: UpdateUserRoleDto,) {
+    const user = await this.usersService.updateUserRoles(id, updateUserRoleDto.roles);
+    const { password, ...result } = user;
+    return result;
+  }
+
+  // REORGANIZADO: Los métodos no duplicados se mueven al final del archivo
   @Get('by-username/:username')
   async findByUsername(@Param('username') username: string) {
     const user = await this.usersService.findOneByUsername(username);
@@ -31,66 +117,21 @@ export class UsersController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.RRPP)
   async findUpcomingBirthdays() {
-    const users = await this.usersService.findUpcomingBirthdays(15); // Próximos 15 días
+    const users = await this.usersService.findUpcomingBirthdays(15);
     return users.map(user => {
       const { password, ...result } = user;
       return result;
     });
   }
 
-  @Patch('profile/me')
-  @UseGuards(JwtAuthGuard)
-  @UseInterceptors(FileInterceptor('profileImage'))
-  async updateProfile(
-    @Request() req, 
-    @Body() updateProfileDto: UpdateProfileDto, 
-    @UploadedFile() profileImage?: Express.Multer.File,
-  ) {
-    let profileImageUrl: string | undefined = undefined;
-    if (profileImage) {
-      const uploadResult = await this.cloudinaryService.uploadImage(profileImage, 'sucht/profiles');
-      profileImageUrl = uploadResult.secure_url;
-    }
-    const userId = req.user.id;
-    const updatedUser = await this.usersService.updateProfile(userId, updateProfileDto, profileImageUrl);
-    const { password, ...result } = updatedUser;
-    return result;
-  }
-  
-  @Get('profile/me')
-  @UseGuards(JwtAuthGuard)
-  async getMyProfile(@Request() req) {
-    // 👇 ESTA LÍNEA ES LA QUE CAMBIÓ
-    return this.usersService.getProfile(req.user.id);
-  }
-  
-  @Post('invite-staff')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN)
-  async inviteStaff(@Body() inviteStaffDto: InviteStaffDto) { const user = await this.usersService.inviteOrUpdateStaff(inviteStaffDto); const { password, ...result } = user; return result; }
-
-  @Get('by-email/:email')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN)
-  async findByEmail(@Param('email') email: string) { const user = await this.usersService.findOneByEmail(email); if (!user) { throw new NotFoundException(`User with email "${email}" not found`); } const { password, ...result } = user; return result; }
-  
   @Get()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
-  async findAll() { const users = await this.usersService.findAll(); return users.map(user => { const { password, ...result } = user; return result; }); }
-  
-  @Get('staff')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN)
-  async findStaff() { const users = await this.usersService.findStaff(); return users.map(user => { const { password, ...result } = user; return result; }); }
-  
-  @Get('clients')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN)
-  async findClients() { const users = await this.usersService.findClients(); return users.map(user => { const { password, ...result } = user; return result; }); }
-  
-  @Patch(':id/roles')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN)
-  async updateUserRoles(@Param('id') id: string, @Body() updateUserRoleDto: UpdateUserRoleDto,) { const user = await this.usersService.updateUserRoles(id, updateUserRoleDto.roles); const { password, ...result } = user; return result; }
+  async findAll() {
+    const users = await this.usersService.findAll();
+    return users.map(user => {
+      const { password, ...result } = user;
+      return result;
+    });
+  }
 }

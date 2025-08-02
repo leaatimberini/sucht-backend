@@ -1,6 +1,6 @@
 // backend/src/users/dto/update-profile.dto.ts
 
-import { IsOptional, IsString, Length, IsDateString, Matches } from 'class-validator';
+import { IsOptional, IsString, Length, IsDateString, Matches, IsDecimal } from 'class-validator';
 
 export class UpdateProfileDto {
   @IsOptional()
@@ -28,14 +28,20 @@ export class UpdateProfileDto {
   @IsDateString()
   dateOfBirth?: string;
 
-  // --- CORRECCIÓN ---
-  // Se ha cambiado el nombre de la propiedad para que coincida con la entidad User.
   @IsOptional()
   @IsString()
   mpAccessToken?: string;
 
-  // AÑADIMOS ESTA PROPIEDAD TAMBIÉN para que los RRPP puedan configurarla
   @IsOptional()
   @IsString()
   mpUserId?: string;
+
+  @IsOptional()
+  @IsDecimal({ decimal_digits: '0,2' })
+  rrppCommissionRate?: number;
+  
+  // CORRECCIÓN: Se agrega la propiedad 'profileImageUrl' al DTO
+  @IsOptional()
+  @IsString()
+  profileImageUrl?: string;
 }
