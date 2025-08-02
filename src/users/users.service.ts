@@ -1,3 +1,5 @@
+// backend/src/users/users.service.ts
+
 import { ConflictException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -7,7 +9,7 @@ import { randomBytes } from 'crypto';
 import { InviteStaffDto } from './dto/invite-staff.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ConfigurationService } from 'src/configuration/configuration.service';
-import { NotificationsService } from 'src/notifications/notifications.service'; // 1. IMPORTAR
+import { NotificationsService } from 'src/notifications/notifications.service';
 
 @Injectable()
 export class UsersService {
@@ -15,29 +17,21 @@ export class UsersService {
     @InjectRepository(User)
     private usersRepository: Repository<User>,
     private readonly configService: ConfigurationService,
-    private readonly notificationsService: NotificationsService, // 2. INYECTAR
+    private readonly notificationsService: NotificationsService,
   ) {}
 
-  // --- NUEVO MÉTODO PARA OBTENER EL PERFIL COMPLETO ---
-  /**
-   * Obtiene el perfil de un usuario y añade el estado de su suscripción a notificaciones.
-   * @param userId El ID del usuario.
-   * @returns El perfil del usuario con el flag `isPushSubscribed`.
-   */
   async getProfile(userId: string) {
     const user = await this.findOneById(userId);
     const isPushSubscribed = await this.notificationsService.isUserSubscribed(userId);
-
-    // Excluimos datos sensibles como el password del objeto que devolvemos
-    const { password, invitationToken, ...profileData } = user;
+    
+    // CORRECCIÓN: Excluimos propiedades sensibles al devolver el perfil
+    const { password, invitationToken, mpAccessToken, mpUserId, ...profileData } = user;
 
     return {
       ...profileData,
       isPushSubscribed,
     };
   }
-
-  // --- RESTO DE MÉTODOS SIN CAMBIOS ---
 
   async findOneById(id: string): Promise<User> {
     const user = await this.usersRepository.findOneBy({ id });
@@ -62,22 +56,29 @@ export class UsersService {
     try { return await this.usersRepository.save(newUser); } catch (error) { throw new InternalServerErrorException('Something went wrong, user not created'); }
   }
 
-  async updateProfile(userId: string, updateProfileDto: UpdateProfileDto, profileImageUrl?: string): Promise<User> {
-    if (updateProfileDto.username) {
-      const existing = await this.findOneByUsername(updateProfileDto.username);
+  async updateProfile(userId: string, updateProfileDto: UpdateProfileDto): Promise<User> {
+    const { username, ...restOfDto } = updateProfileDto;
+    const userToUpdate = await this.usersRepository.findOne({
+      where: { id: userId },
+      // CORRECCIÓN: Usamos 'select' para incluir las propiedades excluidas
+      select: ['id', 'username', 'email', 'mpAccessToken', 'rrppCommissionRate', 'mpUserId'],
+    });
+
+    if (!userToUpdate) {
+      throw new NotFoundException(`User with ID "${userId}" not found`);
+    }
+
+    if (username) {
+      const existing = await this.findOneByUsername(username);
       if (existing && existing.id !== userId) {
         throw new ConflictException('El nombre de usuario ya está en uso.');
       }
+      userToUpdate.username = username;
     }
-    const userToUpdate = await this.findOneById(userId);
-    const { dateOfBirth, ...restOfDto } = updateProfileDto;
+    
+    // CORRECCIÓN: Actualizamos las propiedades del DTO. TypeORM se encargará de las que no estén en el select.
     Object.assign(userToUpdate, restOfDto);
-    if (dateOfBirth) {
-      userToUpdate.dateOfBirth = new Date(dateOfBirth);
-    }
-    if (profileImageUrl !== undefined) {
-      userToUpdate.profileImageUrl = profileImageUrl;
-    }
+
     return this.usersRepository.save(userToUpdate);
   }
 
@@ -122,9 +123,11 @@ export class UsersService {
   async getAdminConfig(): Promise<{ serviceFee: number; accessToken: string | null }> {
     const serviceFeeStr = await this.configService.get('adminServiceFee');
     const adminUser = await this.findAdmin();
+
     return {
       serviceFee: serviceFeeStr ? parseFloat(serviceFeeStr) : 0,
-      accessToken: adminUser?.mercadoPagoAccessToken || null,
+      // CORRECCIÓN CRÍTICA: Cambiamos 'mercadoPagoAccessToken' por 'mpAccessToken'
+      accessToken: adminUser?.mpAccessToken || null,
     };
   }
 
@@ -175,6 +178,4 @@ export class UsersService {
     .orderBy("to_char(\"dateOfBirth\", 'MM-DD')")
     .getMany();
 }
-
 }
-
