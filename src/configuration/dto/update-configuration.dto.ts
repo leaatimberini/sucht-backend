@@ -1,4 +1,7 @@
-import { IsOptional, IsString, IsNotEmpty, IsBooleanString, IsNumberString } from 'class-validator';
+// backend/src/configuration/dto/update-configuration.dto.ts
+
+import { IsOptional, IsString, IsNotEmpty, IsBoolean, IsNumber, IsIn } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class UpdateConfigurationDto {
   @IsOptional()
@@ -14,16 +17,18 @@ export class UpdateConfigurationDto {
   @IsNotEmpty()
   termsAndConditionsText?: string;
 
-  // --- CAMPOS AÑADIDOS ---
+  // --- CAMPOS CORREGIDOS ---
   @IsOptional()
-  @IsBooleanString()
-  paymentsEnabled?: string;
+  @IsBoolean()
+  paymentsEnabled?: boolean;
 
   @IsOptional()
-  @IsNumberString()
-  rrppCommissionRate?: string;
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  adminServiceFee?: number;
 
   @IsOptional()
-  @IsNumberString()
-  adminServiceFee?: string;
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  rrppCommissionRate?: number;
 }
