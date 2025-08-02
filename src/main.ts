@@ -8,7 +8,6 @@ async function bootstrap() {
   process.env.TZ = 'America/Argentina/Buenos_Aires';
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
-  // CORRECCIÓN: Configuramos las rutas de archivos estáticos ANTES del prefijo global.
   app.useStaticAssets(join(__dirname, '..', 'uploads'), {
     prefix: '/uploads/',
   });
@@ -25,9 +24,9 @@ async function bootstrap() {
     credentials: true,
   });
 
+  // CORRECCIÓN: Se elimina 'forbidNonWhitelisted' para permitir peticiones GET sin DTO.
   app.useGlobalPipes(new ValidationPipe({
-    whitelist: true,
-    forbidNonWhitelisted: true,
+    whitelist: true, // Esta opción es segura y suficiente.
   }));
 
   const port = process.env.APP_PORT || 5000;
