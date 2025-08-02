@@ -10,6 +10,7 @@ import {
 import * as bcrypt from 'bcrypt';
 import { Ticket } from 'src/tickets/ticket.entity';
 import { PushSubscription } from 'src/notifications/entities/subscription.entity';
+import { Notification } from 'src/notifications/entities/notification.entity';
 
 export enum UserRole {
   OWNER = 'owner',
@@ -86,7 +87,8 @@ export class User {
       this.password = await bcrypt.hash(this.password, 10);
     }
   }
-
+  @OneToMany(() => Notification, notification => notification.user)
+  notifications: Notification[];
   @OneToMany(() => PushSubscription, (subscription) => subscription.user)
   pushSubscriptions: PushSubscription[];
 }
