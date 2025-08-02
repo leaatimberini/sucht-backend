@@ -178,4 +178,18 @@ export class UsersService {
     .orderBy("to_char(\"dateOfBirth\", 'MM-DD')")
     .getMany();
 }
+
+  // ============== NUEVOS MÉTODOS PARA OAUTH ================
+  async updateMercadoPagoCredentials(userId: string, mpAccessToken: string, mpUserId: string): Promise<void> {
+    const user = await this.usersRepository.findOneBy({ id: userId });
+    if (!user) {
+      throw new NotFoundException(`User with ID "${userId}" not found`);
+    }
+
+    user.mpAccessToken = mpAccessToken;
+    user.mpUserId = mpUserId;
+
+    await this.usersRepository.save(user);
+    return;
+  }
 }

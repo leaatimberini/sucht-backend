@@ -9,6 +9,7 @@ import { User } from 'src/users/user.entity';
 import { TicketTiersService } from 'src/ticket-tiers/ticket-tiers.service';
 import { AcquireTicketDto } from 'src/tickets/dto/acquire-ticket.dto';
 import { ConfigurationService } from 'src/configuration/configuration.service';
+import axios from 'axios'; // Importamos axios para la comunicación con Mercado Pago OAuth
 
 @Injectable()
 export class PaymentsService {
@@ -65,7 +66,6 @@ export class PaymentsService {
     const promoterAmount = promoter && rrppCommissionRate > 0 ? (amountToPay * rrppCommissionRate) / 100 : 0;
     const adminAmount = adminServiceFee > 0 ? (amountToPay * adminServiceFee) / 100 : 0;
 
-    // CORRECCIÓN CRÍTICA: La estructura de split_payments ha sido ajustada
     const receivers: { id: string; amount: number }[] = [];
     if (promoter && promoter.mpUserId) {
       receivers.push({
@@ -101,7 +101,6 @@ export class PaymentsService {
         amountPaid: amountToPay,
         paymentType,
       }),
-      // CORRECCIÓN: Usamos un objeto con la propiedad 'receivers'
       split_payments: receivers.length > 0 ? { receivers } : undefined,
     };
 
@@ -131,5 +130,38 @@ export class PaymentsService {
       return this.ticketsService.acquireForClient(buyer, data, data.promoterUsername, data.amountPaid);
     }
     return null;
+  }
+  
+  // ============== NUEVA LÓGICA PARA OAUTH ================
+
+  getMercadoPagoAuthUrl(userId: string): string {
+    const clientId = this.configService.get('MP_CLIENT_ID');
+    const redirectUri = `${this.configService.get('BACKEND_URL')}/payments/mercadopago/callback`;
+    const state = Buffer.from(JSON.stringify({ userId })).toString('base64');
+    
+    return `https://auth.mercadopago.com.ar/authorization?client_id=${clientId}&response_type=code&platform_id=mp&redirect_uri=${redirectUri}&state=${state}`;
+  }
+
+  async exchangeCodeForAccessToken(userId: string, code: string): Promise<void> {
+    const clientId = this.configService.get('MP_CLIENT_ID');
+    const clientSecret = this.configService.get('MP_CLIENT_SECRET');
+    const redirectUri = `${this.configService.get('BACKEND_URL')}/payments/mercadopago/callback`;
+
+    try {
+      const response = await axios.post('https://api.mercadopago.com/oauth/token', {
+        client_id: clientId,
+        client_secret: clientSecret,
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: redirectUri,
+      });
+
+      const { access_token, refresh_token, user_id } = response.data;
+      
+      await this.usersService.updateMercadoPagoCredentials(userId, access_token, user_id);
+    } catch (error) {
+      console.error('Error exchanging code for access token:', error.response?.data);
+      throw new InternalServerErrorException('Error linking Mercado Pago account.');
+    }
   }
 }

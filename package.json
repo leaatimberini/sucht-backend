@@ -19,7 +19,6 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-  
     "typeorm": "ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js -d ./src/data-source.ts",
     "migration:generate": "npm run typeorm -- migration:generate ./src/database/migrations/%npm_config_name%",
     "migration:run": "npm run typeorm -- migration:run",
@@ -37,6 +36,7 @@
     "@nestjs/serve-static": "^5.0.3",
     "@nestjs/typeorm": "^11.0.0",
     "@types/buffer-to-stream": "^1.0.3",
+    "axios": "^1.11.0",
     "bcrypt": "^6.0.0",
     "buffer-to-stream": "^1.0.0",
     "class-transformer": "^0.5.1",
