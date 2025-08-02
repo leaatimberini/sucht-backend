@@ -1,15 +1,16 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, LessThan, Not, Repository } from 'typeorm';
+import { IsNull, LessThan, Not, Repository, Between, In } from 'typeorm';
 import { Ticket, TicketStatus } from './ticket.entity';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { UsersService } from 'src/users/users.service';
 import { EventsService } from 'src/events/events.service';
-import { TicketTier } from 'src/ticket-tiers/ticket-tier.entity';
+import { TicketTier, ProductType } from 'src/ticket-tiers/ticket-tier.entity';
 import { AcquireTicketDto } from './dto/acquire-ticket.dto';
 import { User } from 'src/users/user.entity';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { MailService } from 'src/mail/mail.service';
+import { DashboardQueryDto } from 'src/dashboard/dto/dashboard-query.dto';
 
 @Injectable()
 export class TicketsService {
@@ -26,7 +27,8 @@ export class TicketsService {
   private async acquire(
     user: User, 
     data: { eventId: string, ticketTierId: string, quantity: number },
-    promoter?: User | null
+    promoter: User | null,
+    amountPaid: number,
   ): Promise<Ticket> {
     const { eventId, ticketTierId, quantity } = data;
     const event = await this.eventsService.findOne(eventId);
@@ -36,9 +38,23 @@ export class TicketsService {
     }
     const tier = await this.ticketTiersRepository.findOneBy({ id: ticketTierId });
     if (!tier) throw new NotFoundException('Tipo de entrada no encontrado.');
-    if (tier.quantity < quantity) throw new BadRequestException(`No quedan suficientes entradas de este tipo. Disponibles: ${tier.quantity}.`);
+    if (tier.quantity < quantity) throw new BadRequestException(`No quedan suficientes. Disponibles: ${tier.quantity}.`);
     
-    const newTicket = this.ticketsRepository.create({ user, event, tier, quantity, promoter });
+    let status = TicketStatus.VALID;
+    const totalPrice = tier.price * quantity;
+    if (amountPaid > 0 && amountPaid < totalPrice) {
+      status = TicketStatus.PARTIALLY_PAID;
+    }
+
+    const newTicket = this.ticketsRepository.create({ 
+      user, 
+      event, 
+      tier, 
+      quantity, 
+      promoter,
+      amountPaid,
+      status,
+    });
     
     tier.quantity -= quantity;
     await this.ticketTiersRepository.save(tier);
@@ -46,16 +62,11 @@ export class TicketsService {
     return this.ticketsRepository.save(newTicket);
   }
 
-  // --- FUNCIÓN CORREGIDA Y MEJORADA ---
   async createByRRPP(createTicketDto: CreateTicketDto, promoter: User): Promise<Ticket> {
-    // Ahora tomamos la cantidad del DTO, con 1 como valor por defecto
     const { userEmail, eventId, ticketTierId, quantity = 1 } = createTicketDto;
     const user = await this.usersService.findOrCreateByEmail(userEmail);
+    const ticket = await this.acquire(user, { eventId, ticketTierId, quantity }, promoter, 0);
 
-    // CORRECCIÓN: Pasamos el objeto 'promoter' completo para que se asocie correctamente
-    const ticket = await this.acquire(user, { eventId, ticketTierId, quantity }, promoter);
-
-    // Enviar correo
     await this.mailService.sendMail(
       user.email,
       '🎟️ Tienes una nueva entrada de RRPP',
@@ -70,14 +81,18 @@ export class TicketsService {
     return ticket;
   }
 
-  async acquireForClient(user: User, acquireTicketDto: AcquireTicketDto, promoterUsername?: string): Promise<Ticket> {
+  async acquireForClient(
+    user: User, 
+    acquireTicketDto: AcquireTicketDto, 
+    promoterUsername?: string,
+    amountPaid: number = 0,
+  ): Promise<Ticket> {
     let promoter: User | null = null;
     if (promoterUsername) {
       promoter = await this.usersService.findOneByUsername(promoterUsername);
     }
-    const ticket = await this.acquire(user, acquireTicketDto, promoter);
+    const ticket = await this.acquire(user, acquireTicketDto, promoter, amountPaid);
 
-    // Enviar correo
     await this.mailService.sendMail(
       user.email,
       '🎟️ Entrada adquirida con éxito',
@@ -90,6 +105,57 @@ export class TicketsService {
     );
 
     return ticket;
+  }
+  
+  async getFullHistory(filters: DashboardQueryDto): Promise<Ticket[]> {
+    const { eventId, startDate, endDate } = filters;
+
+    const queryOptions: any = {
+      relations: ['user', 'event', 'tier', 'promoter'],
+      order: {
+        createdAt: 'DESC',
+      },
+      where: {},
+    };
+
+    if (eventId) {
+      queryOptions.where.event = { id: eventId };
+    }
+
+    if (startDate && endDate) {
+      queryOptions.where.createdAt = Between(new Date(startDate), new Date(endDate));
+    }
+    
+    return this.ticketsRepository.find(queryOptions);
+  }
+
+  async getScanHistory(eventId: string): Promise<Ticket[]> {
+    return this.ticketsRepository.find({
+      where: {
+        event: { id: eventId },
+        validatedAt: Not(IsNull()),
+      },
+      relations: ['user', 'tier'],
+      order: {
+        validatedAt: 'DESC',
+      },
+      take: 50,
+    });
+  }
+
+  async getPremiumProducts(eventId: string): Promise<Ticket[]> {
+    return this.ticketsRepository.find({
+      where: {
+        event: { id: eventId },
+        tier: {
+          productType: In([ProductType.VIP_TABLE, ProductType.VOUCHER]),
+        },
+      },
+      relations: ['user', 'tier'],
+      order: {
+        createdAt: 'ASC',
+      },
+    });
   }
 
   async findTicketsByUser(userId: string): Promise<Ticket[]> {
@@ -134,7 +200,6 @@ export class TicketsService {
     });
 
     for (const ticket of unconfirmedTickets) {
-      // Lógica de cancelación...
       const tier = ticket.tier;
       if (tier) {
         tier.quantity += ticket.quantity;
@@ -156,7 +221,7 @@ export class TicketsService {
       throw new BadRequestException('Esta entrada ha expirado.');
     }
 
-    if (ticket.status !== TicketStatus.VALID && ticket.status !== TicketStatus.PARTIALLY_USED) {
+    if (ticket.status !== TicketStatus.VALID && ticket.status !== TicketStatus.PARTIALLY_USED && ticket.status !== TicketStatus.PARTIALLY_PAID) {
       throw new BadRequestException(`Esta entrada ya fue utilizada completamente o ha sido invalidada.`);
     }
 
@@ -171,7 +236,7 @@ export class TicketsService {
 
     if (ticket.redeemedCount >= ticket.quantity) {
       ticket.status = TicketStatus.USED;
-    } else {
+    } else if (ticket.status === TicketStatus.VALID) {
       ticket.status = TicketStatus.PARTIALLY_USED;
     }
 

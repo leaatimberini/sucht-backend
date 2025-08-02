@@ -1,16 +1,22 @@
-import { IsNotEmpty, IsUUID, IsInt, Min } from 'class-validator';
+// src/tickets/dto/acquire-ticket.dto.ts
+
+import { IsString, IsNotEmpty, IsInt, Min, IsOptional, IsEnum } from 'class-validator';
 
 export class AcquireTicketDto {
+  @IsString()
   @IsNotEmpty()
-  @IsUUID()
   eventId: string;
 
+  @IsString()
   @IsNotEmpty()
-  @IsUUID()
   ticketTierId: string;
 
-  @IsNotEmpty()
   @IsInt()
   @Min(1)
   quantity: number;
+
+  // --- NUEVO CAMPO ---
+  @IsOptional()
+  @IsEnum(['full', 'partial'])
+  paymentType?: 'full' | 'partial';
 }

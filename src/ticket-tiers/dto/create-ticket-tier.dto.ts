@@ -1,4 +1,5 @@
-import { IsNotEmpty, IsString, IsNumber, Min, IsDateString, IsOptional } from 'class-validator';
+import { IsNotEmpty, IsString, IsNumber, Min, IsDateString, IsOptional, IsEnum, IsBoolean } from 'class-validator';
+import { ProductType } from '../ticket-tier.entity';
 
 export class CreateTicketTierDto {
   @IsNotEmpty()
@@ -18,4 +19,18 @@ export class CreateTicketTierDto {
   @IsOptional()
   @IsDateString()
   validUntil?: Date;
+
+  // --- NUEVOS CAMPOS ---
+  @IsOptional()
+  @IsEnum(ProductType)
+  productType?: ProductType;
+
+  @IsOptional()
+  @IsBoolean()
+  allowPartialPayment?: boolean;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  partialPaymentPrice?: number;
 }

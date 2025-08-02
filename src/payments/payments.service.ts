@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, InternalServerErrorException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import MercadoPagoConfig, { Preference } from 'mercadopago';
 import { TicketsService } from 'src/tickets/tickets.service';
@@ -6,7 +6,7 @@ import { UsersService } from 'src/users/users.service';
 import { User } from 'src/users/user.entity';
 import { TicketTiersService } from 'src/ticket-tiers/ticket-tiers.service';
 import { AcquireTicketDto } from 'src/tickets/dto/acquire-ticket.dto';
-import { ConfigurationService } from 'src/configuration/configuration.service'; // 1. IMPORTAR
+import { ConfigurationService } from 'src/configuration/configuration.service';
 
 @Injectable()
 export class PaymentsService {
@@ -17,33 +17,43 @@ export class PaymentsService {
     private readonly usersService: UsersService,
     private readonly ticketsService: TicketsService,
     private readonly ticketTiersService: TicketTiersService,
-    private readonly configurationService: ConfigurationService, // 2. INYECTAR
+    private readonly configurationService: ConfigurationService,
   ) {}
 
   async createPreference(
     buyer: User,
     data: AcquireTicketDto & { promoterUsername?: string },
   ) {
-    const { eventId, ticketTierId, quantity, promoterUsername } = data;
+    // Desestructuramos los datos, incluyendo el nuevo paymentType
+    const { eventId, ticketTierId, quantity, promoterUsername, paymentType = 'full' } = data;
 
     const tier = await this.ticketTiersService.findOne(ticketTierId);
     if (!tier) throw new NotFoundException('Tipo de entrada no encontrado.');
     if (tier.quantity < quantity) throw new BadRequestException('No quedan suficientes entradas.');
     
-    // --- LÓGICA ACTUALIZADA ---
-    // 3. Verificamos si los pagos están habilitados globalmente
     const paymentsEnabled = await this.configurationService.get('paymentsEnabled');
-
-    // Si la entrada es gratis O los pagos están deshabilitados, la generamos directamente
     if (tier.price === 0 || paymentsEnabled !== 'true') {
-      const ticket = await this.ticketsService.acquireForClient(buyer, data, promoterUsername);
-      return { type: 'free', ticketId: ticket.id, message: 'Entrada generada con éxito.' };
+      const ticket = await this.ticketsService.acquireForClient(buyer, data, promoterUsername, 0); // Se paga 0
+      return { type: 'free', ticketId: ticket.id, message: 'Producto adquirido con éxito.' };
     }
     
-    // --- LÓGICA PARA ENTRADAS PAGAS (solo se ejecuta si los pagos están habilitados) ---
+    // --- LÓGICA DE PAGO ACTUALIZADA ---
+    let amountToPay: number;
+    
+    // 1. Determinar el monto a pagar
+    if (paymentType === 'partial') {
+      if (!tier.allowPartialPayment || !tier.partialPaymentPrice) {
+        throw new BadRequestException('Este producto no permite el pago de señas.');
+      }
+      amountToPay = tier.partialPaymentPrice;
+    } else {
+      amountToPay = tier.price * quantity;
+    }
+
+    // 2. Configurar Mercado Pago
     const owner = await this.usersService.findOwner();
     if (!owner?.mercadoPagoAccessToken) {
-      throw new Error("La cuenta del dueño no tiene un Access Token de Mercado Pago configurado.");
+      throw new InternalServerErrorException("La cuenta del dueño no tiene un Access Token de MP configurado.");
     }
     const mpClient = new MercadoPagoConfig({ accessToken: owner.mercadoPagoAccessToken });
     this.client = new Preference(mpClient);
@@ -51,18 +61,18 @@ export class PaymentsService {
     const adminConfig = await this.usersService.getAdminConfig();
     const promoter = promoterUsername ? await this.usersService.findOneByUsername(promoterUsername) : null;
     
-    const totalAmount = tier.price * quantity;
-    const adminFee = adminConfig.serviceFee > 0 ? (totalAmount * adminConfig.serviceFee) / 100 : 0;
-    const promoterFee = promoter && promoter.rrppCommissionRate > 0 ? (totalAmount * promoter.rrppCommissionRate) / 100 : 0;
+    // 3. Las comisiones se calculan sobre el MONTO A PAGAR AHORA
+    const adminFee = adminConfig.serviceFee > 0 ? (amountToPay * adminConfig.serviceFee) / 100 : 0;
+    const promoterFee = promoter && promoter.rrppCommissionRate > 0 ? (amountToPay * promoter.rrppCommissionRate) / 100 : 0;
     const totalFee = adminFee + promoterFee;
 
     const preference = await this.client.create({
       body: {
         items: [{
           id: tier.id,
-          title: `Entrada: ${tier.name} x ${quantity} - ${tier.event.title}`,
+          title: `${tier.name} x ${quantity} - ${tier.event.title} (${paymentType === 'partial' ? 'Seña' : 'Pago Total'})`,
           quantity: 1,
-          unit_price: totalAmount,
+          unit_price: amountToPay,
           currency_id: 'ARS',
         }],
         application_fee: totalFee > 0 ? parseFloat(totalFee.toFixed(2)) : undefined,
@@ -71,12 +81,15 @@ export class PaymentsService {
           failure: `${this.configService.get('FRONTEND_URL')}/payment/failure`,
         },
         auto_return: 'approved',
+        // 4. Guardamos el monto pagado y el tipo en la referencia
         external_reference: JSON.stringify({ 
           buyerId: buyer.id, 
           eventId,
           ticketTierId,
           quantity,
           promoterUsername,
+          amountPaid: amountToPay, // Guardamos lo que se está pagando
+          paymentType,
         }),
       } as any,
     });
@@ -90,6 +103,7 @@ export class PaymentsService {
     if (!buyer) {
       throw new NotFoundException('Comprador no encontrado.');
     }
-    return this.ticketsService.acquireForClient(buyer, data, data.promoterUsername);
+    // 5. Pasamos el monto pagado al servicio de tickets
+    return this.ticketsService.acquireForClient(buyer, data, data.promoterUsername, data.amountPaid);
   }
 }
