@@ -71,7 +71,17 @@ export class TicketsService {
       <h2>Hola ${user.name || ''} 👋</h2>
       <p>Tu entrada para <strong>${newTicket.event.title}</strong> fue registrada correctamente.</p>
       <p>Tipo: ${newTicket.tier.name} — Válida para: ${newTicket.quantity} persona(s)</p>
-      <p>Nos vemos el ${new Date(newTicket.event.startDate).toLocaleDateString('es-AR')} 🎉</p>
+      <br />
+      <P>El día del evento, vas a tener que confirmar tu asistencia a partir de las 20hs. Si no se confirma en una hora, el ticket, vuelve a estar Disponible.</p>
+  <br />
+        <p>¡Nos vemos el ${new Date(newTicket.event.startDate).toLocaleDateString('es-AR')}! 🎉</p>
+  <br />
+      <p>Recuerda que debes validar tu entrada al llegar al evento.</p>
+      <p>Para validar tu entrada, simplemente muestra el código QR que te aparecerá en la app en la sección de <a href="https://sucht.com.ar/mi-cuenta">Entradas</a>.</p>
+      <p>Si tienes alguna duda, contacta al RRPP o a través de nuestro instagram <a href="https://instagram.com/sucht.oficial">@sucht.oficial</a>.</p>
+      <p>¡Te esperamos! 🎉</p>
+
+
       `
     );
 
@@ -96,6 +106,13 @@ export class TicketsService {
       <h2>Hola ${user.name || ''} 👋</h2>
       <p>El RRPP <strong>@${promoter.username}</strong> te generó ${quantity} entradas para <strong>${tickets[0].event.title}</strong>.</p>
       <p>Tipo: ${tickets[0].tier.name}</p>
+<br />
+      <P>El día del evento, vas a tener que confirmar tu asistencia a partir de las 20hs. Si no se confirma en una hora, el ticket, vuelve a estar Disponible.</p>
+  <br />
+      <p>¡Nos vemos el ${new Date(tickets[0].event.startDate).toLocaleDateString('es-AR')}! 🎉</p>
+      <p>Recuerda que debes validar tu entrada al llegar al evento.</p>
+      <p>Para validar tu entrada, simplemente muestra el código QR que te aparecerá en la app en la sección de <a href="https://sucht.com.ar/mi-cuenta">Entradas</a>.</p>
+      <p>Si tienes alguna duda, contacta al RRPP o a través de nuestro instagram <a href="https://instagram.com/sucht.oficial">@sucht.oficial</a>.</p>
       <p>¡Te esperamos! 🎉</p>
       `
     );
@@ -193,47 +210,66 @@ export class TicketsService {
     ticket.confirmedAt = new Date();
     return this.ticketsRepository.save(ticket);
   }
-  
+  
   async deleteTicket(id: string): Promise<boolean> {
-    const result: DeleteResult = await this.ticketsRepository.delete(id);
-    return (result.affected ?? 0) > 0;
-  }
-
-  async redeemTicket(id: string, quantity: number): Promise<Ticket> {
-    const ticket = await this.ticketsRepository.findOne({ 
-      where: { id }, 
-      relations: ['user', 'event', 'tier'] 
+    // CORRECCIÓN: Obtenemos el ticket antes de eliminarlo para actualizar el stock
+    const ticketToDelete = await this.ticketsRepository.findOne({
+      where: { id },
+      relations: ['tier'],
     });
 
-    if (!ticket) {
-      throw new NotFoundException('Ticket not found.');
+    if (!ticketToDelete) {
+      return false; // El ticket ya no existe
+    }
+
+    // Devolvemos la cantidad de tickets al stock
+    const tier = ticketToDelete.tier;
+    if (tier) {
+      tier.quantity += ticketToDelete.quantity;
+      await this.ticketTiersRepository.save(tier);
     }
     
-    if (new Date() > new Date(ticket.event.endDate)) {
-      throw new BadRequestException('Event has already finished.');
-    }
+    // Eliminamos el ticket de la base de datos
+    const result: DeleteResult = await this.ticketsRepository.delete(id);
 
-    if (ticket.status === TicketStatus.REDEEMED) {
-      throw new BadRequestException('Ticket has already been redeemed.');
-    }
+    return (result.affected ?? 0) > 0;
+  }
 
-    if (ticket.status === TicketStatus.PARTIALLY_PAID) {
-        throw new BadRequestException('This is a partially paid ticket. Full payment is required before redemption.');
-    }
+  async redeemTicket(id: string, quantity: number): Promise<Ticket> {
+    const ticket = await this.ticketsRepository.findOne({ 
+      where: { id }, 
+      relations: ['user', 'event', 'tier'] 
+    });
 
-    if (ticket.quantity < quantity) {
-        throw new BadRequestException(`Only ${ticket.quantity} entries remaining on this ticket.`);
-    }
+    if (!ticket) {
+      throw new NotFoundException('Ticket not found.');
+    }
+    
+    if (new Date() > new Date(ticket.event.endDate)) {
+      throw new BadRequestException('Event has already finished.');
+    }
 
-    ticket.quantity -= quantity;
+    if (ticket.status === TicketStatus.REDEEMED) {
+      throw new BadRequestException('Ticket has already been redeemed.');
+    }
 
-    if (ticket.quantity === 0) {
-        ticket.status = TicketStatus.REDEEMED;
-        ticket.validatedAt = new Date();
-    }
+    if (ticket.status === TicketStatus.PARTIALLY_PAID) {
+        throw new BadRequestException('This is a partially paid ticket. Full payment is required before redemption.');
+    }
 
-    await this.ticketsRepository.save(ticket);
+    if (ticket.quantity < quantity) {
+        throw new BadRequestException(`Only ${ticket.quantity} entries remaining on this ticket.`);
+    }
 
-    return ticket;
-  }
+    ticket.quantity -= quantity;
+
+    if (ticket.quantity === 0) {
+        ticket.status = TicketStatus.REDEEMED;
+        ticket.validatedAt = new Date();
+    }
+
+    await this.ticketsRepository.save(ticket);
+
+    return ticket;
+  }
 }
