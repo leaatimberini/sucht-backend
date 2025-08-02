@@ -1,6 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+// backend/src/tickets/tickets.service.ts
+
+import { BadRequestException, Injectable, NotFoundException, InternalServerErrorException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, LessThan, Not, Repository, Between, In } from 'typeorm';
+import { IsNull, LessThan, Not, Repository, Between, In, DeleteResult } from 'typeorm';
 import { Ticket, TicketStatus } from './ticket.entity';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { UsersService } from 'src/users/users.service';
@@ -14,246 +16,224 @@ import { DashboardQueryDto } from 'src/dashboard/dto/dashboard-query.dto';
 
 @Injectable()
 export class TicketsService {
-  constructor(
-    @InjectRepository(Ticket)
-    private ticketsRepository: Repository<Ticket>,
-    @InjectRepository(TicketTier)
-    private ticketTiersRepository: Repository<TicketTier>,
-    private usersService: UsersService,
-    private eventsService: EventsService,
-    private mailService: MailService,
-  ) {}
+  constructor(
+    @InjectRepository(Ticket)
+    private ticketsRepository: Repository<Ticket>,
+    @InjectRepository(TicketTier)
+    private ticketTiersRepository: Repository<TicketTier>,
+    private usersService: UsersService,
+    private eventsService: EventsService,
+    private mailService: MailService,
+  ) {}
 
-  private async acquire(
-    user: User, 
-    data: { eventId: string, ticketTierId: string, quantity: number },
-    promoter: User | null,
-    amountPaid: number,
-  ): Promise<Ticket> {
-    const { eventId, ticketTierId, quantity } = data;
-    const event = await this.eventsService.findOne(eventId);
-    if (!event) throw new NotFoundException('Evento no encontrado.');
-    if (new Date() > new Date(event.endDate)) {
-      throw new BadRequestException('Este evento ya ha finalizado.');
-    }
-    const tier = await this.ticketTiersRepository.findOneBy({ id: ticketTierId });
-    if (!tier) throw new NotFoundException('Tipo de entrada no encontrado.');
-    if (tier.quantity < quantity) throw new BadRequestException(`No quedan suficientes. Disponibles: ${tier.quantity}.`);
-    
-    let status = TicketStatus.VALID;
-    const totalPrice = tier.price * quantity;
-    if (amountPaid > 0 && amountPaid < totalPrice) {
-      status = TicketStatus.PARTIALLY_PAID;
-    }
+  private async createTicketAndSendEmail(
+    user: User, 
+    data: { eventId: string, ticketTierId: string, quantity: number },
+    promoter: User | null,
+    amountPaid: number,
+  ): Promise<Ticket> {
+    const { eventId, ticketTierId, quantity } = data;
+    const event = await this.eventsService.findOne(eventId);
+    if (!event) throw new NotFoundException('Evento no encontrado.');
+    if (new Date() > new Date(event.endDate)) {
+      throw new BadRequestException('Este evento ya ha finalizado.');
+    }
+    const tier = await this.ticketTiersRepository.findOneBy({ id: ticketTierId });
+    if (!tier) throw new NotFoundException('Tipo de entrada no encontrado.');
+    if (tier.quantity < quantity) throw new BadRequestException(`No quedan suficientes. Disponibles: ${tier.quantity}.`);
+    
+    let status = TicketStatus.VALID;
+    const totalPrice = tier.price * quantity;
+    if (amountPaid > 0 && amountPaid < totalPrice) {
+      status = TicketStatus.PARTIALLY_PAID;
+    }
 
-    const newTicket = this.ticketsRepository.create({ 
-      user, 
-      event, 
-      tier, 
-      quantity, 
-      promoter,
-      amountPaid,
-      status,
-    });
-    
-    tier.quantity -= quantity;
-    await this.ticketTiersRepository.save(tier);
+    const newTicket = this.ticketsRepository.create({ 
+      user, 
+      event, 
+      tier, 
+      quantity, 
+      promoter,
+      amountPaid,
+      status,
+    });
+    
+    tier.quantity -= quantity;
+    await this.ticketTiersRepository.save(tier);
 
-    return this.ticketsRepository.save(newTicket);
-  }
+    await this.ticketsRepository.save(newTicket);
 
-  async createByRRPP(createTicketDto: CreateTicketDto, promoter: User): Promise<Ticket> {
-    const { userEmail, eventId, ticketTierId, quantity = 1 } = createTicketDto;
-    const user = await this.usersService.findOrCreateByEmail(userEmail);
-    const ticket = await this.acquire(user, { eventId, ticketTierId, quantity }, promoter, 0);
+    // Enviamos el email de confirmación
+    await this.mailService.sendMail(
+      user.email,
+      '🎟️ Entrada adquirida con éxito',
+      `
+      <h2>Hola ${user.name || ''} 👋</h2>
+      <p>Tu entrada para <strong>${newTicket.event.title}</strong> fue registrada correctamente.</p>
+      <p>Tipo: ${newTicket.tier.name} — Válida para: ${newTicket.quantity} persona(s)</p>
+      <p>Nos vemos el ${new Date(newTicket.event.startDate).toLocaleDateString('es-AR')} 🎉</p>
+      `
+    );
 
-    await this.mailService.sendMail(
-      user.email,
-      '🎟️ Tienes una nueva entrada de RRPP',
-      `
-      <h2>Hola ${user.name || ''} 👋</h2>
-      <p>El RRPP <strong>@${promoter.username}</strong> te generó una entrada para <strong>${ticket.event.title}</strong>.</p>
-      <p>Tipo: ${ticket.tier.name} — Válida para: ${ticket.quantity} persona(s)</p>
-      <p>¡Te esperamos! 🎉</p>
-      `
-    );
+    return newTicket;
+  }
 
-    return ticket;
-  }
+  async createByRRPP(createTicketDto: CreateTicketDto, promoter: User): Promise<Ticket[]> {
+    const { userEmail, eventId, ticketTierId, quantity = 1 } = createTicketDto;
+    const user = await this.usersService.findOrCreateByEmail(userEmail);
+    
+    const tickets: Ticket[] = [];
+    for (let i = 0; i < quantity; i++) {
+      const ticket = await this.createTicketAndSendEmail(user, { eventId, ticketTierId, quantity: 1 }, promoter, 0);
+      tickets.push(ticket);
+    }
+    
+    // Enviamos un email de confirmación al usuario
+    await this.mailService.sendMail(
+      user.email,
+      `🎟️ Tienes ${quantity} nuevas entradas de RRPP`,
+      `
+      <h2>Hola ${user.name || ''} 👋</h2>
+      <p>El RRPP <strong>@${promoter.username}</strong> te generó ${quantity} entradas para <strong>${tickets[0].event.title}</strong>.</p>
+      <p>Tipo: ${tickets[0].tier.name}</p>
+      <p>¡Te esperamos! 🎉</p>
+      `
+    );
 
-  async acquireForClient(
-    user: User, 
-    acquireTicketDto: AcquireTicketDto, 
-    promoterUsername?: string,
-    amountPaid: number = 0,
-  ): Promise<Ticket> {
-    let promoter: User | null = null;
-    if (promoterUsername) {
-      promoter = await this.usersService.findOneByUsername(promoterUsername);
-    }
-    const ticket = await this.acquire(user, acquireTicketDto, promoter, amountPaid);
+    return tickets;
+  }
 
-    await this.mailService.sendMail(
-      user.email,
-      '🎟️ Entrada adquirida con éxito',
-      `
-      <h2>Hola ${user.name || ''} 👋</h2>
-      <p>Tu entrada para <strong>${ticket.event.title}</strong> fue registrada correctamente.</p>
-      <p>Tipo: ${ticket.tier.name} — Válida para: ${ticket.quantity} persona(s)</p>
-      <p>Nos vemos el ${new Date(ticket.event.startDate).toLocaleDateString('es-AR')} 🎉</p>
-      `
-    );
+  async acquireForClient(
+    user: User, 
+    acquireTicketDto: AcquireTicketDto, 
+    promoterUsername?: string,
+    amountPaid: number = 0,
+  ): Promise<Ticket> {
+    let promoter: User | null = null;
+    if (promoterUsername) {
+      promoter = await this.usersService.findOneByUsername(promoterUsername);
+    }
+    const ticket = await this.createTicketAndSendEmail(user, acquireTicketDto, promoter, amountPaid);
+    return ticket;
+  }
+  
+  async getFullHistory(filters: DashboardQueryDto): Promise<Ticket[]> {
+    const { eventId, startDate, endDate } = filters;
 
-    return ticket;
-  }
+    const queryOptions: any = {
+      relations: ['user', 'event', 'tier', 'promoter'],
+      order: {
+        createdAt: 'DESC',
+      },
+      where: {},
+    };
+
+    if (eventId) {
+      queryOptions.where.event = { id: eventId };
+    }
+
+    if (startDate && endDate) {
+      queryOptions.where.createdAt = Between(new Date(startDate), new Date(endDate));
+    }
+    
+    return this.ticketsRepository.find(queryOptions);
+  }
+
+  async getScanHistory(eventId: string): Promise<Ticket[]> {
+    return this.ticketsRepository.find({
+      where: {
+        event: { id: eventId },
+        validatedAt: Not(IsNull()),
+      },
+      relations: ['user', 'tier'],
+      order: {
+        validatedAt: 'DESC',
+      },
+      take: 50,
+    });
+  }
+
+  async getPremiumProducts(eventId: string): Promise<Ticket[]> {
+    return this.ticketsRepository.find({
+      where: {
+        event: { id: eventId },
+        tier: {
+          productType: In([ProductType.VIP_TABLE, ProductType.VOUCHER]),
+        },
+      },
+      relations: ['user', 'tier'],
+      order: {
+        createdAt: 'ASC',
+      },
+    });
+  }
+
+  async findTicketsByUser(userId: string): Promise<Ticket[]> {
+    return this.ticketsRepository.find({
+      where: { user: { id: userId } },
+      relations: ['event', 'tier', 'promoter'],
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  async findOne(ticketId: string): Promise<Ticket> {
+    const ticket = await this.ticketsRepository.findOne({ 
+      where: { id: ticketId },
+      relations: ['user', 'event', 'tier', 'promoter'],
+    });
+    if (!ticket) throw new NotFoundException('Entrada no válida o no encontrada.');
+    return ticket;
+  }
+
+  async confirmAttendance(ticketId: string, userId: string): Promise<Ticket> {
+    const ticket = await this.ticketsRepository.findOne({ where: { id: ticketId, user: { id: userId } }, relations: ['event'] });
+    if (!ticket) {
+      throw new NotFoundException('Entrada no encontrada o no te pertenece.');
+    }
+    ticket.confirmedAt = new Date();
+    return this.ticketsRepository.save(ticket);
+  }
   
-  async getFullHistory(filters: DashboardQueryDto): Promise<Ticket[]> {
-    const { eventId, startDate, endDate } = filters;
+  async deleteTicket(id: string): Promise<boolean> {
+    const result: DeleteResult = await this.ticketsRepository.delete(id);
+    return (result.affected ?? 0) > 0;
+  }
 
-    const queryOptions: any = {
-      relations: ['user', 'event', 'tier', 'promoter'],
-      order: {
-        createdAt: 'DESC',
-      },
-      where: {},
-    };
+  async redeemTicket(id: string, quantity: number): Promise<Ticket> {
+    const ticket = await this.ticketsRepository.findOne({ 
+      where: { id }, 
+      relations: ['user', 'event', 'tier'] 
+    });
 
-    if (eventId) {
-      queryOptions.where.event = { id: eventId };
-    }
-
-    if (startDate && endDate) {
-      queryOptions.where.createdAt = Between(new Date(startDate), new Date(endDate));
+    if (!ticket) {
+      throw new NotFoundException('Ticket not found.');
     }
     
-    return this.ticketsRepository.find(queryOptions);
-  }
-
-  async getScanHistory(eventId: string): Promise<Ticket[]> {
-    return this.ticketsRepository.find({
-      where: {
-        event: { id: eventId },
-        validatedAt: Not(IsNull()),
-      },
-      relations: ['user', 'tier'],
-      order: {
-        validatedAt: 'DESC',
-      },
-      take: 50,
-    });
-  }
-
-  async getPremiumProducts(eventId: string): Promise<Ticket[]> {
-    return this.ticketsRepository.find({
-      where: {
-        event: { id: eventId },
-        tier: {
-          productType: In([ProductType.VIP_TABLE, ProductType.VOUCHER]),
-        },
-      },
-      relations: ['user', 'tier'],
-      order: {
-        createdAt: 'ASC',
-      },
-    });
-  }
-
-  async findTicketsByUser(userId: string): Promise<Ticket[]> {
-    return this.ticketsRepository.find({
-      where: { user: { id: userId } },
-      relations: ['event', 'tier', 'promoter'],
-      order: { createdAt: 'DESC' },
-    });
-  }
-
-  async findOne(ticketId: string): Promise<Ticket> {
-    const ticket = await this.ticketsRepository.findOne({ 
-      where: { id: ticketId },
-      relations: ['user', 'event', 'tier', 'promoter'],
-    });
-    if (!ticket) throw new NotFoundException('Entrada no válida o no encontrada.');
-    return ticket;
-  }
-
-  async confirmAttendance(ticketId: string, userId: string): Promise<Ticket> {
-    const ticket = await this.ticketsRepository.findOne({ where: { id: ticketId, user: { id: userId } }, relations: ['event'] });
-    if (!ticket) {
-      throw new NotFoundException('Entrada no encontrada o no te pertenece.');
-    }
-    ticket.confirmedAt = new Date();
-    return this.ticketsRepository.save(ticket);
-  }
-
-  @Cron(CronExpression.EVERY_MINUTE)
-  async handleUnconfirmedTickets() {
-    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-
-    const unconfirmedTickets = await this.ticketsRepository.find({
-      where: {
-        confirmedAt: IsNull(),
-        status: TicketStatus.VALID,
-        event: {
-          confirmationSentAt: Not(IsNull()) && LessThan(oneHourAgo),
-        },
-      },
-      relations: ['tier', 'event', 'user'],
-    });
-
-    for (const ticket of unconfirmedTickets) {
-      const tier = ticket.tier;
-      if (tier) {
-        tier.quantity += ticket.quantity;
-        await this.ticketTiersRepository.save(tier);
-      }
-      await this.ticketsRepository.remove(ticket);
-      console.log(`❌ Ticket ${ticket.id} cancelado por falta de confirmación.`);
-    }
-  }
-
-  async redeemTicket(ticketId: string, quantityToRedeem: number) {
-    const ticket = await this.ticketsRepository.findOne({ 
-      where: { id: ticketId },
-      relations: ['user', 'event', 'tier'],
-    });
-
-    if (!ticket) throw new NotFoundException('Entrada no válida o no encontrada.');
-    if (ticket.tier.validUntil && new Date() > new Date(ticket.tier.validUntil)) {
-      throw new BadRequestException('Esta entrada ha expirado.');
+    if (new Date() > new Date(ticket.event.endDate)) {
+      throw new BadRequestException('Event has already finished.');
     }
 
-    if (ticket.status !== TicketStatus.VALID && ticket.status !== TicketStatus.PARTIALLY_USED && ticket.status !== TicketStatus.PARTIALLY_PAID) {
-      throw new BadRequestException(`Esta entrada ya fue utilizada completamente o ha sido invalidada.`);
+    if (ticket.status === TicketStatus.REDEEMED) {
+      throw new BadRequestException('Ticket has already been redeemed.');
     }
 
-    const remainingEntries = ticket.quantity - ticket.redeemedCount;
-    if (quantityToRedeem > remainingEntries) {
-      throw new BadRequestException(`Intento de canje inválido. Quedan ${remainingEntries} ingresos disponibles.`);
+    if (ticket.status === TicketStatus.PARTIALLY_PAID) {
+        throw new BadRequestException('This is a partially paid ticket. Full payment is required before redemption.');
     }
 
-    const validationTime = new Date();
-    ticket.redeemedCount += quantityToRedeem;
-    ticket.validatedAt = validationTime;
+    if (ticket.quantity < quantity) {
+        throw new BadRequestException(`Only ${ticket.quantity} entries remaining on this ticket.`);
+    }
 
-    if (ticket.redeemedCount >= ticket.quantity) {
-      ticket.status = TicketStatus.USED;
-    } else if (ticket.status === TicketStatus.VALID) {
-      ticket.status = TicketStatus.PARTIALLY_USED;
+    ticket.quantity -= quantity;
+
+    if (ticket.quantity === 0) {
+        ticket.status = TicketStatus.REDEEMED;
+        ticket.validatedAt = new Date();
     }
 
     await this.ticketsRepository.save(ticket);
 
-    const responseMessage = `${quantityToRedeem} Ingreso(s) Autorizado(s).`;
-
-    return {
-      message: responseMessage,
-      status: ticket.status,
-      userName: ticket.user.name,
-      userEmail: ticket.user.email,
-      eventName: ticket.event.title,
-      ticketType: ticket.tier.name,
-      redeemed: ticket.redeemedCount,
-      total: ticket.quantity,
-      validatedAt: validationTime.toLocaleString('es-AR'),
-    };
+    return ticket;
   }
 }

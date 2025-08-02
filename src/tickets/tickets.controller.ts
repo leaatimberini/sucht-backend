@@ -1,6 +1,7 @@
-import { Controller, Post, Body, Param, UseGuards, Get, Request, Query } from '@nestjs/common';
+// backend/src/tickets/tickets.controller.ts
+
+import { Controller, Post, Body, Param, UseGuards, Get, Request, Query, Delete, HttpCode, HttpStatus, NotFoundException } from '@nestjs/common';
 import { TicketsService } from './tickets.service';
-import { CreateTicketDto } from './dto/create-ticket.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { Roles } from 'src/auth/decorators/roles.decorator';
@@ -8,6 +9,8 @@ import { UserRole } from 'src/users/user.entity';
 import { AcquireTicketDto } from './dto/acquire-ticket.dto';
 import { RedeemTicketDto } from './dto/redeem-ticket.dto';
 import { DashboardQueryDto } from 'src/dashboard/dto/dashboard-query.dto';
+import { User } from 'src/users/user.entity';
+import { CreateTicketDto } from './dto/create-ticket.dto';
 
 @Controller('tickets')
 @UseGuards(JwtAuthGuard)
@@ -35,14 +38,15 @@ export class TicketsController {
   getPremiumProducts(@Param('eventId') eventId: string) {
     return this.ticketsService.getPremiumProducts(eventId);
   }
-  // --- FIN DE NUEVOS ENDPOINTS ---
 
+  // --- Endpoint para que el cliente obtenga sus tickets ---
   @Get('my-tickets')
-  findMyTickets(@Request() req) {
+  findMyTickets(@Request() req: { user: User }) {
     const userId = req.user.id;
     return this.ticketsService.findTicketsByUser(userId);
   }
 
+  // --- Endpoint para obtener un ticket por ID (para escanear) ---
   @Get(':id')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.VERIFIER)
@@ -50,28 +54,40 @@ export class TicketsController {
     return this.ticketsService.findOne(id);
   }
 
-  @Post(':id/confirm-attendance')
-  confirmAttendance(@Request() req, @Param('id') id: string) {
-    const userId = req.user.id;
-    return this.ticketsService.confirmAttendance(id, userId);
-  }
-
+  // --- Endpoint para que el RRPP genere tickets ---
   @Post('generate-by-rrpp')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.RRPP)
-  createByRRPP(@Request() req, @Body() createTicketDto: CreateTicketDto) {
+  createByRRPP(@Request() req: { user: User }, @Body() createTicketDto: CreateTicketDto) {
     return this.ticketsService.createByRRPP(createTicketDto, req.user);
   }
 
+  // --- Endpoint para que el cliente adquiera un ticket gratuito ---
   @Post('acquire')
-  acquireForClient(@Request() req, @Body() acquireTicketDto: AcquireTicketDto & { promoterUsername?: string }) {
-    return this.ticketsService.acquireForClient(req.user, acquireTicketDto, acquireTicketDto.promoterUsername);
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.CLIENT)
+  acquireForClient(@Request() req: { user: User }, @Body() acquireTicketDto: AcquireTicketDto) {
+    return this.ticketsService.acquireForClient(req.user, acquireTicketDto, undefined, 0);
   }
-
+  
+  // --- Endpoint para canjear un ticket (verificador) ---
   @Post(':id/redeem')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.VERIFIER)
   redeemTicket(@Param('id') id: string, @Body() redeemTicketDto: RedeemTicketDto) {
     return this.ticketsService.redeemTicket(id, redeemTicketDto.quantity);
+  }
+
+  // --- Endpoint para eliminar un ticket (administrador/dueño) ---
+  @Delete(':id')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.OWNER)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteTicket(@Param('id') id: string) {
+    const deleted = await this.ticketsService.deleteTicket(id);
+    if (!deleted) {
+      throw new NotFoundException(`Ticket with ID "${id}" not found.`);
+    }
+    return;
   }
 }
