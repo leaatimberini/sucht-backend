@@ -66,7 +66,7 @@ export class PaymentsService {
     const adminAmount = adminServiceFee > 0 ? (amountToPay * adminServiceFee) / 100 : 0;
 
     // CORRECCIÓN CRÍTICA: La estructura de split_payments ha sido ajustada
-    const receivers = [];
+    const receivers: { id: string; amount: number }[] = [];
     if (promoter && promoter.mpUserId) {
       receivers.push({
         id: promoter.mpUserId,

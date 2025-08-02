@@ -1,3 +1,5 @@
+// backend/src/users/dto/update-profile.dto.ts
+
 import { IsOptional, IsString, Length, IsDateString, Matches } from 'class-validator';
 
 export class UpdateProfileDto {
@@ -26,8 +28,14 @@ export class UpdateProfileDto {
   @IsDateString()
   dateOfBirth?: string;
 
-  // --- CAMPO AÑADIDO ---
+  // --- CORRECCIÓN ---
+  // Se ha cambiado el nombre de la propiedad para que coincida con la entidad User.
   @IsOptional()
   @IsString()
-  mercadoPagoAccessToken?: string;
+  mpAccessToken?: string;
+
+  // AÑADIMOS ESTA PROPIEDAD TAMBIÉN para que los RRPP puedan configurarla
+  @IsOptional()
+  @IsString()
+  mpUserId?: string;
 }
