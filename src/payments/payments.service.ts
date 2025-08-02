@@ -9,7 +9,7 @@ import { User } from 'src/users/user.entity';
 import { TicketTiersService } from 'src/ticket-tiers/ticket-tiers.service';
 import { AcquireTicketDto } from 'src/tickets/dto/acquire-ticket.dto';
 import { ConfigurationService } from 'src/configuration/configuration.service';
-import axios from 'axios'; // Importamos axios para la comunicación con Mercado Pago OAuth
+import axios from 'axios';
 
 @Injectable()
 export class PaymentsService {
@@ -136,7 +136,8 @@ export class PaymentsService {
 
   getMercadoPagoAuthUrl(userId: string): string {
     const clientId = this.configService.get('MP_CLIENT_ID');
-    const redirectUri = `${this.configService.get('BACKEND_URL')}/payments/mercadopago/callback`;
+    // CORRECCIÓN: Usamos la variable de entorno MP_REDIRECT_URI directamente
+    const redirectUri = this.configService.get('MP_REDIRECT_URI');
     const state = Buffer.from(JSON.stringify({ userId })).toString('base64');
     
     return `https://auth.mercadopago.com.ar/authorization?client_id=${clientId}&response_type=code&platform_id=mp&redirect_uri=${redirectUri}&state=${state}`;
@@ -145,7 +146,8 @@ export class PaymentsService {
   async exchangeCodeForAccessToken(userId: string, code: string): Promise<void> {
     const clientId = this.configService.get('MP_CLIENT_ID');
     const clientSecret = this.configService.get('MP_CLIENT_SECRET');
-    const redirectUri = `${this.configService.get('BACKEND_URL')}/payments/mercadopago/callback`;
+    // CORRECCIÓN: Usamos la variable de entorno MP_REDIRECT_URI directamente
+    const redirectUri = this.configService.get('MP_REDIRECT_URI');
 
     try {
       const response = await axios.post('https://api.mercadopago.com/oauth/token', {
