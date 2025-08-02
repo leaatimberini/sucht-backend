@@ -1,6 +1,4 @@
-// src/configuration/dto/update-configuration.dto.ts
-
-import { IsOptional, IsString, IsNotEmpty } from 'class-validator';
+import { IsOptional, IsString, IsNotEmpty, IsBooleanString, IsNumberString } from 'class-validator';
 
 export class UpdateConfigurationDto {
   @IsOptional()
@@ -11,9 +9,21 @@ export class UpdateConfigurationDto {
   @IsString()
   googleAnalyticsId?: string;
 
-  // --- NUEVA PROPIEDAD PARA TÉRMINOS Y CONDICIONES ---
   @IsOptional()
   @IsString()
-  @IsNotEmpty() // No debería ser un string vacío
+  @IsNotEmpty()
   termsAndConditionsText?: string;
+
+  // --- CAMPOS AÑADIDOS ---
+  @IsOptional()
+  @IsBooleanString()
+  paymentsEnabled?: string;
+
+  @IsOptional()
+  @IsNumberString()
+  rrppCommissionRate?: string;
+
+  @IsOptional()
+  @IsNumberString()
+  adminServiceFee?: string;
 }

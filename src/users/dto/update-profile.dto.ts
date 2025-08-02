@@ -6,7 +6,6 @@ export class UpdateProfileDto {
   @Length(3, 50)
   name?: string;
 
-  // --- NUEVO CAMPO CON VALIDACIÓN ---
   @IsOptional()
   @IsString()
   @Length(3, 20)
@@ -26,4 +25,9 @@ export class UpdateProfileDto {
   @IsOptional()
   @IsDateString()
   dateOfBirth?: string;
+
+  // --- CAMPO AÑADIDO ---
+  @IsOptional()
+  @IsString()
+  mercadoPagoAccessToken?: string;
 }
