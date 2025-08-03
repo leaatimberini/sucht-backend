@@ -12,7 +12,16 @@ import {
 import { User, UserRole } from '../users/user.entity';
 import { Event } from '../events/event.entity';
 import { TicketTier } from 'src/ticket-tiers/ticket-tier.entity';
-import { TicketStatus } from './enums/ticket-status.enum'; // CORRECCIÓN: Se importa el enum
+
+// CORRECCIÓN: Se añade el export al enum
+export enum TicketStatus {
+  VALID = 'valid',
+  USED = 'used',
+  PARTIALLY_USED = 'partially_used',
+  INVALIDATED = 'invalidated',
+  PARTIALLY_PAID = 'partially_paid',
+  REDEEMED = 'redeemed',
+}
 
 @Entity('tickets')
 export class Ticket {
@@ -65,5 +74,3 @@ export class Ticket {
   @UpdateDateColumn({ type: 'timestamp' })
   updatedAt: Date;
 }
-
-export { TicketStatus };
