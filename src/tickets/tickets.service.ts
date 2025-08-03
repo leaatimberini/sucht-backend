@@ -308,4 +308,5 @@ export class TicketsService {
       console.log(`❌ Ticket ${ticket.id} cancelado por falta de confirmación.`);
     }
   }
+  
 }
