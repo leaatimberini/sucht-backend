@@ -14,69 +14,69 @@ import { unlink } from 'fs/promises';
 
 @Controller('events')
 export class EventsController {
-  constructor(
-    private readonly eventsService: EventsService,
-    private readonly cloudinaryService: CloudinaryService,
-  ) {}
+  constructor(
+    private readonly eventsService: EventsService,
+    private readonly cloudinaryService: CloudinaryService,
+  ) {}
 
-  @Post()
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN)
-  @UseInterceptors(FileInterceptor('flyerImage'))
-  async create(
-    @Body() createEventDto: CreateEventDto,
-    @UploadedFile() flyerImage?: Express.Multer.File,
-  ) {
-    let flyerImageUrl: string | undefined = undefined;
-    if (flyerImage) {
-      const uploadResult = await this.cloudinaryService.uploadImage(flyerImage, 'sucht/events');
-      flyerImageUrl = uploadResult.secure_url;
-    }
-    return this.eventsService.create(createEventDto, flyerImageUrl);
-  }
+  @Post()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @UseInterceptors(FileInterceptor('flyerImage'))
+  async create(
+    @Body() createEventDto: CreateEventDto,
+    @UploadedFile() flyerImage?: Express.Multer.File,
+  ) {
+    let flyerImageUrl: string | undefined = undefined;
+    if (flyerImage) {
+      const uploadResult = await this.cloudinaryService.uploadImage(flyerImage, 'sucht/events');
+      flyerImageUrl = uploadResult.secure_url;
+    }
+    return this.eventsService.create(createEventDto, flyerImageUrl);
+  }
 
-  @Patch(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN)
-  @UseInterceptors(FileInterceptor('flyerImage'))
-  async update(
-    @Param('id') id: string,
-    @Body() updateEventDto: UpdateEventDto,
-    @UploadedFile() flyerImage?: Express.Multer.File,
-  ) {
-    if (flyerImage) {
-      const uploadResult = await this.cloudinaryService.uploadImage(flyerImage, 'sucht/events');
-      updateEventDto.flyerImageUrl = uploadResult.secure_url;
-      try {
-        await unlink(flyerImage.path);
-      } catch (err) {
-        console.error('Error removing temporary file:', err);
-      }
-    }
-    return this.eventsService.update(id, updateEventDto);
-  }
+  @Patch(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @UseInterceptors(FileInterceptor('flyerImage'))
+  async update(
+    @Param('id') id: string,
+    @Body() updateEventDto: UpdateEventDto,
+    @UploadedFile() flyerImage?: Express.Multer.File,
+  ) {
+    if (flyerImage) {
+      const uploadResult = await this.cloudinaryService.uploadImage(flyerImage, 'sucht/events');
+      updateEventDto.flyerImageUrl = uploadResult.secure_url;
+      try {
+        await unlink(flyerImage.path);
+      } catch (err) {
+        console.error('Error removing temporary file:', err);
+      }
+    }
+    return this.eventsService.update(id, updateEventDto);
+  }
 
-  @Post(':id/request-confirmation')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN)
-  requestConfirmation(@Param('id') id: string) {
-    return this.eventsService.requestConfirmation(id);
-  }
+  @Post(':id/request-confirmation')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  requestConfirmation(@Param('id') id: string) {
+    return this.eventsService.requestConfirmation(id);
+  }
 
-  @Get()
-  findAll() { return this.eventsService.findAll(); }
+  @Get()
+  findAll() { return this.eventsService.findAll(); }
 
-  @Get(':id')
-  findOne(@Param('id') id: string) { return this.eventsService.findOne(id); }
+  @Get(':id')
+  findOne(@Param('id') id: string) { return this.eventsService.findOne(id); }
 
-  @Delete(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN)
-  remove(@Param('id') id: string) { return this.eventsService.remove(id); }
+  @Delete(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  remove(@Param('id') id: string) { return this.eventsService.remove(id); }
 
-  @Get('list/for-select')
-  @UseGuards(JwtAuthGuard)
-  findAllForSelect() {
-    return this.eventsService.findAllForSelect();
-  }
+  @Get('list/for-select')
+  @UseGuards(JwtAuthGuard)
+  findAllForSelect() {
+    return this.eventsService.findAllForSelect();
+  }
 }
