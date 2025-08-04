@@ -1,3 +1,5 @@
+// backend/src/events/events.service.ts
+
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -5,76 +7,77 @@ import { Event } from './event.entity';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
 
+// CORRECCIÓN: Se añade el export a la clase EventsService
 @Injectable()
 export class EventsService {
-  constructor(
-    @InjectRepository(Event)
-    private eventsRepository: Repository<Event>,
-  ) {}
+  constructor(
+    @InjectRepository(Event)
+    private eventsRepository: Repository<Event>,
+  ) {}
 
-  // --- LÓGICA DE CREACIÓN CORREGIDA ---
-  async create(createEventDto: CreateEventDto, flyerImageUrl?: string): Promise<Event> {
-    // Corregimos el DTO para que no intente acceder a 'validUntil'
-    const { startDate, endDate, ...restOfDto } = createEventDto;
+  // --- LÓGICA DE CREACIÓN CORREGIDA ---
+  async create(createEventDto: CreateEventDto, flyerImageUrl?: string): Promise<Event> {
+    // Corregimos el DTO para que no intente acceder a 'validUntil'
+    const { startDate, endDate, ...restOfDto } = createEventDto;
 
-    const eventData: Partial<Event> = {
-      ...restOfDto,
-      flyerImageUrl: flyerImageUrl,
-      startDate: new Date(startDate),
-      endDate: new Date(endDate),
-    };
+    const eventData: Partial<Event> = {
+      ...restOfDto,
+      flyerImageUrl: flyerImageUrl,
+      startDate: new Date(startDate),
+      endDate: new Date(endDate),
+    };
 
-    const event = this.eventsRepository.create(eventData);
-    return this.eventsRepository.save(event);
-  }
+    const event = this.eventsRepository.create(eventData);
+    return this.eventsRepository.save(event);
+  }
 
-  async update(id: string, updateEventDto: UpdateEventDto, flyerImageUrl?: string): Promise<Event> {
-    const event = await this.findOne(id);
-    const { startDate, endDate, ...restOfDto } = updateEventDto;
-    
-    const updatePayload: Partial<Event> = { ...restOfDto };
+  async update(id: string, updateEventDto: UpdateEventDto, flyerImageUrl?: string): Promise<Event> {
+    const event = await this.findOne(id);
+    const { startDate, endDate, ...restOfDto } = updateEventDto;
+    
+    const updatePayload: Partial<Event> = { ...restOfDto };
 
-    if (startDate) updatePayload.startDate = new Date(startDate);
-    if (endDate) updatePayload.endDate = new Date(endDate);
+    if (startDate) updatePayload.startDate = new Date(startDate);
+    if (endDate) updatePayload.endDate = new Date(endDate);
 
-    if (flyerImageUrl !== undefined) {
-      updatePayload.flyerImageUrl = flyerImageUrl;
-    }
-    
-    this.eventsRepository.merge(event, updatePayload);
-    return this.eventsRepository.save(event);
-  }
-  
-  async findAll(): Promise<Event[]> {
-    return this.eventsRepository.find({ order: { startDate: 'DESC' } });
-  }
+    if (flyerImageUrl !== undefined) {
+      updatePayload.flyerImageUrl = flyerImageUrl;
+    }
+    
+    this.eventsRepository.merge(event, updatePayload);
+    return this.eventsRepository.save(event);
+  }
+  
+  async findAll(): Promise<Event[]> {
+    return this.eventsRepository.find({ order: { startDate: 'DESC' } });
+  }
 
-  async findOne(id: string): Promise<Event> {
-    const event = await this.eventsRepository.findOne({ where: { id }, relations: ['ticketTiers'] });
-    if (!event) {
-      throw new NotFoundException(`Event with ID "${id}" not found`);
-    }
-    return event;
-  }
+  async findOne(id: string): Promise<Event> {
+    const event = await this.eventsRepository.findOne({ where: { id }, relations: ['ticketTiers'] });
+    if (!event) {
+      throw new NotFoundException(`Event with ID "${id}" not found`);
+    }
+    return event;
+  }
 
-  async remove(id: string): Promise<void> {
-    const result = await this.eventsRepository.delete(id);
-    if (result.affected === 0) {
-      throw new NotFoundException(`Event with ID "${id}" not found`);
-    }
-  }
+  async remove(id: string): Promise<void> {
+    const result = await this.eventsRepository.delete(id);
+    if (result.affected === 0) {
+      throw new NotFoundException(`Event with ID "${id}" not found`);
+    }
+  }
 
-  async requestConfirmation(eventId: string): Promise<Event> {
-    const event = await this.findOne(eventId);
-    event.confirmationSentAt = new Date();
-    return this.eventsRepository.save(event);
-  }
-  async findAllForSelect(): Promise<{ id: string; title: string }[]> {
-    return this.eventsRepository.find({
-      select: ['id', 'title'],
-      order: {
-        startDate: 'DESC',
-      },
-    });
-  }
+  async requestConfirmation(eventId: string): Promise<Event> {
+    const event = await this.findOne(eventId);
+    event.confirmationSentAt = new Date();
+    return this.eventsRepository.save(event);
+  }
+  async findAllForSelect(): Promise<{ id: string; title: string }[]> {
+    return this.eventsRepository.find({
+      select: ['id', 'title'],
+      order: {
+        startDate: 'DESC',
+      },
+    });
+  }
 }

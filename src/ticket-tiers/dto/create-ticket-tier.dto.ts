@@ -2,35 +2,40 @@ import { IsNotEmpty, IsString, IsNumber, Min, IsDateString, IsOptional, IsEnum, 
 import { ProductType } from '../ticket-tier.entity';
 
 export class CreateTicketTierDto {
-  @IsNotEmpty()
-  @IsString()
-  name: string;
+  @IsNotEmpty()
+  @IsString()
+  name: string;
 
-  @IsNotEmpty()
-  @IsNumber()
-  @Min(0)
-  price: number;
+  @IsNotEmpty()
+  @IsNumber()
+  @Min(0)
+  price: number;
 
-  @IsNotEmpty()
-  @IsNumber()
-  @Min(1)
-  quantity: number;
+  @IsNotEmpty()
+  @IsNumber()
+  @Min(1)
+  quantity: number;
 
-  @IsOptional()
-  @IsDateString()
-  validUntil?: Date;
+  @IsOptional()
+  @IsDateString()
+  validUntil?: Date;
 
-  // --- NUEVOS CAMPOS ---
-  @IsOptional()
-  @IsEnum(ProductType)
-  productType?: ProductType;
+  // --- NUEVOS CAMPOS ---
+  @IsNotEmpty() // CORRECCIÓN: 'productType' es obligatorio
+  @IsEnum(ProductType)
+  productType: ProductType;
 
-  @IsOptional()
-  @IsBoolean()
-  allowPartialPayment?: boolean;
+  // CORRECCIÓN: 'isFree' es una nueva propiedad para distinguir las entradas
+  @IsNotEmpty()
+  @IsBoolean()
+  isFree: boolean;
 
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  partialPaymentPrice?: number;
+  @IsOptional()
+  @IsBoolean()
+  allowPartialPayment?: boolean;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  partialPaymentPrice?: number;
 }

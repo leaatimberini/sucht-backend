@@ -1,4 +1,6 @@
-import { Controller, Get, Post, Body, Param, Delete, UseGuards, UseInterceptors, UploadedFile, Patch } from '@nestjs/common';
+// backend/src/events/events.controller.ts
+
+import { Controller, Get, Post, Body, Param, Delete, UseGuards, UseInterceptors, UploadedFile, Patch, NotFoundException } from '@nestjs/common';
 import { EventsService } from './events.service';
 import { CreateEventDto } from './dto/create-event.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
@@ -8,6 +10,7 @@ import { UserRole } from 'src/users/user.entity';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
+import { unlink } from 'fs/promises';
 
 @Controller('events')
 export class EventsController {
@@ -41,14 +44,18 @@ export class EventsController {
     @Body() updateEventDto: UpdateEventDto,
     @UploadedFile() flyerImage?: Express.Multer.File,
   ) {
-    let flyerImageUrl: string | undefined = undefined;
     if (flyerImage) {
       const uploadResult = await this.cloudinaryService.uploadImage(flyerImage, 'sucht/events');
-      flyerImageUrl = uploadResult.secure_url;
+      updateEventDto.flyerImageUrl = uploadResult.secure_url;
+      try {
+        await unlink(flyerImage.path);
+      } catch (err) {
+        console.error('Error removing temporary file:', err);
+      }
     }
-    return this.eventsService.update(id, updateEventDto, flyerImageUrl);
+    return this.eventsService.update(id, updateEventDto);
   }
-  
+
   @Post(':id/request-confirmation')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
@@ -68,7 +75,7 @@ export class EventsController {
   remove(@Param('id') id: string) { return this.eventsService.remove(id); }
 
   @Get('list/for-select')
-  @UseGuards(JwtAuthGuard) // Aseguramos que solo usuarios logueados puedan verlo
+  @UseGuards(JwtAuthGuard)
   findAllForSelect() {
     return this.eventsService.findAllForSelect();
   }
