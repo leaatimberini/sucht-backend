@@ -26,15 +26,16 @@ export class PaymentsController {
     return this.paymentsService.createPreference(buyer, body);
   }
 
-  // ============== NUEVOS ENDPOINTS PARA OAUTH ================
+  // ============== ENDPOINTS PARA OAUTH CORREGIDOS ================
   @Get('connect/mercadopago')
   // Solo los usuarios con roles de pago (Owner, Admin, RRPP) pueden vincular su cuenta
   @UseGuards(RolesGuard)
   @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.RRPP)
-  async getAuthUrl(@Request() req: { user: User }, @Res() res: Response) {
+  async getAuthUrl(@Request() req: { user: User }) { // <-- CORRECCIÓN 1: Se elimina @Res()
     const userId = req.user.id;
     const authUrl = await this.paymentsService.getMercadoPagoAuthUrl(userId);
-    return res.redirect(authUrl);
+    // CORRECCIÓN 2: Se devuelve la URL como un objeto JSON
+    return { authUrl };
   }
 
   @Get('mercadopago/callback')
@@ -44,16 +45,18 @@ export class PaymentsController {
   async handleMercadoPagoCallback(@Request() req: { user: User }, @Query('code') code: string, @Res() res: Response) {
     const userId = req.user.id;
     if (!code) {
-      // Redirigimos a una página de error en caso de que no haya código de autorización
-      return res.redirect(`${process.env.FRONTEND_URL}/rrpp/settings?error=auth_failed`);
+      // CORRECCIÓN 3: Se redirige a la página de settings del dashboard
+      return res.redirect(`${process.env.FRONTEND_URL}/dashboard/settings?error=auth_failed`);
     }
     
     try {
       await this.paymentsService.exchangeCodeForAccessToken(userId, code);
-      return res.redirect(`${process.env.FRONTEND_URL}/rrpp/settings?success=true`);
+      // CORRECCIÓN 3: Se redirige a la página de settings del dashboard
+      return res.redirect(`${process.env.FRONTEND_URL}/dashboard/settings?success=true`);
     } catch (error) {
       console.error('Error in Mercado Pago callback:', error);
-      return res.redirect(`${process.env.FRONTEND_URL}/rrpp/settings?error=server_error`);
+      // CORRECCIÓN 3: Se redirige a la página de settings del dashboard
+      return res.redirect(`${process.env.FRONTEND_URL}/dashboard/settings?error=server_error`);
     }
   }
 
