@@ -8,15 +8,16 @@ import { User, UserRole } from 'src/users/user.entity';
 import { Response } from 'express';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { Roles } from 'src/auth/decorators/roles.decorator';
+import { Public } from 'src/auth/decorators/public.decorator';
 
 @Controller('payments')
-@UseGuards(JwtAuthGuard)
+// 1. Se elimina la protección GLOBAL @UseGuards(JwtAuthGuard) de aquí.
 export class PaymentsController {
   constructor(private readonly paymentsService: PaymentsService) {}
 
   @Post('create-preference')
-  // Solo los clientes y RRPP pueden crear una preferencia de pago
-  @UseGuards(RolesGuard)
+  // 2. La protección se aplica AHORA a cada endpoint que la necesita.
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.CLIENT, UserRole.RRPP)
   async createPreference(
     @Request() req: { user: User },
@@ -26,48 +27,45 @@ export class PaymentsController {
     return this.paymentsService.createPreference(buyer, body);
   }
 
-  // ============== ENDPOINTS PARA OAUTH CORREGIDOS ================
   @Get('connect/mercadopago')
-  // Solo los usuarios con roles de pago (Owner, Admin, RRPP) pueden vincular su cuenta
-  @UseGuards(RolesGuard)
+  // 2. La protección también se aplica aquí.
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.RRPP)
-  async getAuthUrl(@Request() req: { user: User }) { // <-- CORRECCIÓN 1: Se elimina @Res()
+  async getAuthUrl(@Request() req: { user: User }) {
     const userId = req.user.id;
     const authUrl = await this.paymentsService.getMercadoPagoAuthUrl(userId);
-    // CORRECCIÓN 2: Se devuelve la URL como un objeto JSON
     return { authUrl };
   }
 
   @Get('mercadopago/callback')
-  // Este endpoint se llama después de la autorización de MP, y recibe el código
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.RRPP)
-  async handleMercadoPagoCallback(@Request() req: { user: User }, @Query('code') code: string, @Res() res: Response) {
-    const userId = req.user.id;
-    if (!code) {
-      // CORRECCIÓN 3: Se redirige a la página de settings del dashboard
+  // 3. Se marca como PÚBLICO. El navegador no envía token en la redirección.
+  @Public()
+  async handleMercadoPagoCallback(
+    @Query('code') code: string,
+    @Query('state') state: string, // 4. Se obtiene el 'state' para identificar al usuario.
+    @Res() res: Response,
+  ) {
+    if (!code || !state) {
       return res.redirect(`${process.env.FRONTEND_URL}/dashboard/settings?error=auth_failed`);
     }
     
     try {
-      await this.paymentsService.exchangeCodeForAccessToken(userId, code);
-      // CORRECCIÓN 3: Se redirige a la página de settings del dashboard
+      // 5. Se pasa el 'state' al servicio en lugar del 'userId'.
+      await this.paymentsService.exchangeCodeForAccessToken(state, code);
       return res.redirect(`${process.env.FRONTEND_URL}/dashboard/settings?success=true`);
     } catch (error) {
       console.error('Error in Mercado Pago callback:', error);
-      // CORRECCIÓN 3: Se redirige a la página de settings del dashboard
       return res.redirect(`${process.env.FRONTEND_URL}/dashboard/settings?error=server_error`);
     }
   }
 
-  // ================ WEBHOOK DE PAGO ================
   @Post('webhook')
+  // 3. El webhook también se marca como PÚBLICO.
+  @Public()
   async handleWebhook(@Body() body: any, @Query('source_news') source: string) {
-    // Verificamos que la llamada provenga del webhook de Mercado Pago
     if (source !== 'webhooks') {
       throw new HttpException('Invalid webhook source', HttpStatus.FORBIDDEN);
     }
-    // Verificamos si es una notificación de pago
     if (body.type === 'payment') {
       await this.paymentsService.handleWebhook(body.data.id);
     }

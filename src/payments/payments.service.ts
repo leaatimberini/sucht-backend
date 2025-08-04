@@ -1,6 +1,6 @@
 // backend/src/payments/payments.service.ts
 
-import { BadRequestException, Injectable, NotFoundException, InternalServerErrorException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, InternalServerErrorException, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { MercadoPagoConfig, Preference, Payment } from 'mercadopago';
 import { TicketsService } from 'src/tickets/tickets.service';
@@ -32,7 +32,7 @@ export class PaymentsService {
     if (tier.quantity < quantity) throw new BadRequestException('No quedan suficientes entradas.');
 
     const paymentsEnabled = await this.configurationService.get('paymentsEnabled');
-    if (tier.price === 0 || paymentsEnabled !== 'true') {
+    if (tier.isFree || paymentsEnabled !== 'true') { // Modificado para usar isFree
       const ticket = await this.ticketsService.acquireForClient(buyer, data, promoterUsername, 0);
       return { type: 'free', ticketId: ticket.id, message: 'Producto adquirido con éxito.' };
     }
@@ -64,10 +64,9 @@ export class PaymentsService {
     const rrppCommissionRate = rrppCommissionRateStr ? parseFloat(rrppCommissionRateStr) : 0;
 
     const promoterAmount = promoter && rrppCommissionRate > 0 ? (amountToPay * rrppCommissionRate) / 100 : 0;
-    const adminAmount = adminServiceFee > 0 ? (amountToPay * adminServiceFee) / 100 : 0;
 
     const receivers: { id: string; amount: number }[] = [];
-    if (promoter && promoter.mpUserId) {
+    if (promoter && promoter.mpUserId && promoterAmount > 0) {
       receivers.push({
         id: promoter.mpUserId,
         amount: parseFloat(promoterAmount.toFixed(2)),
@@ -98,10 +97,11 @@ export class PaymentsService {
         ticketTierId,
         quantity,
         promoterId: promoter?.id || null,
+        promoterUsername: promoter?.username || null,
         amountPaid: amountToPay,
         paymentType,
       }),
-      split_payments: receivers.length > 0 ? { receivers } : undefined,
+      marketplace_fee: adminServiceFee > 0 ? parseFloat(((amountToPay * adminServiceFee) / 100).toFixed(2)) : 0,
     };
 
     const preference = await preferenceClient.create({
@@ -132,21 +132,34 @@ export class PaymentsService {
     return null;
   }
   
-  // ============== NUEVA LÓGICA PARA OAUTH ================
+  // ============== LÓGICA PARA OAUTH ACTUALIZADA ================
 
   getMercadoPagoAuthUrl(userId: string): string {
     const clientId = this.configService.get('MP_CLIENT_ID');
-    // CORRECCIÓN: Usamos la variable de entorno MP_REDIRECT_URI directamente
     const redirectUri = this.configService.get('MP_REDIRECT_URI');
+    // Codificamos el userId en base64 para enviarlo de forma segura en el state
     const state = Buffer.from(JSON.stringify({ userId })).toString('base64');
     
     return `https://auth.mercadopago.com.ar/authorization?client_id=${clientId}&response_type=code&platform_id=mp&redirect_uri=${redirectUri}&state=${state}`;
   }
 
-  async exchangeCodeForAccessToken(userId: string, code: string): Promise<void> {
+  // CORRECCIÓN: El método ahora recibe 'state' en lugar de 'userId'
+  async exchangeCodeForAccessToken(state: string, code: string): Promise<void> {
+    let userId: string;
+
+    try {
+      // 1. Decodificamos el 'state' para obtener el 'userId' de forma segura
+      const decodedState = JSON.parse(Buffer.from(state, 'base64').toString('ascii'));
+      userId = decodedState.userId;
+      if (!userId) {
+        throw new Error('User ID no encontrado en el state');
+      }
+    } catch (error) {
+      throw new UnauthorizedException('Parámetro de estado inválido o malformado.');
+    }
+
     const clientId = this.configService.get('MP_CLIENT_ID');
     const clientSecret = this.configService.get('MP_CLIENT_SECRET');
-    // CORRECCIÓN: Usamos la variable de entorno MP_REDIRECT_URI directamente
     const redirectUri = this.configService.get('MP_REDIRECT_URI');
 
     try {
@@ -158,12 +171,13 @@ export class PaymentsService {
         redirect_uri: redirectUri,
       });
 
-      const { access_token, refresh_token, user_id } = response.data;
+      const { access_token, user_id } = response.data;
       
+      // 2. Usamos el userId recuperado del state para actualizar las credenciales del usuario correcto
       await this.usersService.updateMercadoPagoCredentials(userId, access_token, user_id);
     } catch (error) {
-      console.error('Error exchanging code for access token:', error.response?.data);
-      throw new InternalServerErrorException('Error linking Mercado Pago account.');
+      console.error('Error intercambiando el código por el access token:', error.response?.data);
+      throw new InternalServerErrorException('Error al vincular la cuenta de Mercado Pago.');
     }
   }
 }
