@@ -1,5 +1,5 @@
 // backend/src/payments/payments.controller.ts
-import { Controller, Post, Body, UseGuards, Request, Get, Res, Query, HttpStatus, HttpException, HttpCode } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Request, Get, Res, Query, HttpStatus, HttpException, HttpCode, Delete } from '@nestjs/common';
 import { PaymentsService } from './payments.service';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { AcquireTicketDto } from 'src/tickets/dto/acquire-ticket.dto';
@@ -10,14 +10,19 @@ import { Roles } from 'src/auth/decorators/roles.decorator';
 import { Public } from 'src/auth/decorators/public.decorator';
 import { FinalizePurchaseDto } from './dto/finalize-purchase.dto';
 import { AuthenticatedRequest } from 'src/auth/interfaces/authenticated-request.interface';
+import { UsersService } from 'src/users/users.service';
 
 @Controller('payments')
 export class PaymentsController {
-  constructor(private readonly paymentsService: PaymentsService) {}
+  // Se inyecta UsersService para usarlo en el método de desvincular
+  constructor(
+    private readonly paymentsService: PaymentsService,
+    private readonly usersService: UsersService
+  ) {}
 
-  @Post('create-preference')
+  @Post('create-preference')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.CLIENT, UserRole.RRPP, UserRole.ADMIN, UserRole.OWNER) // Permitir a todos los logueados crear preferencias
+  @Roles(UserRole.CLIENT, UserRole.RRPP, UserRole.ADMIN, UserRole.OWNER)
   async createPreference(
     @Request() req: AuthenticatedRequest,
     @Body() body: AcquireTicketDto & { promoterUsername?: string },
@@ -26,19 +31,16 @@ export class PaymentsController {
     return this.paymentsService.createPreference(buyer, body);
   }
 
-  // ==========================================================
-  // NUEVO ENDPOINT PARA VERIFICACIÓN SÍNCRONA DESDE EL FRONTEND
-  // ==========================================================
-  @Post('finalize-purchase')
-  @UseGuards(JwtAuthGuard)
-  @HttpCode(HttpStatus.OK)
-  async finalizePurchase(
-    @Request() req: AuthenticatedRequest,
-    @Body() finalizePurchaseDto: FinalizePurchaseDto,
-  ) {
-    return this.paymentsService.finalizePurchase(finalizePurchaseDto.paymentId, req.user);
-  }
-
+  @Post('finalize-purchase')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async finalizePurchase(
+    @Request() req: AuthenticatedRequest,
+    @Body() finalizePurchaseDto: FinalizePurchaseDto,
+  ) {
+    return this.paymentsService.finalizePurchase(finalizePurchaseDto.paymentId, req.user);
+  }
+  
   @Get('connect/mercadopago')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.RRPP)
@@ -47,6 +49,18 @@ export class PaymentsController {
     const authUrl = this.paymentsService.getMercadoPagoAuthUrl(userId);
     return { authUrl };
   }
+
+  // ==========================================================
+  // ===== NUEVO ENDPOINT PARA DESVINCULAR MERCADO PAGO =====
+  // ==========================================================
+  @Delete('connect/mercadopago')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  async unlinkMercadoPago(@Request() req: AuthenticatedRequest) {
+    // Usamos el servicio de usuarios para limpiar las credenciales de MP del usuario logueado
+    await this.usersService.updateMercadoPagoCredentials(req.user.id, null, null);
+    return { message: 'Cuenta de Mercado Pago desvinculada exitosamente.' };
+  }
 
   @Get('mercadopago/callback')
   @Public()
@@ -70,17 +84,14 @@ export class PaymentsController {
 
   @Post('webhook')
   @Public()
-  @HttpCode(HttpStatus.OK) // Siempre responder 200 OK a los webhooks
+  @HttpCode(HttpStatus.OK)
   async handleWebhook(@Body() body: any, @Query('data.id') paymentIdFromQuery: string) {
-    const paymentId = body?.data?.id || paymentIdFromQuery;
+    const paymentId = body?.data?.id || paymentIdFromQuery;
 
-    if (body.type === 'payment' && paymentId) {
+    if (body.type === 'payment' && paymentId) {
       try {
-        // La lógica compleja ahora está en el servicio
         await this.paymentsService.handleWebhook(paymentId);
       } catch (error) {
-        // Aunque falle nuestro procesamiento, respondemos OK a MP para que no reintente indefinidamente.
-        // Nuestro logger ya registró el error para que lo solucionemos.
         console.error(`Error procesando webhook para paymentId: ${paymentId}`, error);
       }
     }
