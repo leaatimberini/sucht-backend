@@ -1,8 +1,8 @@
-// backend/src/configuration/dto/update-configuration.dto.ts
-
-import { IsOptional, IsString, IsNotEmpty, IsBoolean, IsNumber, IsIn } from 'class-validator';
+import { IsOptional, IsString, IsNotEmpty, IsBoolean, IsNumber } from 'class-validator';
 import { Type } from 'class-transformer';
 
+// Este DTO define los datos que el frontend puede enviar para actualizar la configuración.
+// Todos los campos son opcionales para permitir actualizaciones parciales (PATCH).
 export class UpdateConfigurationDto {
   @IsOptional()
   @IsString()
@@ -17,13 +17,12 @@ export class UpdateConfigurationDto {
   @IsNotEmpty()
   termsAndConditionsText?: string;
 
-  // --- CAMPOS CORREGIDOS ---
   @IsOptional()
-  @IsBoolean()
+  @IsBoolean() // Se asegura que el valor entrante sea un booleano (true/false)
   paymentsEnabled?: boolean;
 
   @IsOptional()
-  @Type(() => Number)
+  @Type(() => Number) // Transforma el valor entrante a número
   @IsNumber({ maxDecimalPlaces: 2 })
   adminServiceFee?: number;
 
