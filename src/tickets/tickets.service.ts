@@ -1,3 +1,5 @@
+// backend/src/tickets/tickets.service.ts
+
 import { BadRequestException, Injectable, NotFoundException, InternalServerErrorException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, LessThan, Not, Repository, Between, In, DeleteResult } from 'typeorm';
@@ -31,6 +33,9 @@ export class TicketsService {
     amountPaid: number,
     paymentId: string | null,
   ): Promise<Ticket> {
+    // ===== PRUEBA DE FUEGO 2 =====
+    console.log(`[PRUEBA DE FUEGO 2] Entrando a createTicketAndSendEmail. RRPP recibido:`, promoter ? promoter.email : 'NULL');
+
     const { eventId, ticketTierId, quantity } = data;
     const event = await this.eventsService.findOne(eventId);
     if (!event) throw new NotFoundException('Evento no encontrado.');
@@ -57,15 +62,20 @@ export class TicketsService {
       status,
       paymentId,
     });
+    
+    // ===== PRUEBA DE FUEGO 3 (LA MÁS IMPORTANTE) =====
+    console.log('[PRUEBA DE FUEGO 3] Objeto TICKET CREADO antes de guardar:', JSON.stringify(newTicket, null, 2));
     
     tier.quantity -= quantity;
     await this.ticketTiersRepository.save(tier);
 
-    await this.ticketsRepository.save(newTicket);
+    const savedTicket = await this.ticketsRepository.save(newTicket);
+    console.log('[PRUEBA DE FUEGO 4] Ticket guardado en la DB:', JSON.stringify(savedTicket, null, 2));
+
 
     await this.mailService.sendMail(user.email, '🎟️ Entrada adquirida con éxito', `...`);
 
-    return newTicket;
+    return savedTicket;
   }
 
   async createByRRPP(createTicketDto: CreateTicketDto, promoter: User): Promise<Ticket[]> {
@@ -92,14 +102,9 @@ export class TicketsService {
   ): Promise<Ticket> {
     let promoter: User | null = null;
     if (promoterUsername) {
-      // ===========================================================================
-      // ===== CORRECCIÓN CLAVE: Buscamos por nombre de usuario, no por email =====
-      // ===========================================================================
       promoter = await this.usersService.findOneByUsername(promoterUsername); 
-      if (!promoter) {
-        // Opcional: Advertimos en consola si un RRPP referido no fue encontrado
-        console.warn(`Se intentó registrar una venta con un RRPP inexistente: ${promoterUsername}`);
-      }
+      // ===== PRUEBA DE FUEGO 1 =====
+      console.log(`[PRUEBA DE FUEGO 1] RRPP encontrado en acquireForClient para "${promoterUsername}":`, promoter ? promoter.email : 'NULL');
     }
     const ticket = await this.createTicketAndSendEmail(user, acquireTicketDto, promoter, amountPaid, paymentId);
     return ticket;
