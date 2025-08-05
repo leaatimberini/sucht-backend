@@ -1,5 +1,3 @@
-// backend/src/tickets/tickets.service.ts
-
 import { BadRequestException, Injectable, NotFoundException, InternalServerErrorException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, LessThan, Not, Repository, Between, In, DeleteResult } from 'typeorm';
@@ -26,15 +24,12 @@ export class TicketsService {
     private mailService: MailService,
   ) {}
 
-  // ===========================================================================
-  // ===== MÉTODO INTERNO MODIFICADO PARA ACEPTAR Y GUARDAR EL paymentId =====
-  // ===========================================================================
   private async createTicketAndSendEmail(
     user: User, 
     data: { eventId: string, ticketTierId: string, quantity: number },
     promoter: User | null,
     amountPaid: number,
-    paymentId: string | null, // <-- 1. PARÁMETRO AÑADIDO
+    paymentId: string | null,
   ): Promise<Ticket> {
     const { eventId, ticketTierId, quantity } = data;
     const event = await this.eventsService.findOne(eventId);
@@ -60,7 +55,7 @@ export class TicketsService {
       promoter,
       amountPaid,
       status,
-      paymentId, // <-- 2. CAMPO AÑADIDO AL CREAR EL TICKET
+      paymentId,
     });
     
     tier.quantity -= quantity;
@@ -68,8 +63,7 @@ export class TicketsService {
 
     await this.ticketsRepository.save(newTicket);
 
-    // Enviamos el email de confirmación
-    await this.mailService.sendMail(user.email, '🎟️ Entrada adquirida con éxito', `...`); // Contenido del email omitido por brevedad
+    await this.mailService.sendMail(user.email, '🎟️ Entrada adquirida con éxito', `...`);
 
     return newTicket;
   }
@@ -80,31 +74,32 @@ export class TicketsService {
     
     const tickets: Ticket[] = [];
     for (let i = 0; i < quantity; i++) {
-      // Como estos tickets son gratuitos, el paymentId es null
       const ticket = await this.createTicketAndSendEmail(user, { eventId, ticketTierId, quantity: 1 }, promoter, 0, null);
       tickets.push(ticket);
     }
     
-    await this.mailService.sendMail(user.email, `🎟️ Tienes ${quantity} nuevas entradas de RRPP`, `...`); // Contenido del email omitido por brevedad
+    await this.mailService.sendMail(user.email, `🎟️ Tienes ${quantity} nuevas entradas de RRPP`, `...`);
 
     return tickets;
   }
 
-  // ===========================================================================
-  // ===== MÉTODO PÚBLICO MODIFICADO PARA ACEPTAR Y PASAR EL paymentId =====
-  // ===========================================================================
   async acquireForClient(
     user: User, 
     acquireTicketDto: AcquireTicketDto, 
     promoterUsername: string | null,
     amountPaid: number,
-    paymentId: string | null, // <-- 3. PARÁMETRO AÑADIDO
+    paymentId: string | null,
   ): Promise<Ticket> {
     let promoter: User | null = null;
     if (promoterUsername) {
-      // Aquí había un error lógico, debería buscar por username, no por email. Asumimos que el servicio de usuarios tiene un método para esto.
-      // Si no, habría que cambiar `findOrCreateByEmail` por `findOneByUsername`. Por ahora lo dejamos como estaba para no introducir más cambios.
-      promoter = await this.usersService.findOrCreateByEmail(promoterUsername); 
+      // ===========================================================================
+      // ===== CORRECCIÓN CLAVE: Buscamos por nombre de usuario, no por email =====
+      // ===========================================================================
+      promoter = await this.usersService.findOneByUsername(promoterUsername); 
+      if (!promoter) {
+        // Opcional: Advertimos en consola si un RRPP referido no fue encontrado
+        console.warn(`Se intentó registrar una venta con un RRPP inexistente: ${promoterUsername}`);
+      }
     }
     const ticket = await this.createTicketAndSendEmail(user, acquireTicketDto, promoter, amountPaid, paymentId);
     return ticket;
@@ -158,16 +153,15 @@ export class TicketsService {
     return ticket;
   }
 
-  // =================================================================
-  // ===== NUEVO MÉTODO REQUERIDO POR PAYMENTS.SERVICE =====
-  // =================================================================
-  async findOneByPaymentId(paymentId: string): Promise<Ticket | null> {
-    return this.ticketsRepository.findOne({ where: { paymentId } });
-  }
+  async findOneByPaymentId(paymentId: string): Promise<Ticket | null> {
+    return this.ticketsRepository.findOne({ where: { paymentId } });
+  }
 
   async confirmAttendance(ticketId: string, userId: string): Promise<Ticket> {
     const ticket = await this.ticketsRepository.findOne({ where: { id: ticketId, user: { id: userId } }, relations: ['event'] });
-    if (!ticket) throw new NotFoundException('Entrada no encontrada o no te pertenece.');
+    if (!ticket) {
+      throw new NotFoundException('Entrada no encontrada o no te pertenece.');
+    }
     ticket.confirmedAt = new Date();
     return this.ticketsRepository.save(ticket);
   }
