@@ -18,16 +18,16 @@ export class User {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ unique: true, nullable: true })
+  @Column({ type: 'varchar', unique: true, nullable: true })
   username: string | null;
 
-  @Column({ unique: true })
+  @Column({ type: 'varchar', unique: true })
   email: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   password?: string;
 
-  @Column()
+  @Column({ type: 'varchar' })
   name: string;
 
   @Column({
@@ -36,23 +36,21 @@ export class User {
   })
   roles: UserRole[];
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   invitationToken: string | null;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   profileImageUrl: string | null;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   instagramHandle: string | null;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   whatsappNumber: string | null;
 
   @Column({ type: 'date', nullable: true })
   dateOfBirth: Date | null;
 
-  // --- CAMPOS PARA PAGOS CORREGIDOS ---
-  // CORRECCIÓN FINAL: Se añade type: 'varchar' para ser explícitos
   @Column({ type: 'varchar', nullable: true })
   mpAccessToken: string | null;
 
