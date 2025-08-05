@@ -1,14 +1,5 @@
 // backend/src/users/user.entity.ts
-
-import {
-  Entity,
-  PrimaryGeneratedColumn,
-  Column,
-  CreateDateColumn,
-  UpdateDateColumn,
-  BeforeInsert,
-  OneToMany,
-} from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, BeforeInsert, OneToMany } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { Ticket } from 'src/tickets/ticket.entity';
 import { PushSubscription } from 'src/notifications/entities/subscription.entity';
@@ -60,14 +51,15 @@ export class User {
   @Column({ type: 'date', nullable: true })
   dateOfBirth: Date;
 
-  // --- NUEVOS CAMPOS PARA PAGOS ---
-  // CORRECCIÓN: Cambiamos el nombre de la propiedad a 'mpAccessToken'
-  @Column({ nullable: true, select: false })
-  mpAccessToken: string;
+  // ==========================================================
+  // ===== CORRECCIÓN FINAL: Se elimina 'select: false' =====
+  // ==========================================================
+  @Column({ nullable: true })
+  mpAccessToken: string | null;
 
-  // NUEVO CAMPO: Agregamos el mpUserId para el split de pagos
-  @Column({ nullable: true, select: false })
-  mpUserId: string;
+  // CORRECCIÓN: Tipo cambiado a number y se elimina 'select: false'
+  @Column({ type: 'bigint', nullable: true })
+  mpUserId: number | null;
 
   @Column({ type: 'decimal', precision: 5, scale: 2, nullable: true })
   rrppCommissionRate: number;
