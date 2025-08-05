@@ -19,7 +19,7 @@ export class User {
   id: string;
 
   @Column({ unique: true, nullable: true })
-  username: string;
+  username: string | null;
 
   @Column({ unique: true })
   email: string;
@@ -37,32 +37,30 @@ export class User {
   roles: UserRole[];
 
   @Column({ nullable: true })
-  invitationToken: string;
+  invitationToken: string | null;
 
   @Column({ nullable: true })
-  profileImageUrl: string;
+  profileImageUrl: string | null;
 
   @Column({ nullable: true })
-  instagramHandle: string;
+  instagramHandle: string | null;
 
   @Column({ nullable: true })
-  whatsappNumber: string;
+  whatsappNumber: string | null;
 
   @Column({ type: 'date', nullable: true })
-  dateOfBirth: Date;
+  dateOfBirth: Date | null;
 
-  // ==========================================================
-  // ===== CORRECCIÓN FINAL: Se elimina 'select: false' =====
-  // ==========================================================
-  @Column({ nullable: true })
+  // --- CAMPOS PARA PAGOS CORREGIDOS ---
+  // CORRECCIÓN FINAL: Se añade type: 'varchar' para ser explícitos
+  @Column({ type: 'varchar', nullable: true })
   mpAccessToken: string | null;
 
-  // CORRECCIÓN: Tipo cambiado a number y se elimina 'select: false'
   @Column({ type: 'bigint', nullable: true })
   mpUserId: number | null;
 
   @Column({ type: 'decimal', precision: 5, scale: 2, nullable: true })
-  rrppCommissionRate: number;
+  rrppCommissionRate: number | null;
 
   @OneToMany(() => Ticket, (ticket) => ticket.user)
   tickets: Ticket[];
