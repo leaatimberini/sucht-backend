@@ -24,8 +24,9 @@ export class UsersService {
     const user = await this.findOneById(userId);
     const isPushSubscribed = await this.notificationsService.isUserSubscribed(userId);
     
-    // Excluimos propiedades sensibles al devolver el perfil
-    const { password, invitationToken, mpAccessToken, mpUserId, ...profileData } = user;
+    // CORRECCIÓN: Dejamos de filtrar mpAccessToken y mpUserId.
+    // Solo filtramos datos que NUNCA deben llegar al frontend.
+    const { password, invitationToken, ...profileData } = user;
 
     return {
       ...profileData,
@@ -118,14 +119,12 @@ export class UsersService {
   async getAdminConfig(): Promise<{ serviceFee: number; accessToken: string | null }> {
     const serviceFeeStr = await this.configService.get('adminServiceFee');
     const adminUser = await this.findAdmin();
-
     return {
       serviceFee: serviceFeeStr ? parseFloat(serviceFeeStr) : 0,
       accessToken: adminUser?.mpAccessToken || null,
     };
   }
 
-  // Se crea una función privada reutilizable para buscar por rol en el string
   private async findUserByRole(role: UserRole): Promise<User | null> {
     return this.usersRepository.createQueryBuilder("user")
       .where(`(
@@ -142,12 +141,10 @@ export class UsersService {
       .getOne();
   }
   
-  // CORRECCIÓN: findAdmin ahora usa la función de búsqueda correcta
   async findAdmin(): Promise<User | null> {
     return this.findUserByRole(UserRole.ADMIN);
   }
   
-  // CORRECCIÓN: findOwner ahora usa la función de búsqueda correcta
   async findOwner(): Promise<User | null> {
     return this.findUserByRole(UserRole.OWNER);
   }
