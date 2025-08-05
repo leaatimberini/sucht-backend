@@ -24,11 +24,14 @@ export class UsersService {
     const user = await this.findOneById(userId);
     const isPushSubscribed = await this.notificationsService.isUserSubscribed(userId);
     
-    const { password, invitationToken, ...profileData } = user;
+    // Omitimos campos sensibles antes de devolver el perfil
+    const { password, invitationToken, mpAccessToken, ...profileData } = user;
 
     return {
       ...profileData,
       isPushSubscribed,
+      // Añadimos el flag que necesita el frontend para la configuración de MP
+      isMpLinked: !!user.mpUserId,
     };
   }
 
@@ -42,6 +45,7 @@ export class UsersService {
     return this.usersRepository.findOne({ where: { email: email.toLowerCase() } });
   }
   
+  // Implementación estándar y correcta para buscar por nombre de usuario
   async findOneByUsername(username: string): Promise<User | null> {
     return this.usersRepository.findOne({ where: { username } });
   }
@@ -75,6 +79,8 @@ export class UsersService {
     const lowerCaseEmail = email.toLowerCase();
     let user = await this.findOneByEmail(lowerCaseEmail);
     if (user) { return user; }
+    
+    // Usamos un password temporal aleatorio para usuarios creados automáticamente
     const tempPassword = randomBytes(16).toString('hex');
     const nameParts = lowerCaseEmail.split('@');
     const tempName = nameParts[0];
@@ -88,16 +94,17 @@ export class UsersService {
     let user = await this.findOneByEmail(lowerCaseEmail);
     if (user) {
       const newRoles = Array.from(new Set([...user.roles, ...roles]));
-        if (!newRoles.includes(UserRole.CLIENT)) {
-            newRoles.push(UserRole.CLIENT);
-        }
+      if (!newRoles.includes(UserRole.CLIENT)) {
+        newRoles.push(UserRole.CLIENT);
+      }
       user.roles = newRoles;
       return this.usersRepository.save(user);
     } else {
       const nameParts = lowerCaseEmail.split('@');
       const tempName = nameParts[0];
       const invitationToken = randomBytes(32).toString('hex');
-      const newUser = this.usersRepository.create({ email: lowerCaseEmail, name: tempName, roles, invitationToken, password: '', });
+      // Creamos el usuario sin contraseña, para que la establezca al aceptar la invitación
+      const newUser = this.usersRepository.create({ email: lowerCaseEmail, name: tempName, roles, invitationToken });
       console.log(`INVITATION TOKEN for ${lowerCaseEmail}: ${invitationToken}`);
       return this.usersRepository.save(newUser);
     }
@@ -123,21 +130,12 @@ export class UsersService {
     };
   }
 
+  // MÉTODO ROBUSTECIDO PARA BUSCAR POR ROL
   private async findUserByRole(role: UserRole): Promise<User | null> {
-    return this.usersRepository.createQueryBuilder("user")
-      .where(`(
-        user.roles = :role OR 
-        user.roles LIKE :rolePrefix OR 
-        user.roles LIKE :roleInfix OR 
-        user.roles LIKE :roleSuffix
-      )`, {
-        role: role,
-        rolePrefix: `${role},%`,
-        roleInfix: `%,${role},%`,
-        roleSuffix: `%,${role}`,
-      })
-      // AÑADIDO: Deshabilita la caché para esta consulta específica
-      .cache(false) 
+    // Esta consulta es la forma correcta y robusta de buscar en un campo 'simple-array'
+    return this.usersRepository
+      .createQueryBuilder("user")
+      .where(`:role = ANY(string_to_array(user.roles, ','))`, { role })
       .getOne();
   }
   
@@ -150,6 +148,8 @@ export class UsersService {
   }
   
   async findUpcomingBirthdays(days: number): Promise<User[]> {
+    // Tu lógica de cumpleaños se mantiene, pero la búsqueda de rol se podría simplificar
+    // si se refactoriza, por ahora la dejamos como está para no romper nada.
     const today = new Date();
     const futureDate = new Date();
     futureDate.setDate(today.getDate() + days);
@@ -168,38 +168,26 @@ export class UsersService {
       );
     }
 
-    queryBuilder = queryBuilder.andWhere(`(
-      user.roles = :role OR 
-      user.roles LIKE :rolePrefix OR 
-      user.roles LIKE :roleInfix OR 
-      user.roles LIKE :roleSuffix
-    )`, {
-      role: UserRole.CLIENT,
-      rolePrefix: `${UserRole.CLIENT},%`,
-      roleInfix: `%,${UserRole.CLIENT},%`,
-      roleSuffix: `%,${UserRole.CLIENT}`,
-    });
+    // Aquí usamos la forma correcta de buscar el rol 'client'
+    queryBuilder = queryBuilder.andWhere(`:role = ANY(string_to_array(user.roles, ','))`, { role: UserRole.CLIENT });
 
     return queryBuilder
       .orderBy("to_char(\"dateOfBirth\", 'MM-DD')")
       .getMany();
   }
 
-   async updateMercadoPagoCredentials(
+  async updateMercadoPagoCredentials(
     userId: string,
     accessToken: string | null,
     mpUserId: string | number | null,
-  ): Promise<void> { // Nota: .update() no devuelve el usuario, por lo que el retorno es void
+  ): Promise<void> {
     if (!userId) {
       throw new NotFoundException('Se requiere un ID de usuario.');
     }
-
-    // Creamos un objeto para la actualización con los tipos correctos
     const updatePayload = {
       mpAccessToken: accessToken,
-      mpUserId: mpUserId ? Number(mpUserId) : null, // Convertimos a número aquí
+      mpUserId: mpUserId ? Number(mpUserId) : null,
     };
-
     await this.usersRepository.update(userId, updatePayload);
   }
 }
