@@ -67,7 +67,7 @@ export class TicketsController {
   @UseGuards(RolesGuard)
   @Roles(UserRole.CLIENT)
   acquireForClient(@Request() req: { user: User }, @Body() acquireTicketDto: AcquireTicketDto) {
-    return this.ticketsService.acquireForClient(req.user, acquireTicketDto, undefined, 0);
+    return this.ticketsService.acquireForClient(req.user, acquireTicketDto, null, 0, null);
   }
   
   // --- Endpoint para canjear un ticket (verificador) ---
