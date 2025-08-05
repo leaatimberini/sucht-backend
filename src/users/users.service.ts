@@ -24,8 +24,6 @@ export class UsersService {
     const user = await this.findOneById(userId);
     const isPushSubscribed = await this.notificationsService.isUserSubscribed(userId);
     
-    // CORRECCIÓN: Dejamos de filtrar mpAccessToken y mpUserId.
-    // Solo filtramos datos que NUNCA deben llegar al frontend.
     const { password, invitationToken, ...profileData } = user;
 
     return {
@@ -138,6 +136,8 @@ export class UsersService {
         roleInfix: `%,${role},%`,
         roleSuffix: `%,${role}`,
       })
+      // AÑADIDO: Deshabilita la caché para esta consulta específica
+      .cache(false) 
       .getOne();
   }
   
