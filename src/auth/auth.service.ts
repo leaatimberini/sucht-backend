@@ -33,12 +33,11 @@ export class AuthService {
   }
 
   async login(user: User) {
-    // Tu función de seguridad es una buena idea, la mantenemos.
     const cleanRoles = (roles: any): string[] => {
       if (Array.isArray(roles)) {
         return roles;
       }
-      return []; // Fallback de seguridad
+      return [];
     };
 
     const payload = { 
@@ -49,8 +48,6 @@ export class AuthService {
 
     const accessToken = this.jwtService.sign(payload);
 
-    // CORRECCIÓN: Devolvemos tanto el token como el objeto de usuario completo
-    // para que el frontend tenga toda la información que necesita.
     return {
       accessToken: accessToken,
       user: {
@@ -59,7 +56,8 @@ export class AuthService {
         name: user.name,
         roles: cleanRoles(user.roles),
         profileImageUrl: user.profileImageUrl,
-        isMpLinked: !!user.mpUserId, // El flag crucial para el frontend
+        isMpLinked: !!user.mpUserId,
+        rrppCommissionRate: user.rrppCommissionRate,
       }
     };
   }
