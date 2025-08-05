@@ -7,13 +7,12 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   ManyToOne,
-  JoinColumn,
+  JoinColumn,
 } from 'typeorm';
 import { User, UserRole } from '../users/user.entity';
 import { Event } from '../events/event.entity';
 import { TicketTier } from 'src/ticket-tiers/ticket-tier.entity';
 
-// CORRECCIÓN: Se añade el export al enum
 export enum TicketStatus {
   VALID = 'valid',
   USED = 'used',
@@ -59,6 +58,13 @@ export class Ticket {
   @Column({ type: 'decimal', precision: 10, scale: 2, default: 0.00 })
   amountPaid: number;
   
+  // ===============================================
+  // ===== NUEVA COLUMNA PARA IDEMPOTENCIA =========
+  // ===============================================
+  @Column({ type: 'varchar', nullable: true, unique: true })
+  paymentId: string | null;
+  // ===============================================
+
   @Column({ type: 'timestamp', nullable: true })
   confirmedAt: Date | null;
 
