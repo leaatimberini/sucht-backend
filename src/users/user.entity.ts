@@ -1,11 +1,9 @@
 // backend/src/users/user.entity.ts
-
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, BeforeInsert, OneToMany } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { Ticket } from 'src/tickets/ticket.entity';
 import { PushSubscription } from 'src/notifications/entities/subscription.entity';
 import { Notification } from 'src/notifications/entities/notification.entity';
-import { Event } from 'src/events/event.entity';
 
 export enum UserRole {
   OWNER = 'owner',
@@ -86,8 +84,4 @@ export class User {
 
   @OneToMany(() => PushSubscription, (subscription) => subscription.user)
   pushSubscriptions: PushSubscription[];
-
-  // Nueva relación: un usuario puede tener muchos eventos como dueño.
-  @OneToMany(() => Event, (event) => event.owner)
-  events: Event[];
 }

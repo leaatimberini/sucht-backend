@@ -1,5 +1,3 @@
-// src/events/event.entity.ts
-
 import {
   Entity,
   PrimaryGeneratedColumn,
@@ -7,11 +5,9 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   OneToMany,
-  ManyToOne,
 } from 'typeorm';
-import { User } from 'src/users/user.entity';
-import { TicketTier } from 'src/tickets/ticket-tier.entity';
-import { EventStatus } from 'src/events/enums/event-status.enum';
+import { Ticket } from 'src/tickets/ticket.entity';
+import { TicketTier } from 'src/ticket-tiers/ticket-tier.entity';
 
 @Entity('events')
 export class Event {
@@ -21,37 +17,40 @@ export class Event {
   @Column()
   title: string;
 
-  @Column({ nullable: true })
-  flyerUrl: string;
+  @Column({ type: 'text', nullable: true })
+  description: string;
 
-  @Column({ nullable: true })
+  @Column()
   location: string;
 
+  @Column({ type: 'timestamp' })
+  startDate: Date;
+
+  @Column({ type: 'timestamp' })
+  endDate: Date;
+
+  @Column({ nullable: true })
+  flyerImageUrl: string;
+
   @Column({ type: 'timestamp', nullable: true })
-  date: Date;
+  confirmationSentAt: Date | null;
 
-  @Column({ default: true })
-  isActive: boolean;
-
-  @Column({
-    type: 'enum',
-    enum: EventStatus,
-    default: EventStatus.DRAFT,
+  // Borrado en cascada para mantener la integridad referencial
+  @OneToMany(() => Ticket, (ticket) => ticket.event, {
+    cascade: true,
+    onDelete: 'CASCADE',
   })
-  status: EventStatus;
-
-  @CreateDateColumn()
-  createdAt: Date;
-
-  @UpdateDateColumn()
-  updatedAt: Date;
-
-  @ManyToOne(() => User, (user) => user.events, { eager: true })
-  owner: User;
+  tickets: Ticket[];
 
   @OneToMany(() => TicketTier, (ticketTier) => ticketTier.event, {
     cascade: true,
     onDelete: 'CASCADE',
   })
   ticketTiers: TicketTier[];
+
+  @CreateDateColumn({ type: 'timestamp' })
+  createdAt: Date;
+
+  @UpdateDateColumn({ type: 'timestamp' })
+  updatedAt: Date;
 }
