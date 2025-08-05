@@ -24,6 +24,7 @@ export class UsersService {
     const user = await this.findOneById(userId);
     const isPushSubscribed = await this.notificationsService.isUserSubscribed(userId);
     
+    // Excluimos propiedades sensibles al devolver el perfil
     const { password, invitationToken, mpAccessToken, mpUserId, ...profileData } = user;
 
     return {
@@ -49,7 +50,7 @@ export class UsersService {
   async create(registerAuthDto: RegisterAuthDto): Promise<User> {
     const { email, name, password, dateOfBirth } = registerAuthDto;
     const lowerCaseEmail = email.toLowerCase();
-    const existingUser = await this.findOneByEmail(lowerCaseEmail);
+    const existingUser = await this.findOneByEmail(email);
     if (existingUser) { throw new ConflictException('Email already registered'); }
     const newUser = this.usersRepository.create({ email: lowerCaseEmail, name, password, dateOfBirth: new Date(dateOfBirth), roles: [UserRole.CLIENT] });
     try { return await this.usersRepository.save(newUser); } catch (error) { throw new InternalServerErrorException('Something went wrong, user not created'); }
@@ -88,9 +89,9 @@ export class UsersService {
     let user = await this.findOneByEmail(lowerCaseEmail);
     if (user) {
       const newRoles = Array.from(new Set([...user.roles, ...roles]));
-      if (!newRoles.includes(UserRole.CLIENT)) {
-        newRoles.push(UserRole.CLIENT);
-      }
+        if (!newRoles.includes(UserRole.CLIENT)) {
+            newRoles.push(UserRole.CLIENT);
+        }
       user.roles = newRoles;
       return this.usersRepository.save(user);
     } else {
@@ -124,18 +125,31 @@ export class UsersService {
     };
   }
 
-  async findAdmin(): Promise<User | null> {
-    // CORRECCIÓN: Se añade el type cast '::text[]' para ser explícitos con PostgreSQL.
+  // Se crea una función privada reutilizable para buscar por rol en el string
+  private async findUserByRole(role: UserRole): Promise<User | null> {
     return this.usersRepository.createQueryBuilder("user")
-      .where("user.roles @> :roles::text[]", { roles: [UserRole.ADMIN] })
+      .where(`(
+        user.roles = :role OR 
+        user.roles LIKE :rolePrefix OR 
+        user.roles LIKE :roleInfix OR 
+        user.roles LIKE :roleSuffix
+      )`, {
+        role: role,
+        rolePrefix: `${role},%`,
+        roleInfix: `%,${role},%`,
+        roleSuffix: `%,${role}`,
+      })
       .getOne();
   }
   
+  // CORRECCIÓN: findAdmin ahora usa la función de búsqueda correcta
+  async findAdmin(): Promise<User | null> {
+    return this.findUserByRole(UserRole.ADMIN);
+  }
+  
+  // CORRECCIÓN: findOwner ahora usa la función de búsqueda correcta
   async findOwner(): Promise<User | null> {
-    // CORRECCIÓN: Se añade el type cast '::text[]' para ser explícitos con PostgreSQL.
-    return this.usersRepository.createQueryBuilder("user")
-      .where("user.roles @> :roles::text[]", { roles: [UserRole.OWNER] })
-      .getOne();
+    return this.findUserByRole(UserRole.OWNER);
   }
   
   async findUpcomingBirthdays(days: number): Promise<User[]> {
@@ -146,15 +160,32 @@ export class UsersService {
     const todayMonthDay = `${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
     const futureMonthDay = `${String(futureDate.getMonth() + 1).padStart(2, '0')}-${String(futureDate.getDate()).padStart(2, '0')}`;
     
-    // CORRECCIÓN: Se añade el type cast '::text[]' también aquí por consistencia.
-    let query = this.usersRepository.createQueryBuilder("user")
-        .where(`to_char(user.dateOfBirth, 'MM-DD') BETWEEN :start AND :end`, {
-            start: todayMonthDay,
-            end: futureMonthDay,
-        })
-        .andWhere("user.roles @> :roles::text[]", { roles: [UserRole.CLIENT] });
+    let queryBuilder = this.usersRepository.createQueryBuilder('user');
+    
+    if (todayMonthDay <= futureMonthDay) {
+      queryBuilder = queryBuilder.where("to_char(\"dateOfBirth\", 'MM-DD') BETWEEN :today AND :future", { today: todayMonthDay, future: futureMonthDay });
+    } else {
+      queryBuilder = queryBuilder.where(
+        "(to_char(\"dateOfBirth\", 'MM-DD') >= :today OR to_char(\"dateOfBirth\", 'MM-DD') <= :future)",
+        { today: todayMonthDay, future: futureMonthDay }
+      );
+    }
 
-    return query.orderBy("to_char(user.dateOfBirth, 'MM-DD')").getMany();
+    queryBuilder = queryBuilder.andWhere(`(
+      user.roles = :role OR 
+      user.roles LIKE :rolePrefix OR 
+      user.roles LIKE :roleInfix OR 
+      user.roles LIKE :roleSuffix
+    )`, {
+      role: UserRole.CLIENT,
+      rolePrefix: `${UserRole.CLIENT},%`,
+      roleInfix: `%,${UserRole.CLIENT},%`,
+      roleSuffix: `%,${UserRole.CLIENT}`,
+    });
+
+    return queryBuilder
+      .orderBy("to_char(\"dateOfBirth\", 'MM-DD')")
+      .getMany();
   }
 
   async updateMercadoPagoCredentials(userId: string, mpAccessToken: string, mpUserId: string): Promise<void> {
