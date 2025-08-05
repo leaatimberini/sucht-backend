@@ -24,4 +24,5 @@ export class AcquireTicketDto {
   @IsOptional()
   @IsString()
   promoterUsername?: string;
+  
 }
