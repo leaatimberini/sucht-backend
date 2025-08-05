@@ -15,8 +15,13 @@ export class AcquireTicketDto {
   @Min(1)
   quantity: number;
 
-  // --- NUEVO CAMPO ---
   @IsOptional()
   @IsEnum(['full', 'partial'])
   paymentType?: 'full' | 'partial';
+
+  // --- CAMPO AÑADIDO ---
+  // Se añade promoterUsername como un string opcional para que la validación no falle.
+  @IsOptional()
+  @IsString()
+  promoterUsername?: string;
 }
