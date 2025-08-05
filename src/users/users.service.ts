@@ -185,7 +185,21 @@ export class UsersService {
       .getMany();
   }
 
-  async updateMercadoPagoCredentials(userId: string, mpAccessToken: string, mpUserId: string): Promise<void> {
-    await this.usersRepository.update(userId, { mpAccessToken, mpUserId });
+   async updateMercadoPagoCredentials(
+    userId: string,
+    accessToken: string | null,
+    mpUserId: string | number | null,
+  ): Promise<void> { // Nota: .update() no devuelve el usuario, por lo que el retorno es void
+    if (!userId) {
+      throw new NotFoundException('Se requiere un ID de usuario.');
+    }
+
+    // Creamos un objeto para la actualización con los tipos correctos
+    const updatePayload = {
+      mpAccessToken: accessToken,
+      mpUserId: mpUserId ? Number(mpUserId) : null, // Convertimos a número aquí
+    };
+
+    await this.usersRepository.update(userId, updatePayload);
   }
 }
