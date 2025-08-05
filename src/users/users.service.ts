@@ -2,8 +2,7 @@
 
 import { ConflictException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-// 1. IMPORTAMOS ArrayContains DE TYPEORM
-import { ArrayContains, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 import { User, UserRole } from './user.entity';
 import { RegisterAuthDto } from 'src/auth/dto/register-auth.dto';
 import { randomBytes } from 'crypto';
@@ -98,7 +97,7 @@ export class UsersService {
       const nameParts = lowerCaseEmail.split('@');
       const tempName = nameParts[0];
       const invitationToken = randomBytes(32).toString('hex');
-      const newUser = this.usersRepository.create({ email: lowerCaseEmail, name: tempName, roles, invitationToken, password: '', }); // Password no puede ser nulo
+      const newUser = this.usersRepository.create({ email: lowerCaseEmail, name: tempName, roles, invitationToken, password: '', });
       console.log(`INVITATION TOKEN for ${lowerCaseEmail}: ${invitationToken}`);
       return this.usersRepository.save(newUser);
     }
@@ -125,26 +124,21 @@ export class UsersService {
     };
   }
 
-  // 2. CORREGIMOS findAdmin CON ArrayContains
   async findAdmin(): Promise<User | null> {
-    return this.usersRepository.findOne({
-      where: {
-        roles: ArrayContains([UserRole.ADMIN]),
-      },
-    });
+    // CORRECCIÓN: Se añade el type cast '::text[]' para ser explícitos con PostgreSQL.
+    return this.usersRepository.createQueryBuilder("user")
+      .where("user.roles @> :roles::text[]", { roles: [UserRole.ADMIN] })
+      .getOne();
   }
   
-  // 2. CORREGIMOS findOwner CON ArrayContains
   async findOwner(): Promise<User | null> {
-    return this.usersRepository.findOne({
-      where: {
-        roles: ArrayContains([UserRole.OWNER]),
-      },
-    });
+    // CORRECCIÓN: Se añade el type cast '::text[]' para ser explícitos con PostgreSQL.
+    return this.usersRepository.createQueryBuilder("user")
+      .where("user.roles @> :roles::text[]", { roles: [UserRole.OWNER] })
+      .getOne();
   }
   
   async findUpcomingBirthdays(days: number): Promise<User[]> {
-    // ... (esta función no necesita cambios)
     const today = new Date();
     const futureDate = new Date();
     futureDate.setDate(today.getDate() + days);
@@ -152,12 +146,13 @@ export class UsersService {
     const todayMonthDay = `${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
     const futureMonthDay = `${String(futureDate.getMonth() + 1).padStart(2, '0')}-${String(futureDate.getDate()).padStart(2, '0')}`;
     
+    // CORRECCIÓN: Se añade el type cast '::text[]' también aquí por consistencia.
     let query = this.usersRepository.createQueryBuilder("user")
         .where(`to_char(user.dateOfBirth, 'MM-DD') BETWEEN :start AND :end`, {
             start: todayMonthDay,
             end: futureMonthDay,
         })
-        .andWhere("roles @> ARRAY[:role::text]", { role: UserRole.CLIENT });
+        .andWhere("user.roles @> :roles::text[]", { roles: [UserRole.CLIENT] });
 
     return query.orderBy("to_char(user.dateOfBirth, 'MM-DD')").getMany();
   }
