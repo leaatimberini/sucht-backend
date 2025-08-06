@@ -13,6 +13,8 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { ConfigurationModule } from './configuration/configuration.module';
 import { PaymentsModule } from './payments/payments.module';
 import { MailModule } from './mail/mail.module';
+import { PointTransactionsModule } from './point-transactions/point-transactions.module';
+
 
 @Module({
   imports: [
@@ -44,6 +46,7 @@ import { MailModule } from './mail/mail.module';
     ConfigurationModule,
     PaymentsModule,
     MailModule,
+    PointTransactionsModule,
   ],
   controllers: [],
   providers: [],
