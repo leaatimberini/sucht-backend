@@ -1,6 +1,6 @@
 // src/dashboard/dashboard.controller.ts
 
-import { Controller, Get, UseGuards, Request, Query, ParseIntPipe } from '@nestjs/common';
+import { Controller, Get, UseGuards, Request, Query, ParseIntPipe, BadRequestException } from '@nestjs/common';
 import { DashboardService } from './dashboard.service';
 // CAMBIO: Ya no importamos 'DashboardFilters' desde el servicio.
 // import { DashboardFilters } from './dashboard.service'; 
@@ -63,5 +63,16 @@ export class DashboardController {
     @Query('limit', new ParseIntPipe({ optional: true })) limit?: number,
   ) {
     return this.dashboardService.getAttendanceRanking(limit);
+  }
+  @Get('loyalty/perfect-attendance')
+  getPerfectAttendance(@Query() query: DashboardQueryDto) {
+    const { startDate, endDate } = query;
+
+    // Se añade una validación para asegurar que los parámetros requeridos existan.
+    if (!startDate || !endDate) {
+      throw new BadRequestException('Los parámetros startDate y endDate son requeridos.');
+    }
+
+    return this.dashboardService.getPerfectAttendance(startDate, endDate);
   }
 }

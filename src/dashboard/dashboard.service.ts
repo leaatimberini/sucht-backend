@@ -1,9 +1,9 @@
 import { Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Event } from 'src/events/event.entity';
-import { Ticket } from 'src/tickets/ticket.entity';
+import { Ticket, TicketStatus } from 'src/tickets/ticket.entity';
 import { User, UserRole } from 'src/users/user.entity';
-import { LessThan, Repository } from 'typeorm';
+import { Between, In, LessThan, Repository } from 'typeorm';
 import { DashboardQueryDto } from './dto/dashboard-query.dto';
 
 @Injectable()
@@ -207,5 +207,56 @@ export class DashboardService {
         ...r,
         totalAttendance: parseInt(r.totalAttendance, 10)
     }));
+  }
+
+  async getPerfectAttendance(startDate: string, endDate: string): Promise<User[]> {
+    this.logger.log(`[getPerfectAttendance] Calculando asistencia perfecta entre ${startDate} y ${endDate}`);
+
+    const dateRange = {
+      startDate: new Date(startDate),
+      endDate: new Date(endDate),
+    };
+
+    const totalEvents = await this.eventsRepository.count({
+      where: {
+        startDate: Between(dateRange.startDate, dateRange.endDate),
+      },
+    });
+
+    this.logger.debug(`[getPerfectAttendance] Total de eventos en el período: ${totalEvents}`);
+
+    if (totalEvents === 0) {
+      return [];
+    }
+
+    const attendanceCounts = await this.ticketsRepository
+      .createQueryBuilder('ticket')
+      .select('ticket.userId', 'userId')
+      .addSelect('COUNT(ticket.id)', 'attendanceCount')
+      .where('ticket.status IN (:...statuses)', { 
+        statuses: [TicketStatus.REDEEMED, TicketStatus.USED, TicketStatus.PARTIALLY_USED] 
+      })
+      .andWhere('ticket.validatedAt BETWEEN :startDate AND :endDate', dateRange)
+      .groupBy('ticket.userId')
+      .getRawMany();
+
+    const perfectAttendanceUserIds = attendanceCounts
+      .filter(record => record.attendanceCount >= totalEvents)
+      .map(record => record.userId);
+
+    this.logger.debug(`[getPerfectAttendance] IDs de usuarios con asistencia perfecta: ${perfectAttendanceUserIds}`);
+
+    if (perfectAttendanceUserIds.length === 0) {
+      return [];
+    }
+
+    const users = await this.usersRepository.find({
+      where: {
+        id: In(perfectAttendanceUserIds),
+      },
+      select: ['id', 'name', 'email'],
+    });
+
+    return users;
   }
 }
