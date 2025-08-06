@@ -1,19 +1,24 @@
-// src/dashboard/dto/dashboard-query.dto.ts
+// backend/src/dashboard/dto/dashboard-query.dto.ts
+import { IsOptional, IsString, IsUUID, IsNumber, Min, IsInt } from 'class-validator';
+import { Type } from 'class-transformer';
 
-import { IsOptional, IsString, IsUUID } from 'class-validator';
-
-// Este DTO se usará para validar los query params de los endpoints de métricas.
-// Asegura que si los parámetros vienen, tengan el formato correcto, y si no vienen, no haya error.
 export class DashboardQueryDto {
-  @IsOptional()
-  @IsUUID()
-  eventId?: string;
+  @IsOptional()
+  @IsUUID()
+  eventId?: string;
 
-  @IsOptional()
-  @IsString()
-  startDate?: string;
+  @IsOptional()
+  @IsString()
+  startDate?: string;
 
+  @IsOptional()
+  @IsString()
+  endDate?: string;
+  
+  // Se añade la propiedad 'limit' al DTO
   @IsOptional()
-  @IsString()
-  endDate?: string;
+  @IsInt()
+  @Min(1)
+  @Type(() => Number) // Transforma el string del query param a número
+  limit?: number;
 }

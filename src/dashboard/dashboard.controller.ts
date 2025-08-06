@@ -1,78 +1,64 @@
-// src/dashboard/dashboard.controller.ts
+// backend/src/dashboard/dashboard.controller.ts
 
-import { Controller, Get, UseGuards, Request, Query, ParseIntPipe, BadRequestException } from '@nestjs/common';
+import { Controller, Get, UseGuards, Request, Query, BadRequestException } from '@nestjs/common';
 import { DashboardService } from './dashboard.service';
-// CAMBIO: Ya no importamos 'DashboardFilters' desde el servicio.
-// import { DashboardFilters } from './dashboard.service'; 
-
-// MANTENIDO: Tus guardias y decoradores originales.
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import { UserRole } from 'src/users/user.entity';
-
-// CAMBIO: Importamos nuestro nuevo DTO para la validación.
 import { DashboardQueryDto } from './dto/dashboard-query.dto';
 
 @Controller('dashboard')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class DashboardController {
-  constructor(private readonly dashboardService: DashboardService) {}
+  constructor(private readonly dashboardService: DashboardService) {}
 
-  @Get('summary')
-  @Roles(UserRole.ADMIN, UserRole.OWNER) // ROL CORREGIDO: Generalmente OWNER también ve esto.
-  // CAMBIO: Usamos el DTO para validar los filtros.
-  getSummaryMetrics(@Query() queryDto: DashboardQueryDto) {
-    // El ValidationPipe global se encarga de la magia.
-    return this.dashboardService.getSummaryMetrics(queryDto);
-  }
+  @Get('summary')
+  @Roles(UserRole.ADMIN, UserRole.OWNER)
+  getSummaryMetrics(@Query() queryDto: DashboardQueryDto) {
+    return this.dashboardService.getSummaryMetrics(queryDto);
+  }
 
-  @Get('event-performance')
-  @Roles(UserRole.ADMIN, UserRole.OWNER) // ROL CORREGIDO
-  // CAMBIO: Usamos el DTO aquí también para consistencia.
-  getEventPerformance(@Query() queryDto: DashboardQueryDto) {
-    return this.dashboardService.getEventPerformance(queryDto);
-  }
+  @Get('event-performance')
+  @Roles(UserRole.ADMIN, UserRole.OWNER)
+  getEventPerformance(@Query() queryDto: DashboardQueryDto) {
+    return this.dashboardService.getEventPerformance(queryDto);
+  }
 
-  @Get('rrpp-performance')
-  @Roles(UserRole.ADMIN, UserRole.OWNER) // ROL CORREGIDO
-  // CAMBIO PRINCIPAL: Este es el endpoint que fallaba. Ahora usa el DTO.
-  getRRPPPerformance(@Query() queryDto: DashboardQueryDto) {
-    return this.dashboardService.getRRPPPerformance(queryDto);
-  }
-  
-  // MANTENIDO: Este endpoint está bien como estaba.
-  @Get('my-rrpp-stats')
-  @Roles(UserRole.RRPP) // ROL CORREGIDO: ADMIN no necesita esta ruta, tiene la global.
-  getMyRRPPStats(@Request() req) {
-    const promoterId = req.user.id;
-    return this.dashboardService.getMyRRPPStats(promoterId);
-  }
+  @Get('rrpp-performance')
+  @Roles(UserRole.ADMIN, UserRole.OWNER)
+  getRRPPPerformance(@Query() queryDto: DashboardQueryDto) {
+    return this.dashboardService.getRRPPPerformance(queryDto);
+  }
+  
+  @Get('my-rrpp-stats')
+  @Roles(UserRole.RRPP)
+  getMyRRPPStats(@Request() req) {
+    const promoterId = req.user.id;
+    return this.dashboardService.getMyRRPPStats(promoterId);
+  }
 
-  // MANTENIDO: Este endpoint no usa filtros, se queda como está.
-  @Get('no-shows')
+  @Get('no-shows')
+  @Roles(UserRole.ADMIN, UserRole.OWNER)
+  getNoShows() {
+    return this.dashboardService.getNoShows();
+  }
+
+  @Get('loyalty/attendance-ranking')
+  @Roles(UserRole.ADMIN, UserRole.OWNER)
+  // ===== CORRECCIÓN =====
+  // Ahora el método recibe el DTO completo para ser consistente con el servicio.
+  getAttendanceRanking(@Query() queryDto: DashboardQueryDto) {
+    return this.dashboardService.getAttendanceRanking(queryDto);
+  }
+
+  @Get('loyalty/perfect-attendance')
   @Roles(UserRole.ADMIN, UserRole.OWNER)
-  getNoShows() {
-    return this.dashboardService.getNoShows();
-  }
-
-  // MANTENIDO: Este endpoint está bien como estaba.
-  @Get('loyalty/attendance-ranking')
-  @Roles(UserRole.ADMIN, UserRole.OWNER)
-  getAttendanceRanking(
-    @Query('limit', new ParseIntPipe({ optional: true })) limit?: number,
-  ) {
-    return this.dashboardService.getAttendanceRanking(limit);
-  }
-  @Get('loyalty/perfect-attendance')
-  getPerfectAttendance(@Query() query: DashboardQueryDto) {
-    const { startDate, endDate } = query;
-
-    // Se añade una validación para asegurar que los parámetros requeridos existan.
-    if (!startDate || !endDate) {
-      throw new BadRequestException('Los parámetros startDate y endDate son requeridos.');
-    }
-
-    return this.dashboardService.getPerfectAttendance(startDate, endDate);
-  }
+  getPerfectAttendance(@Query() query: DashboardQueryDto) {
+    const { startDate, endDate } = query;
+    if (!startDate || !endDate) {
+      throw new BadRequestException('Los parámetros startDate y endDate son requeridos.');
+    }
+    return this.dashboardService.getPerfectAttendance(startDate, endDate);
+  }
 }
