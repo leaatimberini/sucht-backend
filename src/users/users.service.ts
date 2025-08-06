@@ -24,11 +24,14 @@ export class UsersService {
     const user = await this.findOneById(userId);
     const isPushSubscribed = await this.notificationsService.isUserSubscribed(userId);
     
-    const { password, invitationToken, ...profileData } = user;
+    // Se omiten campos sensibles del objeto de usuario antes de devolverlo.
+    const { password, invitationToken, mpAccessToken, ...profileData } = user;
 
     return {
       ...profileData,
       isPushSubscribed,
+      // Se añade el flag que necesita el frontend para la configuración de MP.
+      isMpLinked: !!user.mpUserId,
     };
   }
 
@@ -42,18 +45,10 @@ export class UsersService {
     return this.usersRepository.findOne({ where: { email: email.toLowerCase() } });
   }
   
-  async findOneByUsername(username: string): Promise<User | null> {
-    // ===================================================================
-    // =================== PRUEBA DE FUEGO ===============================
-    console.log(`[PRUEBA DE FUEGO] Buscando usuario con username: "${username}" a las ${new Date().toLocaleTimeString()}`);
-    
-    const user = await this.usersRepository.findOne({ where: { username } });
-
-    console.log(`[PRUEBA DE FUEGO] Resultado de la búsqueda:`, user ? user.email : 'NO ENCONTRADO');
-    // ===================================================================
-    // ===================================================================
-    return user;
-  }
+  // Versión limpia y final de findOneByUsername
+  async findOneByUsername(username: string): Promise<User | null> {
+    return this.usersRepository.findOne({ where: { username } });
+  }
 
   async create(registerAuthDto: RegisterAuthDto): Promise<User> {
     const { email, name, password, dateOfBirth } = registerAuthDto;
@@ -76,7 +71,6 @@ export class UsersService {
     }
     
     Object.assign(userToUpdate, updateProfileDto);
-
     return this.usersRepository.save(userToUpdate);
   }
 
@@ -106,7 +100,7 @@ export class UsersService {
       const nameParts = lowerCaseEmail.split('@');
       const tempName = nameParts[0];
       const invitationToken = randomBytes(32).toString('hex');
-      const newUser = this.usersRepository.create({ email: lowerCaseEmail, name: tempName, roles, invitationToken, password: '', });
+      const newUser = this.usersRepository.create({ email: lowerCaseEmail, name: tempName, roles, invitationToken });
       console.log(`INVITATION TOKEN for ${lowerCaseEmail}: ${invitationToken}`);
       return this.usersRepository.save(newUser);
     }
@@ -132,20 +126,12 @@ export class UsersService {
     };
   }
 
+  // ===== MÉTODO DE BÚSQUEDA POR ROL CORREGIDO Y ROBUSTECIDO =====
   private async findUserByRole(role: UserRole): Promise<User | null> {
-    return this.usersRepository.createQueryBuilder("user")
-      .where(`(
-        user.roles = :role OR 
-        user.roles LIKE :rolePrefix OR 
-        user.roles LIKE :roleInfix OR 
-        user.roles LIKE :roleSuffix
-      )`, {
-        role: role,
-        rolePrefix: `${role},%`,
-        roleInfix: `%,${role},%`,
-        roleSuffix: `%,${role}`,
-      })
-      .cache(false) 
+    // Esta consulta usa string_to_array, la forma correcta para columnas 'simple-array'
+    return this.usersRepository
+      .createQueryBuilder("user")
+      .where(`:role = ANY(string_to_array(user.roles, ','))`, { role })
       .getOne();
   }
   
@@ -176,17 +162,8 @@ export class UsersService {
       );
     }
 
-    queryBuilder = queryBuilder.andWhere(`(
-      user.roles = :role OR 
-      user.roles LIKE :rolePrefix OR 
-      user.roles LIKE :roleInfix OR 
-      user.roles LIKE :roleSuffix
-    )`, {
-      role: UserRole.CLIENT,
-      rolePrefix: `${UserRole.CLIENT},%`,
-      roleInfix: `%,${UserRole.CLIENT},%`,
-      roleSuffix: `%,${UserRole.CLIENT}`,
-    });
+    // Se actualiza también esta consulta para que sea robusta
+    queryBuilder = queryBuilder.andWhere(`:role = ANY(string_to_array(user.roles, ','))`, { role: UserRole.CLIENT });
 
     return queryBuilder
       .orderBy("to_char(\"dateOfBirth\", 'MM-DD')")

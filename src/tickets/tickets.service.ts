@@ -1,6 +1,6 @@
 // backend/src/tickets/tickets.service.ts
 
-import { BadRequestException, Injectable, NotFoundException, InternalServerErrorException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, InternalServerErrorException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, LessThan, Not, Repository, Between, In, DeleteResult } from 'typeorm';
 import { Ticket, TicketStatus } from './ticket.entity';
@@ -16,6 +16,8 @@ import { DashboardQueryDto } from 'src/dashboard/dto/dashboard-query.dto';
 
 @Injectable()
 export class TicketsService {
+  private readonly logger = new Logger(TicketsService.name);
+
   constructor(
     @InjectRepository(Ticket)
     private ticketsRepository: Repository<Ticket>,
@@ -33,9 +35,7 @@ export class TicketsService {
     amountPaid: number,
     paymentId: string | null,
   ): Promise<Ticket> {
-    // ===== PRUEBA DE FUEGO 2 =====
-    console.log(`[PRUEBA DE FUEGO 2] Entrando a createTicketAndSendEmail. RRPP recibido:`, promoter ? promoter.email : 'NULL');
-
+    this.logger.log(`[createTicket] Creando ticket para: ${user.email} | RRPP: ${promoter ? promoter.username : 'N/A'}`);
     const { eventId, ticketTierId, quantity } = data;
     const event = await this.eventsService.findOne(eventId);
     if (!event) throw new NotFoundException('Evento no encontrado.');
@@ -53,32 +53,25 @@ export class TicketsService {
     }
 
     const newTicket = this.ticketsRepository.create({ 
-      user, 
-      event, 
-      tier, 
-      quantity, 
-      promoter,
-      amountPaid,
-      status,
-      paymentId,
+      user, event, tier, quantity, promoter, amountPaid, status, paymentId,
     });
-    
-    // ===== PRUEBA DE FUEGO 3 (LA MÁS IMPORTANTE) =====
-    console.log('[PRUEBA DE FUEGO 3] Objeto TICKET CREADO antes de guardar:', JSON.stringify(newTicket, null, 2));
     
     tier.quantity -= quantity;
     await this.ticketTiersRepository.save(tier);
 
     const savedTicket = await this.ticketsRepository.save(newTicket);
-    console.log('[PRUEBA DE FUEGO 4] Ticket guardado en la DB:', JSON.stringify(savedTicket, null, 2));
+    this.logger.log(`[createTicket] Ticket ${savedTicket.id} guardado en DB con promoterId: ${savedTicket.promoter?.id || 'null'}`);
 
-
-    await this.mailService.sendMail(user.email, '🎟️ Entrada adquirida con éxito', `...`);
-
+    await this.mailService.sendMail(user.email, '🎟️ Entrada adquirida con éxito', `<div>
+      <h1>¡Gracias por elegirnos!</h1>
+      <p>Has adquirido ${quantity} entrada(s) para el evento: <strong>${event.title}</strong>.</p>
+      <p>Tipo de entrada: <strong>${tier.name}</strong>.</p> 
+      `);
     return savedTicket;
   }
 
   async createByRRPP(createTicketDto: CreateTicketDto, promoter: User): Promise<Ticket[]> {
+    this.logger.log(`[createByRRPP] RRPP ${promoter.email} generando ${createTicketDto.quantity} ticket(s) para ${createTicketDto.userEmail}`);
     const { userEmail, eventId, ticketTierId, quantity = 1 } = createTicketDto;
     const user = await this.usersService.findOrCreateByEmail(userEmail);
     
@@ -89,25 +82,17 @@ export class TicketsService {
     }
     
     await this.mailService.sendMail(user.email, `🎟️ Tienes ${quantity} nuevas entradas de RRPP`, `...`);
-
     return tickets;
   }
 
-  async acquireForClient(
-    user: User, 
-    acquireTicketDto: AcquireTicketDto, 
-    promoterUsername: string | null,
-    amountPaid: number,
-    paymentId: string | null,
-  ): Promise<Ticket> {
+  async acquireForClient( user: User, acquireTicketDto: AcquireTicketDto, promoterUsername: string | null, amountPaid: number, paymentId: string | null, ): Promise<Ticket> {
+    this.logger.log(`[acquireForClient] Adquiriendo ticket para ${user.email} con RRPP username: ${promoterUsername || 'N/A'}`);
     let promoter: User | null = null;
     if (promoterUsername) {
       promoter = await this.usersService.findOneByUsername(promoterUsername); 
-      // ===== PRUEBA DE FUEGO 1 =====
-      console.log(`[PRUEBA DE FUEGO 1] RRPP encontrado en acquireForClient para "${promoterUsername}":`, promoter ? promoter.email : 'NULL');
+      this.logger.log(`[acquireForClient] Búsqueda de RRPP "${promoterUsername}" resultó en: ${promoter ? promoter.email : 'No encontrado'}`);
     }
-    const ticket = await this.createTicketAndSendEmail(user, acquireTicketDto, promoter, amountPaid, paymentId);
-    return ticket;
+    return this.createTicketAndSendEmail(user, acquireTicketDto, promoter, amountPaid, paymentId);
   }
   
   async getFullHistory(filters: DashboardQueryDto): Promise<Ticket[]> {
@@ -186,12 +171,32 @@ export class TicketsService {
   }
   
   async redeemTicket(id: string, quantityToRedeem: number): Promise<any> {
+    this.logger.log(`[redeemTicket] Iniciando canje para ticket ID: ${id} | Cantidad: ${quantityToRedeem}`);
     const ticket = await this.ticketsRepository.findOne({ where: { id }, relations: ['user', 'event', 'tier'] });
-    if (!ticket) throw new NotFoundException('Ticket not found.');
-    if (new Date() > new Date(ticket.event.endDate)) throw new BadRequestException('Event has already finished.');
+
+    if (!ticket) {
+      this.logger.error(`[redeemTicket] FALLO: No se encontró el ticket con ID ${id}.`);
+      throw new NotFoundException('Ticket not found.');
+    }
+    this.logger.log(`[redeemTicket] Ticket encontrado para el evento: ${ticket.event.title}`);
+
+    if (new Date() > new Date(ticket.event.endDate)) {
+      this.logger.warn(`[redeemTicket] FALLO: El evento ya finalizó. Fecha actual: ${new Date()}, Fecha fin evento: ${new Date(ticket.event.endDate)}`);
+      throw new BadRequestException('Event has already finished.');
+    }
+
     const remaining = ticket.quantity - (ticket.redeemedCount || 0);
-    if (remaining === 0) throw new BadRequestException('Ticket has been fully redeemed.');
-    if (quantityToRedeem > remaining) throw new BadRequestException(`Only ${remaining} entries remaining on this ticket.`);
+    this.logger.log(`[redeemTicket] Ticket válido. Entradas totales: ${ticket.quantity}, Ya canjeadas: ${ticket.redeemedCount}, Restantes: ${remaining}`);
+
+    if (remaining === 0) {
+      this.logger.warn(`[redeemTicket] FALLO: El ticket ya fue canjeado por completo.`);
+      throw new BadRequestException('Ticket has been fully redeemed.');
+    }
+
+    if (quantityToRedeem > remaining) {
+      this.logger.warn(`[redeemTicket] FALLO: Se intentan canjear ${quantityToRedeem} pero solo quedan ${remaining}.`);
+      throw new BadRequestException(`Only ${remaining} entries remaining on this ticket.`);
+    }
 
     ticket.redeemedCount += quantityToRedeem;
     if (ticket.redeemedCount >= ticket.quantity) {
@@ -200,8 +205,10 @@ export class TicketsService {
       ticket.status = TicketStatus.PARTIALLY_USED;
     }
     ticket.validatedAt = new Date();
-
+    
+    this.logger.log('[redeemTicket] VALIDACIÓN OK. Guardando nuevos datos en la DB:', { status: ticket.status, redeemedCount: ticket.redeemedCount });
     await this.ticketsRepository.save(ticket);
+    this.logger.log('[redeemTicket] DATOS GUARDADOS EXITOSAMENTE.');
 
     return {
       message: `${quantityToRedeem} Ingreso(s) Autorizado(s).`,
@@ -217,6 +224,7 @@ export class TicketsService {
 
   @Cron(CronExpression.EVERY_MINUTE)
   async handleUnconfirmedTickets() {
+    this.logger.log('[CronJob] Ejecutando handleUnconfirmedTickets...');
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
     const unconfirmedTickets = await this.ticketsRepository.find({
       where: {
@@ -226,6 +234,10 @@ export class TicketsService {
       },
       relations: ['tier', 'event', 'user'],
     });
+    
+    if (unconfirmedTickets.length > 0) {
+      this.logger.log(`[CronJob] ${unconfirmedTickets.length} tickets no confirmados encontrados para invalidar.`);
+    }
 
     for (const ticket of unconfirmedTickets) {
       const tier = ticket.tier;
@@ -235,7 +247,7 @@ export class TicketsService {
       }
       ticket.status = TicketStatus.INVALIDATED;
       await this.ticketsRepository.save(ticket);
-      console.log(`❌ Ticket ${ticket.id} cancelado por falta de confirmación.`);
+      this.logger.log(`[CronJob] ❌ Ticket ${ticket.id} invalidado por falta de confirmación.`);
     }
   }
 }
