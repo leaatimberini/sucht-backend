@@ -30,4 +30,8 @@ export class UpdateConfigurationDto {
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 2 })
   rrppCommissionRate?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  isRewardsStoreEnabled?: boolean;
 }
