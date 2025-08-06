@@ -117,4 +117,11 @@ export class RewardsService {
       await queryRunner.release();
     }
   }
+  async findUserRewards(userId: string): Promise<UserReward[]> {
+    return this.userRewardsRepository.find({
+      where: { userId },
+      relations: ['reward'], // Carga la información del premio relacionado
+      order: { createdAt: 'DESC' },
+    });
+  }
 }

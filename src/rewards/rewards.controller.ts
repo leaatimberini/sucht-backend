@@ -1,3 +1,5 @@
+// backend/src/rewards/rewards.controller.ts
+
 import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, HttpCode, HttpStatus, Request } from '@nestjs/common';
 import { RewardsService } from './rewards.service';
 import { CreateRewardDto } from './dto/create-reward.dto';
@@ -26,6 +28,13 @@ export class RewardsController {
   findAll() {
     return this.rewardsService.findAll();
   }
+  
+  // ===== CORRECCIÓN: Se añade el endpoint 'my-rewards' ANTES de ':id' =====
+  @Get('my-rewards')
+  @UseGuards(JwtAuthGuard)
+  getMyRewards(@Request() req: AuthenticatedRequest) {
+    return this.rewardsService.findUserRewards(req.user.id);
+  }
 
   @Get(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -49,9 +58,8 @@ export class RewardsController {
     return this.rewardsService.remove(id);
   }
 
-  // ===== NUEVO ENDPOINT PARA QUE EL CLIENTE CANJEE UN PREMIO =====
   @Post(':id/redeem')
-  @UseGuards(JwtAuthGuard) // Solo usuarios logueados pueden canjear
+  @UseGuards(JwtAuthGuard)
   redeemReward(@Param('id') id: string, @Request() req: AuthenticatedRequest) {
     return this.rewardsService.redeem(id, req.user as User);
   }
