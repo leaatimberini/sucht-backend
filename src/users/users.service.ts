@@ -24,13 +24,11 @@ export class UsersService {
     const user = await this.findOneById(userId);
     const isPushSubscribed = await this.notificationsService.isUserSubscribed(userId);
     
-    // Se omiten campos sensibles del objeto de usuario antes de devolverlo.
     const { password, invitationToken, mpAccessToken, ...profileData } = user;
 
     return {
       ...profileData,
       isPushSubscribed,
-      // Se añade el flag que necesita el frontend para la configuración de MP.
       isMpLinked: !!user.mpUserId,
     };
   }
@@ -41,9 +39,10 @@ export class UsersService {
     return user;
   }
 
+  // ===== CORRECCIÓN PARA EL LOGIN =====
   async findOneByEmail(email: string): Promise<User | null> {
-    // Usamos el QueryBuilder para poder seleccionar explícitamente la contraseña,
-    // que normalmente está oculta por el `select: false` en la entidad.
+    // Se usa QueryBuilder para seleccionar explícitamente la contraseña,
+    // que está oculta por 'select: false' en la entidad.
     return this.usersRepository
       .createQueryBuilder('user')
       .where('user.email = :email', { email: email.toLowerCase() })
@@ -51,7 +50,6 @@ export class UsersService {
       .getOne();
   }
   
-  // Versión limpia y final de findOneByUsername
   async findOneByUsername(username: string): Promise<User | null> {
     return this.usersRepository.findOne({ where: { username } });
   }
@@ -59,7 +57,7 @@ export class UsersService {
   async create(registerAuthDto: RegisterAuthDto): Promise<User> {
     const { email, name, password, dateOfBirth } = registerAuthDto;
     const lowerCaseEmail = email.toLowerCase();
-    const existingUser = await this.findOneByEmail(email);
+    const existingUser = await this.findOneByEmail(lowerCaseEmail);
     if (existingUser) { throw new ConflictException('Email already registered'); }
     const newUser = this.usersRepository.create({ email: lowerCaseEmail, name, password, dateOfBirth: new Date(dateOfBirth), roles: [UserRole.CLIENT] });
     try { return await this.usersRepository.save(newUser); } catch (error) { throw new InternalServerErrorException('Something went wrong, user not created'); }
@@ -134,9 +132,9 @@ export class UsersService {
 
   // ===== MÉTODO DE BÚSQUEDA POR ROL CORREGIDO Y ROBUSTECIDO =====
   private async findUserByRole(role: UserRole): Promise<User | null> {
-    // Esta consulta usa string_to_array, la forma correcta para columnas 'simple-array'
     return this.usersRepository
       .createQueryBuilder("user")
+      .addSelect('user.mpAccessToken') // Aseguramos que se traiga el token de MP si es necesario
       .where(`:role = ANY(string_to_array(user.roles, ','))`, { role })
       .getOne();
   }
@@ -168,7 +166,6 @@ export class UsersService {
       );
     }
 
-    // Se actualiza también esta consulta para que sea robusta
     queryBuilder = queryBuilder.andWhere(`:role = ANY(string_to_array(user.roles, ','))`, { role: UserRole.CLIENT });
 
     return queryBuilder
@@ -176,7 +173,7 @@ export class UsersService {
       .getMany();
   }
 
-   async updateMercadoPagoCredentials(
+  async updateMercadoPagoCredentials(
     userId: string,
     accessToken: string | null,
     mpUserId: string | number | null,
