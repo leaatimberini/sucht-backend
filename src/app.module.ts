@@ -14,7 +14,7 @@ import { ConfigurationModule } from './configuration/configuration.module';
 import { PaymentsModule } from './payments/payments.module';
 import { MailModule } from './mail/mail.module';
 import { PointTransactionsModule } from './point-transactions/point-transactions.module';
-
+import { RewardsModule } from './rewards/rewards.module';
 
 @Module({
   imports: [
@@ -47,6 +47,7 @@ import { PointTransactionsModule } from './point-transactions/point-transactions
     PaymentsModule,
     MailModule,
     PointTransactionsModule,
+    RewardsModule,
   ],
   controllers: [],
   providers: [],
