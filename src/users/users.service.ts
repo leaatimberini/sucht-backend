@@ -42,7 +42,13 @@ export class UsersService {
   }
 
   async findOneByEmail(email: string): Promise<User | null> {
-    return this.usersRepository.findOne({ where: { email: email.toLowerCase() } });
+    // Usamos el QueryBuilder para poder seleccionar explícitamente la contraseña,
+    // que normalmente está oculta por el `select: false` en la entidad.
+    return this.usersRepository
+      .createQueryBuilder('user')
+      .where('user.email = :email', { email: email.toLowerCase() })
+      .addSelect('user.password')
+      .getOne();
   }
   
   // Versión limpia y final de findOneByUsername

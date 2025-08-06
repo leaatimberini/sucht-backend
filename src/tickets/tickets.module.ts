@@ -9,6 +9,7 @@ import { UsersModule } from 'src/users/users.module';
 import { EventsModule } from 'src/events/events.module';
 import { TicketTier } from 'src/ticket-tiers/ticket-tier.entity';
 import { MailModule } from 'src/mail/mail.module';
+import { PointTransactionsModule } from 'src/point-transactions/point-transactions.module';
 
 @Module({
   imports: [
@@ -16,9 +17,10 @@ import { MailModule } from 'src/mail/mail.module';
     UsersModule,
     EventsModule,
     MailModule,
+    PointTransactionsModule,
   ],
   controllers: [TicketsController],
   providers: [TicketsService],
-  exports: [TicketsService], // <-- 👈 ¡ESTO ES LO QUE FALTABA!
+  exports: [TicketsService],
 })
 export class TicketsModule {}
