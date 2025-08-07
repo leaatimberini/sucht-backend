@@ -20,16 +20,57 @@ export class UsersService {
     private readonly notificationsService: NotificationsService,
   ) {}
 
+  /**
+   * Calcula el nivel de lealtad y el progreso del usuario de forma dinámica.
+   */
+  private async calculateLoyaltyTier(userPoints: number) {
+    // Leemos los umbrales desde la configuración, con valores por defecto
+    const silverMin = parseInt(await this.configService.get('loyalty_tier_silver_points') || '1000', 10);
+    const goldMin = parseInt(await this.configService.get('loyalty_tier_gold_points') || '5000', 10);
+    const platinoMin = parseInt(await this.configService.get('loyalty_tier_platino_points') || '15000', 10);
+
+    const loyaltyTiers = [
+      { level: 'Bronce', minPoints: 0 },
+      { level: 'Plata', minPoints: silverMin },
+      { level: 'Oro', minPoints: goldMin },
+      { level: 'Platino', minPoints: platinoMin },
+    ];
+
+    const sortedTiers = [...loyaltyTiers].sort((a, b) => b.minPoints - a.minPoints);
+    const currentTier = sortedTiers.find(tier => userPoints >= tier.minPoints) || loyaltyTiers[0];
+    const nextTierIndex = loyaltyTiers.findIndex(tier => tier.level === currentTier.level) + 1;
+    const nextTier = loyaltyTiers[nextTierIndex];
+
+    let progress = 0;
+    if (nextTier) {
+      const pointsInCurrentTier = userPoints - currentTier.minPoints;
+      const pointsNeededForNext = nextTier.minPoints - currentTier.minPoints;
+      progress = Math.min(100, (pointsInCurrentTier / pointsNeededForNext) * 100);
+    } else {
+      progress = 100; // El usuario está en el nivel máximo
+    }
+
+    return {
+      currentLevel: currentTier.level,
+      nextLevel: nextTier ? nextTier.level : null,
+      progressPercentage: progress,
+      pointsToNextLevel: nextTier ? nextTier.minPoints - userPoints : 0,
+    };
+  }
+
   async getProfile(userId: string) {
     const user = await this.findOneById(userId);
     const isPushSubscribed = await this.notificationsService.isUserSubscribed(userId);
+    // Ahora la llamada a la calculadora es asíncrona
+    const loyaltyInfo = await this.calculateLoyaltyTier(user.points);
     
     const { password, invitationToken, mpAccessToken, ...profileData } = user;
 
     return {
       ...profileData,
       isPushSubscribed,
-      isMpLinked: !!user.mpUserId,
+      isMpLinked: !!user.mpUserId,
+      loyalty: loyaltyInfo,
     };
   }
 
@@ -39,15 +80,12 @@ export class UsersService {
     return user;
   }
 
-  // ===== CORRECCIÓN PARA EL LOGIN =====
   async findOneByEmail(email: string): Promise<User | null> {
-    // Se usa QueryBuilder para seleccionar explícitamente la contraseña,
-    // que está oculta por 'select: false' en la entidad.
     return this.usersRepository
-      .createQueryBuilder('user')
-      .where('user.email = :email', { email: email.toLowerCase() })
-      .addSelect('user.password')
-      .getOne();
+      .createQueryBuilder('user')
+      .where('user.email = :email', { email: email.toLowerCase() })
+      .addSelect('user.password')
+      .getOne();
   }
   
   async findOneByUsername(username: string): Promise<User | null> {
@@ -130,11 +168,10 @@ export class UsersService {
     };
   }
 
-  // ===== MÉTODO DE BÚSQUEDA POR ROL CORREGIDO Y ROBUSTECIDO =====
   private async findUserByRole(role: UserRole): Promise<User | null> {
     return this.usersRepository
       .createQueryBuilder("user")
-      .addSelect('user.mpAccessToken') // Aseguramos que se traiga el token de MP si es necesario
+      .addSelect('user.mpAccessToken')
       .where(`:role = ANY(string_to_array(user.roles, ','))`, { role })
       .getOne();
   }
