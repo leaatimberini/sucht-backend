@@ -28,13 +28,12 @@ export class RewardsController {
   findAll() {
     return this.rewardsService.findAll();
   }
-  
-  // ===== CORRECCIÓN: Se añade el endpoint 'my-rewards' ANTES de ':id' =====
-  @Get('my-rewards')
-  @UseGuards(JwtAuthGuard)
-  getMyRewards(@Request() req: AuthenticatedRequest) {
-    return this.rewardsService.findUserRewards(req.user.id);
-  }
+  
+  @Get('my-rewards')
+  @UseGuards(JwtAuthGuard)
+  getMyRewards(@Request() req: AuthenticatedRequest) {
+    return this.rewardsService.findUserRewards(req.user.id);
+  }
 
   @Get(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -58,9 +57,17 @@ export class RewardsController {
     return this.rewardsService.remove(id);
   }
 
-  @Post(':id/redeem')
-  @UseGuards(JwtAuthGuard)
-  redeemReward(@Param('id') id: string, @Request() req: AuthenticatedRequest) {
-    return this.rewardsService.redeem(id, req.user as User);
+  @Post(':id/redeem')
+  @UseGuards(JwtAuthGuard)
+  redeemReward(@Param('id') id: string, @Request() req: AuthenticatedRequest) {
+    return this.rewardsService.redeem(id, req.user as User);
+  }
+
+  // ===== NUEVO ENDPOINT PARA QUE EL ROL BARRA VALIDE EL QR =====
+  @Post('validate/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.OWNER, UserRole.BARRA)
+  validateUserReward(@Param('id') id: string) {
+    return this.rewardsService.validateUserReward(id);
   }
 }
