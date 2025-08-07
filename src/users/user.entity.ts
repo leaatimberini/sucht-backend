@@ -10,7 +10,7 @@ export enum UserRole {
   ADMIN = 'admin',
   RRPP = 'rrpp',
   VERIFIER = 'verifier',
-  BARRA = 'barra',
+  BARRA = 'barra', // <-- Correcto
   CLIENT = 'client',
 }
 
@@ -25,7 +25,7 @@ export class User {
   @Column({ type: 'varchar', unique: true })
   email: string;
 
-  @Column({ type: 'varchar', nullable: true, select: false }) // select: false para seguridad
+  @Column({ type: 'varchar', nullable: true, select: false })
   password?: string;
 
   @Column({ type: 'varchar' })
@@ -37,7 +37,7 @@ export class User {
   })
   roles: UserRole[];
 
-  @Column({ type: 'varchar', nullable: true, select: false }) // select: false para seguridad
+  @Column({ type: 'varchar', nullable: true, select: false })
   invitationToken: string | null;
 
   @Column({ type: 'varchar', nullable: true })
@@ -52,7 +52,7 @@ export class User {
   @Column({ type: 'date', nullable: true })
   dateOfBirth: Date | null;
 
-  @Column({ type: 'varchar', nullable: true, select: false }) // select: false para seguridad
+  @Column({ type: 'varchar', nullable: true, select: false })
   mpAccessToken: string | null;
 
   @Column({ type: 'bigint', nullable: true })
@@ -61,11 +61,8 @@ export class User {
   @Column({ type: 'decimal', precision: 5, scale: 2, nullable: true })
   rrppCommissionRate: number | null;
 
-  // ==========================================================
-  // ===== NUEVA COLUMNA PARA EL SISTEMA DE PUNTOS =====
-  // ==========================================================
-  @Column({ type: 'int', default: 0 })
-  points: number;
+  @Column({ type: 'int', default: 0 })
+  points: number;
 
   @OneToMany(() => Ticket, (ticket) => ticket.user)
   tickets: Ticket[];
