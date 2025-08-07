@@ -70,4 +70,11 @@ export class RewardsController {
   validateUserReward(@Param('id') id: string) {
     return this.rewardsService.validateUserReward(id);
   }
+  
+  @Get('history/redeemed')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.OWNER, UserRole.BARRA)
+  getRedeemedHistory() {
+  return this.rewardsService.getRedeemedRewardsHistory();
+  }
 }

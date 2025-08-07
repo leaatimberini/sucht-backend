@@ -2,7 +2,7 @@
 
 import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource } from 'typeorm';
+import { Repository, DataSource, Not, IsNull } from 'typeorm';
 import { Reward } from './reward.entity';
 import { CreateRewardDto } from './dto/create-reward.dto';
 import { UpdateRewardDto } from './dto/update-reward.dto';
@@ -147,5 +147,15 @@ export class RewardsService {
       rewardName: userReward.reward.name,
       redeemedAt: userReward.redeemedAt,
     };
+  }
+  async getRedeemedRewardsHistory(): Promise<UserReward[]> {
+  this.logger.log(`[getRedeemedRewardsHistory] Obteniendo historial de premios canjeados.`);
+  return this.userRewardsRepository.find({
+    where: {
+      redeemedAt: Not(IsNull()), // Filtramos solo los que tienen fecha de canje
+    },
+    relations: ['user', 'reward'], // Cargamos la info del usuario y del premio
+    order: { redeemedAt: 'DESC' }, // Mostramos los más recientes primero
+  });
   }
 }
