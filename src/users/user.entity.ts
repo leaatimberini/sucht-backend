@@ -4,13 +4,15 @@ import * as bcrypt from 'bcrypt';
 import { Ticket } from 'src/tickets/ticket.entity';
 import { PushSubscription } from 'src/notifications/entities/subscription.entity';
 import { Notification } from 'src/notifications/entities/notification.entity';
+import { PointTransaction } from 'src/point-transactions/point-transaction.entity';
+import { UserReward } from 'src/rewards/user-reward.entity';
 
 export enum UserRole {
   OWNER = 'owner',
   ADMIN = 'admin',
   RRPP = 'rrpp',
   VERIFIER = 'verifier',
-  BARRA = 'barra', // <-- Correcto
+  BARRA = 'barra',
   CLIENT = 'client',
 }
 
@@ -69,6 +71,13 @@ export class User {
 
   @OneToMany(() => Ticket, (ticket) => ticket.promoter)
   promotedTickets: Ticket[];
+
+  // ===== RELACIONES INVERSAS AÑADIDAS PARA CONSISTENCIA =====
+  @OneToMany(() => PointTransaction, (transaction) => transaction.user)
+  pointTransactions: PointTransaction[];
+
+  @OneToMany(() => UserReward, (userReward) => userReward.user)
+  userRewards: UserReward[];
 
   @CreateDateColumn({ type: 'timestamp' })
   createdAt: Date;

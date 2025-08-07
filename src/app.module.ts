@@ -15,6 +15,7 @@ import { PaymentsModule } from './payments/payments.module';
 import { MailModule } from './mail/mail.module';
 import { PointTransactionsModule } from './point-transactions/point-transactions.module';
 import { RewardsModule } from './rewards/rewards.module';
+import { StoreModule } from './store/store.module';
 
 @Module({
   imports: [
@@ -48,6 +49,7 @@ import { RewardsModule } from './rewards/rewards.module';
     MailModule,
     PointTransactionsModule,
     RewardsModule,
+    StoreModule,
   ],
   controllers: [],
   providers: [],
