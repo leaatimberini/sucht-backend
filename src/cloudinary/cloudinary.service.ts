@@ -1,3 +1,5 @@
+// backend/src/cloudinary/cloudinary.service.ts
+
 import { Injectable } from '@nestjs/common';
 import { UploadApiErrorResponse, UploadApiResponse, v2 as cloudinary } from 'cloudinary';
 import * as toStream from 'buffer-to-stream';
@@ -13,8 +15,6 @@ export class CloudinaryService {
         { folder: folder },
         (error, result) => {
           if (error) return reject(error);
-          
-          // CORRECCIÓN: Nos aseguramos de que el resultado no sea undefined
           if (result) {
             resolve(result);
           } else {
@@ -23,6 +23,20 @@ export class CloudinaryService {
         },
       );
       toStream(file.buffer).pipe(upload);
+    });
+  }
+
+  // ===== NUEVO MÉTODO AÑADIDO =====
+  /**
+   * Genera una URL firmada para forzar la descarga de un archivo.
+   * @param publicId El public_id del archivo en Cloudinary.
+   * @returns Una URL de descarga válida por 1 hora.
+   */
+  getSignedDownloadUrl(publicId: string): string {
+    return cloudinary.utils.private_download_url(publicId, '', {
+      type: 'upload',
+      attachment: true, // Esto fuerza la descarga
+      expires_at: Math.floor(Date.now() / 1000) + 3600, // Válida por 1 hora
     });
   }
 }
