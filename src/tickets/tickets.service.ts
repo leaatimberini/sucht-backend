@@ -74,7 +74,35 @@ export class TicketsService {
     const savedTicket = await this.ticketsRepository.save(newTicket);
     this.logger.log(`[createTicket] Ticket ${savedTicket.id} guardado en DB con promoterId: ${savedTicket.promoter?.id || 'null'}`);
 
-    await this.mailService.sendMail(user.email, '🎟️ Entrada adquirida con éxito', `...`);
+    await this.mailService.sendMail(
+  user.email,
+  '🎟️ ¡Tu entrada para SUCHT está confirmada!',
+  `
+  <div style="font-family: Arial, sans-serif; color: #111; line-height: 1.6; max-width: 600px; margin: auto;">
+    <h1 style="color: #D6006D;">¡Hola ${user.name}!</h1>
+
+    <p>🎉 Gracias por tu compra. Ya sos parte del próximo evento en <strong>SUCHT</strong>.</p>
+
+    <h2 style="color: #D6006D;">🎟️ Detalles de tu entrada:</h2>
+    <ul style="padding-left: 20px;">
+      <li><strong>Evento:</strong> ${event.title}</li>
+      <li><strong>Tipo de entrada:</strong> ${tier.name}</li>
+      <li><strong>Cantidad:</strong> ${quantity}</li>
+      <li><strong>Precio total:</strong> $${totalPrice.toFixed(2)}</li>
+      <li><strong>Estado:</strong> ${status}</li>
+    </ul>
+
+    <p>Podés ver tus entradas accediendo a tu perfil en nuestra web.</p>
+
+    <p>Si señaste o compraste una <strong>mesa VIP</strong>, te pedimos que <a href="https://wa.me/5491152738137?text=Hola!%0Ahice%20una%20compra%20desde%20http://sucht.com.ar%20.%20" target="_blank" style="color: #25D366; text-decoration: none;"><strong>nos mandes un mensaje por WhatsApp</strong></a> para coordinar la reserva.</p>
+
+    <p>🕺💃 ¡Nos vemos en la fiesta!</p>
+
+    <hr style="margin: 30px 0; border: none; border-top: 1px solid #ccc;" />
+    <p style="font-size: 0.9em; color: #666;">Este correo fue generado automáticamente. Si no realizaste esta compra, por favor comunicate con nosotros.</p>
+  </div>
+  `
+);
 
     return savedTicket;
   }
