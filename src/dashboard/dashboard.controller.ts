@@ -46,14 +46,12 @@ export class DashboardController {
 
   @Get('loyalty/attendance-ranking')
   @Roles(UserRole.ADMIN, UserRole.OWNER)
-  // ===== CORRECCIÓN =====
-  // Ahora el método recibe el DTO completo para ser consistente con el servicio.
   getAttendanceRanking(@Query() queryDto: DashboardQueryDto) {
     return this.dashboardService.getAttendanceRanking(queryDto);
   }
 
   @Get('loyalty/perfect-attendance')
-  @Roles(UserRole.ADMIN, UserRole.OWNER)
+  @Roles(UserRole.ADMIN, UserRole.OWNER)
   getPerfectAttendance(@Query() query: DashboardQueryDto) {
     const { startDate, endDate } = query;
     if (!startDate || !endDate) {

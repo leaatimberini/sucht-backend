@@ -31,7 +31,6 @@ export class DashboardService {
           'user.id as "rrppId"',
           'user.name as "rrppName"',
         ])
-        // CORRECCIÓN: Se utiliza un método de búsqueda de roles robusto.
         .where(`:role = ANY(string_to_array(user.roles, ','))`, { role: UserRole.RRPP });
 
       query.addSelect(
@@ -131,11 +130,10 @@ export class DashboardService {
     }
 
     const stats = await query.getRawOne();
-    
-    // CORRECCIÓN: El conteo de eventos ahora respeta los filtros de fecha.
+    
     const eventFilterOptions = (startDate && endDate) 
-      ? { where: { startDate: Between(new Date(startDate), new Date(endDate)) } } 
-      : {};
+      ? { where: { startDate: Between(new Date(startDate), new Date(endDate)) } } 
+      : {};
     const totalEvents = await this.eventsRepository.count(eventFilterOptions);
 
     return {
@@ -195,23 +193,21 @@ export class DashboardService {
 
   async getAttendanceRanking(queryDto: DashboardQueryDto, limit: number = 25) {
     const { startDate, endDate } = queryDto;
-    const query = this.usersRepository.createQueryBuilder("user")
-        .select(["user.id as userId", "user.name as userName", "user.email as userEmail"])
-        .addSelect("COALESCE(SUM(ticket.redeemedCount), 0)", "totalAttendance")
-        .leftJoin("user.tickets", "ticket", 
-            // CORRECCIÓN: Movemos los filtros de fecha y estado al JOIN para que el SUM sea correcto
+    const query = this.usersRepository.createQueryBuilder("user")
+        .select(["user.id as userId", "user.name as userName", "user.email as userEmail"])
+        .addSelect("COALESCE(SUM(ticket.redeemedCount), 0)", "totalAttendance")
+        .leftJoin("user.tickets", "ticket", 
             startDate && endDate 
             ? `ticket.validatedAt BETWEEN '${startDate}' AND '${endDate}' AND ticket.redeemedCount > 0`
             : 'ticket.redeemedCount > 0'
         )
-        // CORRECCIÓN: Se utiliza un método de búsqueda de roles robusto.
-        .where(`:role = ANY(string_to_array(user.roles, ','))`, { role: UserRole.CLIENT })
-        .groupBy("user.id, user.name, user.email")
-        .orderBy('"totalAttendance"', 'DESC')
-        .limit(limit);
+        .where(`:role = ANY(string_to_array(user.roles, ','))`, { role: UserRole.CLIENT })
+        .groupBy("user.id, user.name, user.email")
+        .orderBy('"totalAttendance"', 'DESC')
+        .limit(limit);
 
-    const results = await query.getRawMany();
-    return results.map(r => ({ ...r, totalAttendance: parseInt(r.totalAttendance, 10) }));
+    const results = await query.getRawMany();
+    return results.map(r => ({ ...r, totalAttendance: parseInt(r.totalAttendance, 10) }));
   }
 
   async getPerfectAttendance(startDate: string, endDate: string): Promise<User[]> {
@@ -228,7 +224,7 @@ export class DashboardService {
     const attendanceCounts = await this.ticketsRepository
       .createQueryBuilder('ticket')
       .select('ticket.userId', 'userId')
-      .addSelect('COUNT(DISTINCT ticket.eventId)', 'attendanceCount') // Contamos eventos distintos
+      .addSelect('COUNT(DISTINCT ticket.eventId)', 'attendanceCount')
       .where('ticket.status IN (:...statuses)', { 
         statuses: [TicketStatus.REDEEMED, TicketStatus.USED, TicketStatus.PARTIALLY_USED] 
       })
