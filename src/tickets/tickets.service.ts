@@ -79,7 +79,7 @@ export class TicketsService {
   '🎟️ ¡Tu entrada para SUCHT está confirmada!',
   `
   <div style="font-family: Arial, sans-serif; color: #111; line-height: 1.6; max-width: 600px; margin: auto;">
-    <h1 style="color: #D6006D;">¡Hola ${user.name}!</h1>
+    <h1 style="color: #D6006D;"> Hola ${user.name || user.email},</h1>
 
     <p>🎉 Gracias por tu compra. Ya sos parte del próximo evento en <strong>SUCHT</strong>.</p>
 
