@@ -1,8 +1,8 @@
 // backend/src/point-transactions/point-transactions.service.ts
 
-import { Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
+import { Injectable, InternalServerErrorException, Logger, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource } from 'typeorm';
+import { Repository, DataSource, MoreThan } from 'typeorm';
 import { PointTransaction, PointTransactionReason } from './point-transaction.entity';
 import { User } from 'src/users/user.entity';
 import { ConfigurationService } from 'src/configuration/configuration.service';
@@ -17,10 +17,10 @@ export class PointTransactionsService {
     private transactionsRepository: Repository<PointTransaction>,
     @InjectRepository(User)
     private usersRepository: Repository<User>,
-    @InjectRepository(Event)
-    private eventsRepository: Repository<Event>,
+    @InjectRepository(Event)
+    private eventsRepository: Repository<Event>,
     private dataSource: DataSource,
-    private configurationService: ConfigurationService,
+    private configurationService: ConfigurationService,
   ) {}
 
   async createTransaction(
@@ -35,9 +35,8 @@ export class PointTransactionsService {
     await queryRunner.startTransaction();
 
     try {
-      // Obtenemos el estado más reciente del usuario dentro de la transacción
-      const currentUser = await queryRunner.manager.findOneBy(User, { id: user.id });
-      if(!currentUser) throw new Error('Usuario no encontrado durante la transacción');
+      const currentUser = await queryRunner.manager.findOneBy(User, { id: user.id });
+      if(!currentUser) throw new Error('Usuario no encontrado durante la transacción');
 
       const newTotalPoints = currentUser.points + points;
       await queryRunner.manager.update(User, user.id, { points: newTotalPoints });
@@ -72,29 +71,45 @@ export class PointTransactionsService {
     });
   }
 
-  /**
-   * Otorga puntos a un usuario por compartir un evento en redes sociales.
-   */
-  async awardPointsForSocialShare(user: User, eventId: string): Promise<PointTransaction | null> {
-    const pointsValue = await this.configurationService.get('points_social_share');
-    const pointsToAward = pointsValue ? parseInt(pointsValue, 10) : 10; // 10 puntos por defecto
+  /**
+   * Otorga puntos a un usuario por compartir un evento, con un límite de una vez cada 24 horas por evento.
+   */
+  async awardPointsForSocialShare(user: User, eventId: string): Promise<PointTransaction | null> {
+    // 1. Verificamos si ya compartió este evento en las últimas 24 horas
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const recentShare = await this.transactionsRepository.findOne({
+      where: {
+        userId: user.id,
+        relatedEntityId: eventId,
+        reason: PointTransactionReason.SOCIAL_SHARE,
+        createdAt: MoreThan(twentyFourHoursAgo),
+      }
+    });
 
-    if (pointsToAward <= 0) {
-      this.logger.log(`La recompensa por compartir está desactivada (0 puntos). No se creará transacción para ${user.email}.`);
-      return null;
+    if (recentShare) {
+      this.logger.warn(`El usuario ${user.email} ya ganó puntos por compartir el evento ${eventId} recientemente.`);
+      throw new BadRequestException('Ya has ganado puntos por compartir este evento hoy. ¡Inténtalo de nuevo mañana!');
     }
-    
-    const event = await this.eventsRepository.findOneBy({ id: eventId });
-    const description = event 
-      ? `Por compartir el evento: ${event.title}`
-      : `Por compartir un evento`;
 
-    return this.createTransaction(
-      user,
-      pointsToAward,
-      PointTransactionReason.SOCIAL_SHARE,
-      description,
-      eventId
-    );
-  }
+    const pointsValue = await this.configurationService.get('points_social_share');
+    const pointsToAward = pointsValue ? parseInt(pointsValue, 10) : 10;
+
+    if (pointsToAward <= 0) {
+      this.logger.log(`La recompensa por compartir está desactivada (0 puntos).`);
+      return null;
+    }
+    
+    const event = await this.eventsRepository.findOneBy({ id: eventId });
+    const description = event 
+      ? `Por compartir el evento: ${event.title}`
+      : `Por compartir un evento`;
+
+    return this.createTransaction(
+      user,
+      pointsToAward,
+      PointTransactionReason.SOCIAL_SHARE,
+      description,
+      eventId
+    );
+  }
 }
