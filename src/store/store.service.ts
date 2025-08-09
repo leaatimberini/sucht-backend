@@ -1,5 +1,3 @@
-// backend/src/store/store.service.ts
-
 import { Injectable, NotFoundException, BadRequestException, InternalServerErrorException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
@@ -74,6 +72,16 @@ export class StoreService {
     }
     return product;
   }
+  
+  // --- NUEVO: Obtener productos comprados por el usuario ---
+  async findProductsByUserId(userId: string): Promise<ProductPurchase[]> {
+    const purchases = await this.purchasesRepository.find({
+      where: { userId },
+      relations: ['product', 'event'],
+      order: { createdAt: 'DESC' },
+    });
+    return purchases;
+  }
 
   // --- Lógica de Compra con Carrito ---
 
@@ -97,8 +105,8 @@ export class StoreService {
       if (product.stock !== null && product.stock < item.quantity) {
         throw new BadRequestException(`No hay suficiente stock para ${product.name}.`);
       }
-      // ===== CORRECCIÓN CLAVE: Se convierte el precio a número =====
-      const priceAsNumber = Number(product.price);
+      // ===== CORRECCIÓN CLAVE: Se convierte el precio a número =====
+      const priceAsNumber = Number(product.price);
       totalAmount += priceAsNumber * item.quantity;
       preferenceItems.push({
         id: product.id,
