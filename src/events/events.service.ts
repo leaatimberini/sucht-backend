@@ -77,4 +77,17 @@ export class EventsService {
       },
     });
   }
+
+  // --- NUEVO MÉTODO AÑADIDO ---
+  /**
+   * Encuentra el próximo evento activo cuya fecha de inicio sea en el futuro.
+   * Esencial para el módulo de cumpleaños.
+   */
+  async findNextUpcomingEvent(): Promise<Event | null> {
+    return this.eventsRepository
+      .createQueryBuilder('event')
+      .where('event.startDate >= :now', { now: new Date() })
+      .orderBy('event.startDate', 'ASC')
+      .getOne();
+  }
 }

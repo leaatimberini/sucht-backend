@@ -16,7 +16,7 @@ import { MailModule } from './mail/mail.module';
 import { PointTransactionsModule } from './point-transactions/point-transactions.module';
 import { RewardsModule } from './rewards/rewards.module';
 import { StoreModule } from './store/store.module';
-import { BirthdayBenefitsModule } from './birthday-benefits/birthday-benefits.module'; // 1. Se importa el nuevo módulo
+import { BirthdayModule } from './birthday/birthday.module';
 
 @Module({
   imports: [
@@ -51,7 +51,7 @@ import { BirthdayBenefitsModule } from './birthday-benefits/birthday-benefits.mo
     PointTransactionsModule,
     RewardsModule,
     StoreModule,
-    BirthdayBenefitsModule, // 2. Se añade a la lista de imports
+    BirthdayModule,
   ],
   controllers: [],
   providers: [],
