@@ -72,16 +72,16 @@ export class StoreService {
     }
     return product;
   }
-  
-  // --- NUEVO: Obtener productos comprados por el usuario ---
-  async findProductsByUserId(userId: string): Promise<ProductPurchase[]> {
-    const purchases = await this.purchasesRepository.find({
-      where: { userId },
-      relations: ['product', 'event'],
-      order: { createdAt: 'DESC' },
-    });
-    return purchases;
-  }
+  
+  // --- Obtener productos comprados por el usuario ---
+  async findProductsByUserId(userId: string): Promise<ProductPurchase[]> {
+    const purchases = await this.purchasesRepository.find({
+      where: { userId },
+      relations: ['product', 'event'],
+      order: { createdAt: 'DESC' },
+    });
+    return purchases;
+  }
 
   // --- Lógica de Compra con Carrito ---
 
@@ -182,4 +182,23 @@ export class StoreService {
 
     return purchases;
   }
+    
+    // --- NUEVO: Lógica de validación de compra de producto ---
+    async validatePurchase(purchaseId: string): Promise<ProductPurchase> {
+        const purchase = await this.purchasesRepository.findOne({
+            where: { id: purchaseId },
+            relations: ['product', 'user'],
+        });
+
+        if (!purchase) {
+            throw new NotFoundException(`Compra de producto con ID "${purchaseId}" no encontrada.`);
+        }
+
+        if (purchase.redeemedAt) {
+            throw new BadRequestException(`El producto ya fue canjeado por ${purchase.user.name} el ${purchase.redeemedAt.toLocaleString()}.`);
+        }
+
+        purchase.redeemedAt = new Date();
+        return this.purchasesRepository.save(purchase);
+    }
 }

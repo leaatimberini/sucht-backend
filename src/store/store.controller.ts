@@ -53,7 +53,6 @@ export class StoreController {
         return this.storeService.findOneProduct(id);
     }
 
-    // --- Endpoint para iniciar una compra desde el carrito ---
     @Post('purchase/create-preference')
     @UseGuards(JwtAuthGuard)
     createPurchasePreference(
@@ -62,11 +61,18 @@ export class StoreController {
     ) {
         return this.storeService.createPurchasePreference(createPurchaseDto, req.user);
     }
-
-    // --- NUEVO ENDPOINT para ver los productos comprados del usuario ---
+    
     @Get('purchase/my-products')
     @UseGuards(JwtAuthGuard)
     async getMyProducts(@Request() req: AuthenticatedRequest): Promise<ProductPurchase[]> {
         return this.storeService.findProductsByUserId(req.user.id);
+    }
+
+    // --- NUEVO ENDPOINT para validar una compra de producto ---
+    @Post('purchase/validate/:id')
+    @UseGuards(JwtAuthGuard, RolesGuard)
+    @Roles(UserRole.VERIFIER, UserRole.ADMIN, UserRole.OWNER)
+    async validateProductPurchase(@Param('id') id: string): Promise<ProductPurchase> {
+        return this.storeService.validatePurchase(id);
     }
 }
