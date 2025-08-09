@@ -1,5 +1,3 @@
-// backend/src/birthday/birthday.controller.ts
-
 import { Controller, Post, UseGuards, Req, Get, Param, Patch, Body, ParseUUIDPipe } from '@nestjs/common';
 import { BirthdayService } from './birthday.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -75,5 +73,26 @@ export class BirthdayController {
     @Body() updateGuestLimitDto: UpdateGuestLimitDto,
   ) {
     return this.birthdayService.updateGuestLimitByAdmin(benefitId, updateGuestLimitDto.guestLimit);
+  }
+
+  /**
+   * VERIFIER (PUERTA): Canjea la ENTRADA usando el entryQrId.
+   */
+  @Post('validate-entry/:entryQrId')
+  @Roles(UserRole.VERIFIER, UserRole.ADMIN, UserRole.OWNER)
+  async validateEntry(
+    @Param('entryQrId', ParseUUIDPipe) entryQrId: string,
+    @Body('guestsEntered') guestsEntered: number,
+  ) {
+    return this.birthdayService.claimEntry(entryQrId, guestsEntered);
+  }
+
+  /**
+   * BARRA/ADMIN: Canjea el REGALO usando el giftQrId.
+   */
+  @Post('validate-gift/:giftQrId')
+  @Roles(UserRole.VERIFIER, UserRole.ADMIN, UserRole.OWNER, UserRole.BARRA)
+  async validateGift(@Param('giftQrId', ParseUUIDPipe) giftQrId: string) {
+    return this.birthdayService.claimGift(giftQrId);
   }
 }
