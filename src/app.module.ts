@@ -17,6 +17,7 @@ import { PointTransactionsModule } from './point-transactions/point-transactions
 import { RewardsModule } from './rewards/rewards.module';
 import { StoreModule } from './store/store.module';
 import { BirthdayModule } from './birthday/birthday.module';
+import { ScanModule } from './scan/scan.module';
 
 @Module({
   imports: [
@@ -52,6 +53,7 @@ import { BirthdayModule } from './birthday/birthday.module';
     RewardsModule,
     StoreModule,
     BirthdayModule,
+    ScanModule,
   ],
   controllers: [],
   providers: [],

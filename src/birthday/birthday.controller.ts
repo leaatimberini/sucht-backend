@@ -1,7 +1,6 @@
 // backend/src/birthday/birthday.controller.ts
 
 import { Controller, Post, UseGuards, Req, Get, Param, Patch, Body, ParseUUIDPipe } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { BirthdayService } from './birthday.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -10,6 +9,11 @@ import { UserRole } from '../users/user.entity';
 import { IsInt, Min } from 'class-validator';
 
 // --- Data Transfer Objects (DTOs) para Validación ---
+class CreateBenefitDto {
+  @IsInt()
+  @Min(0)
+  guestLimit: number;
+}
 
 class UpdateGuestLimitDto {
   @IsInt()
@@ -17,38 +21,43 @@ class UpdateGuestLimitDto {
   guestLimit: number;
 }
 
-class ClaimEntryDto {
-  @IsInt()
-  @Min(1)
-  guestsEntered: number;
-}
-
-
-@ApiTags('Birthday')
-@ApiBearerAuth() // Indica que los endpoints requieren un token JWT
-@UseGuards(JwtAuthGuard, RolesGuard) // Protege todas las rutas del controlador
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('birthday')
 export class BirthdayController {
   constructor(private readonly birthdayService: BirthdayService) {}
 
   /**
-   * CLIENTE: Reclama su beneficio de cumpleaños para el próximo evento.
+   * CLIENTE: Reclama su beneficio, especificando el número de invitados.
    */
   @Post('claim')
   @Roles(UserRole.CLIENT)
-  claimBirthdayBenefit(@Req() req) {
+  claimBirthdayBenefit(@Req() req, @Body() createBenefitDto: CreateBenefitDto) {
     const userId = req.user.id;
-    return this.birthdayService.createBirthdayBenefit(userId);
+    return this.birthdayService.createBirthdayBenefit(userId, createBenefitDto.guestLimit);
   }
+  
+  /**
+   * CLIENTE: Actualiza la cantidad de invitados de su beneficio.
+   */
+  @Patch('my-benefit/guest-limit')
+  @Roles(UserRole.CLIENT)
+  updateMyGuestLimit(@Req() req, @Body() updateGuestLimitDto: UpdateGuestLimitDto) {
+    const userId = req.user.id;
+    return this.birthdayService.updateGuestLimitByClient(userId, updateGuestLimitDto.guestLimit);
+  }
+
+  /**
+   * CLIENTE: Obtiene su beneficio de cumpleaños activo, si existe.
+   */
   @Get('my-benefit')
   @Roles(UserRole.CLIENT)
   getMyBirthdayBenefit(@Req() req) {
     const userId = req.user.id;
     return this.birthdayService.findMyBenefitForUpcomingEvent(userId);
   }
+
   /**
-   * ADMIN/OWNER: Obtiene la lista de todos los beneficios de cumpleaños para un evento.
-   * Usado en el nuevo panel de "Control de Cumpleaños".
+   * ADMIN/OWNER: Obtiene la lista de todos los beneficios para un evento.
    */
   @Get('admin/event/:eventId')
   @Roles(UserRole.ADMIN, UserRole.OWNER)
@@ -61,33 +70,10 @@ export class BirthdayController {
    */
   @Patch('admin/benefit/:benefitId/guest-limit')
   @Roles(UserRole.ADMIN, UserRole.OWNER)
-  updateGuestLimit(
+  updateGuestLimitByAdmin(
     @Param('benefitId', ParseUUIDPipe) benefitId: string,
     @Body() updateGuestLimitDto: UpdateGuestLimitDto,
   ) {
-    return this.birthdayService.updateGuestLimit(benefitId, updateGuestLimitDto.guestLimit);
-  }
-
-  /**
-   * VERIFIER: Canjea el QR de INGRESO del cumpleañero y su grupo.
-   * Recibe el número exacto de personas para el control de aforo.
-   */
-  @Post('verifier/benefit/:benefitId/claim-entry')
-  @Roles(UserRole.VERIFIER)
-  claimEntry(
-    @Param('benefitId', ParseUUIDPipe) benefitId: string,
-    @Body() claimEntryDto: ClaimEntryDto,
-  ) {
-    return this.birthdayService.claimEntry(benefitId, claimEntryDto.guestsEntered);
-  }
-
-  /**
-   * STAFF (ADMIN/OWNER/VERIFIER): Canjea el QR del REGALO (ej. champagne).
-   * Puede ser canjeado en la barra por un admin o en la puerta por el verificador.
-   */
-  @Post('staff/benefit/:benefitId/claim-gift')
-  @Roles(UserRole.ADMIN, UserRole.OWNER, UserRole.VERIFIER)
-  claimGift(@Param('benefitId', ParseUUIDPipe) benefitId: string) {
-    return this.birthdayService.claimGift(benefitId);
+    return this.birthdayService.updateGuestLimitByAdmin(benefitId, updateGuestLimitDto.guestLimit);
   }
 }

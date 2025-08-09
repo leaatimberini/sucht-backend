@@ -8,9 +8,10 @@ import {
   ManyToOne,
   Column,
   JoinColumn,
+  Generated,
 } from 'typeorm';
 import { User } from '../users/user.entity';
-import { Event } from '../events/event.entity'; // Importamos la entidad Event
+import { Event } from '../events/event.entity';
 
 @Entity('birthday_benefits')
 export class BirthdayBenefit {
@@ -18,8 +19,19 @@ export class BirthdayBenefit {
   id: string;
 
   /**
-   * El usuario que recibe el beneficio de cumpleaños.
+   * El UUID único para el QR de INGRESO. Indexado para búsquedas rápidas.
    */
+  @Column({ type: 'uuid', unique: true })
+  @Generated('uuid')
+  entryQrId: string;
+
+  /**
+   * El UUID único para el QR de REGALO. Indexado para búsquedas rápidas.
+   */
+  @Column({ type: 'uuid', unique: true })
+  @Generated('uuid')
+  giftQrId: string;
+
   @ManyToOne(() => User, { eager: true })
   @JoinColumn({ name: 'userId' })
   user: User;
@@ -27,9 +39,6 @@ export class BirthdayBenefit {
   @Column()
   userId: string;
 
-  /**
-   * El evento para el cual este beneficio es válido.
-   */
   @ManyToOne(() => Event, { eager: true })
   @JoinColumn({ name: 'eventId' })
   event: Event;
@@ -38,52 +47,35 @@ export class BirthdayBenefit {
   eventId: string;
 
   /**
-   * Descripción del beneficio (ej: "Acceso gratuito + 1 Champagne").
+   * Número de invitados ELEGIDO por el cliente.
    */
-  @Column({ type: 'varchar', default: 'Beneficio de Cumpleaños' })
-  description: string;
-
-  /**
-   * Número MÁXIMO de invitados permitidos, además del cumpleañero.
-   * Este es el valor que el Admin podrá modificar.
-   */
-  @Column({ type: 'int', default: 10 })
+  @Column({ type: 'int' })
   guestLimit: number;
+  
+  /**
+   * Contador de cuántas veces el cliente puede modificar el guestLimit.
+   */
+  @Column({ type: 'int', default: 2 })
+  updatesRemaining: number;
 
   /**
-   * Número EXACTO de personas (cumpleañero + invitados) que ingresaron,
-   * según lo reportado por el Verificador. Es clave para el aforo.
+   * Número EXACTO de personas reportado por el Verificador de puerta.
    */
   @Column({ type: 'int', default: 0 })
   guestsEntered: number;
 
-  /**
-   * Indica si el beneficio de INGRESO ya fue canjeado en la puerta.
-   */
   @Column({ type: 'boolean', default: false })
   isEntryClaimed: boolean;
 
-  /**
-   * Fecha y hora en la que se canjeó el INGRESO.
-   */
   @Column({ type: 'timestamp with time zone', nullable: true })
   entryClaimedAt: Date | null;
 
-  /**
-   * Indica si el beneficio de REGALO (ej. champagne) ya fue canjeado en la barra.
-   */
   @Column({ type: 'boolean', default: false })
   isGiftClaimed: boolean;
 
-  /**
-   * Fecha y hora en la que se canjeó el REGALO.
-   */
   @Column({ type: 'timestamp with time zone', nullable: true })
   giftClaimedAt: Date | null;
 
-  /**
-   * Fecha hasta la cual el beneficio es válido para ser reclamado.
-   */
   @Column({ type: 'timestamp with time zone' })
   expiresAt: Date;
 
