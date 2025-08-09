@@ -6,10 +6,12 @@ import { BirthdayBenefitsController } from './birthday-benefits.controller';
 import { TicketsModule } from 'src/tickets/tickets.module';
 import { UsersModule } from 'src/users/users.module';
 import { ConfigurationModule } from 'src/configuration/configuration.module';
+import { TicketTier } from 'src/ticket-tiers/ticket-tier.entity';
+import { Event } from 'src/events/event.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([BirthdayBenefit]),
+    TypeOrmModule.forFeature([BirthdayBenefit, TicketTier, Event]),
     TicketsModule,
     UsersModule,
     ConfigurationModule,
