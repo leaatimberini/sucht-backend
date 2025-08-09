@@ -16,42 +16,44 @@ import { MailModule } from './mail/mail.module';
 import { PointTransactionsModule } from './point-transactions/point-transactions.module';
 import { RewardsModule } from './rewards/rewards.module';
 import { StoreModule } from './store/store.module';
+import { BirthdayBenefitsModule } from './birthday-benefits/birthday-benefits.module'; // 1. Se importa el nuevo módulo
 
 @Module({
-  imports: [
-    ScheduleModule.forRoot(),
-    ConfigModule.forRoot({
-      isGlobal: true,
-      envFilePath: '.env',
-    }),
-    TypeOrmModule.forRoot({
-      type: 'postgres',
-      host: process.env.DB_HOST,
-      port: parseInt(process.env.DB_PORT ?? '5432', 10),
-      username: process.env.DB_USERNAME,
-      password: process.env.DB_PASSWORD,
-      database: process.env.DB_DATABASE,
-      autoLoadEntities: true,
-      synchronize: false, // <-- CAMBIO MUY IMPORTANTE
-    }),
-    
-    // Módulos de la Aplicación
-    UsersModule,
-    AuthModule,
-    EventsModule,
-    TicketsModule,
-    TicketTiersModule,
-    DashboardModule,
-    CloudinaryModule,
-    NotificationsModule,
-    ConfigurationModule,
-    PaymentsModule,
-    MailModule,
-    PointTransactionsModule,
-    RewardsModule,
-    StoreModule,
-  ],
-  controllers: [],
-  providers: [],
+  imports: [
+    ScheduleModule.forRoot(),
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: '.env',
+    }),
+    TypeOrmModule.forRoot({
+      type: 'postgres',
+      host: process.env.DB_HOST,
+      port: parseInt(process.env.DB_PORT ?? '5432', 10),
+      username: process.env.DB_USERNAME,
+      password: process.env.DB_PASSWORD,
+      database: process.env.DB_DATABASE,
+      autoLoadEntities: true,
+      synchronize: false,
+    }),
+    
+    // Módulos de la Aplicación
+    UsersModule,
+    AuthModule,
+    EventsModule,
+    TicketsModule,
+    TicketTiersModule,
+    DashboardModule,
+    CloudinaryModule,
+    NotificationsModule,
+    ConfigurationModule,
+    PaymentsModule,
+    MailModule,
+    PointTransactionsModule,
+    RewardsModule,
+    StoreModule,
+    BirthdayBenefitsModule, // 2. Se añade a la lista de imports
+  ],
+  controllers: [],
+  providers: [],
 })
 export class AppModule {}
