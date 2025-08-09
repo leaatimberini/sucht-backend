@@ -1,6 +1,6 @@
 // backend/src/birthday/birthday.module.ts
 
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { BirthdayBenefit } from './birthday-benefit.entity';
 import { BirthdayService } from './birthday.service';
@@ -10,11 +10,15 @@ import { EventsModule } from '../events/events.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([BirthdayBenefit]), // Registra nuestra entidad en la BBDD
-    UsersModule, // Importamos UsersModule para poder acceder a UsersService
-    EventsModule, // Importamos EventsModule para poder acceder a EventsService
+    TypeOrmModule.forFeature([BirthdayBenefit]),
+    // Usamos forwardRef aquí si BirthdayModule necesita servicios de UsersModule/EventsModule
+    // y viceversa, para evitar dependencias circulares. Por ahora no es estrictamente necesario,
+    // pero es una buena práctica si los módulos crecen.
+    UsersModule, 
+    EventsModule,
   ],
-  controllers: [BirthdayController], // El controlador que manejará las rutas HTTP
-  providers: [BirthdayService], // El servicio que contendrá la lógica de negocio
+  controllers: [BirthdayController],
+  providers: [BirthdayService],
+  exports: [BirthdayService], // <-- AÑADE ESTA LÍNEA
 })
 export class BirthdayModule {}
