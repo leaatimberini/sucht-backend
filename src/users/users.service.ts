@@ -1,6 +1,6 @@
 // backend/src/users/users.service.ts
 
-import { ConflictException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, InternalServerErrorException, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User, UserRole } from './user.entity';
@@ -10,6 +10,7 @@ import { InviteStaffDto } from './dto/invite-staff.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ConfigurationService } from 'src/configuration/configuration.service';
 import { NotificationsService } from 'src/notifications/notifications.service';
+import { startOfWeek, endOfWeek, isWithinInterval } from 'date-fns';
 
 @Injectable()
 export class UsersService {
@@ -24,7 +25,6 @@ export class UsersService {
    * Calcula el nivel de lealtad y el progreso del usuario de forma dinámica.
    */
   private async calculateLoyaltyTier(userPoints: number) {
-    // Leemos los umbrales desde la configuración, con valores por defecto
     const silverMin = parseInt(await this.configService.get('loyalty_tier_silver_points') || '1000', 10);
     const goldMin = parseInt(await this.configService.get('loyalty_tier_gold_points') || '5000', 10);
     const platinoMin = parseInt(await this.configService.get('loyalty_tier_platino_points') || '15000', 10);
@@ -47,7 +47,7 @@ export class UsersService {
       const pointsNeededForNext = nextTier.minPoints - currentTier.minPoints;
       progress = Math.min(100, (pointsInCurrentTier / pointsNeededForNext) * 100);
     } else {
-      progress = 100; // El usuario está en el nivel máximo
+      progress = 100;
     }
 
     return {
@@ -58,10 +58,26 @@ export class UsersService {
     };
   }
 
+  /**
+   * Determina si la fecha actual está dentro de la semana de cumpleaños del usuario.
+   * La semana se considera de Domingo a Sábado.
+   */
+  private isBirthdayWeek(dateOfBirth: Date | null): boolean {
+    if (!dateOfBirth) return false;
+
+    const now = new Date();
+    const birthdayThisYear = new Date(dateOfBirth);
+    birthdayThisYear.setFullYear(now.getFullYear());
+
+    const startOfBirthdayWeek = startOfWeek(birthdayThisYear, { weekStartsOn: 0 }); // 0 para Domingo
+    const endOfBirthdayWeek = endOfWeek(birthdayThisYear, { weekStartsOn: 0 });
+
+    return isWithinInterval(now, { start: startOfBirthdayWeek, end: endOfBirthdayWeek });
+  }
+
   async getProfile(userId: string) {
     const user = await this.findOneById(userId);
     const isPushSubscribed = await this.notificationsService.isUserSubscribed(userId);
-    // Ahora la llamada a la calculadora es asíncrona
     const loyaltyInfo = await this.calculateLoyaltyTier(user.points);
     
     const { password, invitationToken, mpAccessToken, ...profileData } = user;
@@ -71,6 +87,7 @@ export class UsersService {
       isPushSubscribed,
       isMpLinked: !!user.mpUserId,
       loyalty: loyaltyInfo,
+      isBirthdayWeek: this.isBirthdayWeek(user.dateOfBirth), // Se añade el flag de cumpleaños
     };
   }
 
@@ -103,6 +120,12 @@ export class UsersService {
 
   async updateProfile(userId: string, updateProfileDto: UpdateProfileDto): Promise<User> {
     const userToUpdate = await this.findOneById(userId);
+
+    // ===== REGLA DE NEGOCIO: BLOQUEO DE FECHA DE NACIMIENTO =====
+    if (userToUpdate.dateOfBirth && updateProfileDto.dateOfBirth && formatDateToInput(userToUpdate.dateOfBirth) !== formatDateToInput(updateProfileDto.dateOfBirth)) {
+      throw new BadRequestException('La fecha de nacimiento no se puede modificar una vez establecida.');
+    }
+    
     const { username, ...restOfDto } = updateProfileDto;
 
     if (username && username !== userToUpdate.username) {
@@ -227,3 +250,10 @@ export class UsersService {
     await this.usersRepository.update(userId, updatePayload);
   }
 }
+
+// Función auxiliar para comparar fechas sin tener en cuenta la zona horaria
+const formatDateToInput = (date?: Date | string | null): string => {
+  if (!date) return '';
+  const d = new Date(date);
+  return d.toISOString().split('T')[0];
+};

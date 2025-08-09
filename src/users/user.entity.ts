@@ -84,6 +84,7 @@ export class User {
 
   @UpdateDateColumn({ type: 'timestamp' })
   updatedAt: Date;
+  birthdayBenefits: any;
 
   @BeforeInsert()
   async hashPassword() {
