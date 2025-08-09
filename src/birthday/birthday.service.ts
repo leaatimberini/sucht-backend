@@ -1,12 +1,10 @@
-// backend/src/birthday/birthday.service.ts
-
 import { Injectable, NotFoundException, ConflictException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { BirthdayBenefit } from './birthday-benefit.entity';
 import { UsersService } from '../users/users.service';
 import { EventsService } from '../events/events.service';
-import { set } from 'date-fns';
+import { set, getYear, startOfWeek, endOfWeek, isWithinInterval } from 'date-fns';
 import { toZonedTime } from 'date-fns-tz';
 
 @Injectable()
@@ -23,8 +21,10 @@ export class BirthdayService {
    */
   async createBirthdayBenefit(userId: string, guestLimit: number): Promise<BirthdayBenefit> {
     const user = await this.usersService.findOneById(userId);
-    // NOTA: Podríamos re-habilitar la comprobación de isBirthdayWeek si es necesario.
-    
+    if (!this.isBirthdayWeek(user.dateOfBirth)) {
+      throw new BadRequestException('No estás en tu semana de cumpleaños.');
+    }
+
     const upcomingEvent = await this.eventsService.findNextUpcomingEvent();
     if (!upcomingEvent) {
       throw new NotFoundException('No hay eventos próximos para asociar el beneficio.');
@@ -34,7 +34,9 @@ export class BirthdayService {
     if (existingBenefit) {
       throw new ConflictException('Ya has reclamado tu beneficio para este evento.');
     }
-    if (guestLimit < 0) throw new BadRequestException('El número de invitados no puede ser negativo.');
+    if (guestLimit < 0) {
+      throw new BadRequestException('El número de invitados no puede ser negativo.');
+    }
 
     const timeZone = 'America/Argentina/Buenos_Aires';
     const eventDateInTz = toZonedTime(upcomingEvent.startDate, timeZone);
@@ -43,12 +45,15 @@ export class BirthdayService {
     const newBenefit = this.birthdayBenefitRepository.create({
       userId,
       eventId: upcomingEvent.id,
-      guestLimit, // Se guarda el límite que eligió el cliente
+      guestLimit,
       expiresAt,
-      // Los campos entryQrId y giftQrId son generados automáticamente por la BBDD
     });
 
-    return this.birthdayBenefitRepository.save(newBenefit);
+    const savedBenefit = await this.birthdayBenefitRepository.save(newBenefit);
+
+    // Volvemos a buscar el beneficio por su ID para asegurarnos de que la respuesta
+    // incluya todas las relaciones que el frontend necesita (como el 'event').
+    return this.findById(savedBenefit.id);
   }
 
   /**
@@ -130,15 +135,38 @@ export class BirthdayService {
   async findMyBenefitForUpcomingEvent(userId: string): Promise<BirthdayBenefit | null> {
     const upcomingEvent = await this.eventsService.findNextUpcomingEvent();
     if (!upcomingEvent) return null;
-    return this.birthdayBenefitRepository.findOne({ where: { userId, eventId: upcomingEvent.id }, relations: ['event'] });
+    return this.birthdayBenefitRepository.findOne({ 
+      where: { userId, eventId: upcomingEvent.id }, 
+      relations: ['event'] 
+    });
   }
 
   /**
    * Método auxiliar para encontrar un beneficio por su ID principal.
    */
   async findById(id: string): Promise<BirthdayBenefit> {
-    const benefit = await this.birthdayBenefitRepository.findOne({ where: { id } });
-    if (!benefit) throw new NotFoundException(`Beneficio de cumpleaños con ID "${id}" no encontrado.`);
+    const benefit = await this.birthdayBenefitRepository.findOne({ 
+      where: { id },
+      relations: ['event'] 
+    });
+    if (!benefit) {
+      throw new NotFoundException(`Beneficio de cumpleaños con ID "${id}" no encontrado.`);
+    }
     return benefit;
+  }
+
+  /**
+   * Determina si la fecha actual está dentro de la semana de cumpleaños del usuario.
+   */
+  private isBirthdayWeek(dateOfBirth: Date | null): boolean {
+    if (!dateOfBirth) return false;
+    
+    const timeZone = 'America/Argentina/Buenos_Aires';
+    const nowInTz = toZonedTime(new Date(), timeZone);
+    const birthdayThisYear = set(dateOfBirth, { year: getYear(nowInTz) });
+    const start = startOfWeek(birthdayThisYear, { weekStartsOn: 0 });
+    const end = endOfWeek(birthdayThisYear, { weekStartsOn: 0 });
+
+    return isWithinInterval(nowInTz, { start, end });
   }
 }
