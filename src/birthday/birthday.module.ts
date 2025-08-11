@@ -7,16 +7,17 @@ import { TicketTiersModule } from '../ticket-tiers/ticket-tiers.module';
 import { TicketsModule } from '../tickets/tickets.module';
 import { RewardsModule } from '../rewards/rewards.module';
 import { ConfigurationModule } from '../configuration/configuration.module';
+import { PaymentsModule } from '../payments/payments.module'; // <-- Importar
 
 @Module({
   imports: [
-    // Importamos todos los módulos cuyos servicios vamos a orquestar
     UsersModule,
     EventsModule,
     TicketTiersModule,
     TicketsModule,
     RewardsModule,
     ConfigurationModule,
+    PaymentsModule, // <-- Añadir a los imports
   ],
   controllers: [BirthdayController],
   providers: [BirthdayService],

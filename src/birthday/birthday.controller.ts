@@ -1,11 +1,10 @@
-import { Controller, Post, UseGuards, Req, Body } from '@nestjs/common';
+import { Controller, Post, UseGuards, Req, Body, BadRequestException } from '@nestjs/common';
 import { BirthdayService } from './birthday.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { User, UserRole } from '../users/user.entity';
 import { SelectBirthdayOptionDto, BirthdayOption } from './dto/select-birthday-option.dto';
-import { BadRequestException } from '@nestjs/common';
 
 @Controller('birthday')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -24,6 +23,7 @@ export class BirthdayController {
     const { choice, guestLimit } = selectBirthdayOptionDto;
 
     if (choice === BirthdayOption.CLASSIC) {
+      // Validamos que para la opción clásica, el número de invitados sea obligatorio.
       if (typeof guestLimit !== 'number') {
         throw new BadRequestException('Se requiere el número de invitados para la opción clásica.');
       }
@@ -31,10 +31,8 @@ export class BirthdayController {
     }
     
     if (choice === BirthdayOption.VIP) {
-      // La lógica para la opción VIP se implementará aquí.
-      // Por ahora, devolvemos un placeholder.
-      // return this.birthdayService.claimVipBenefit(req.user);
-      throw new BadRequestException('La opción VIP aún no está implementada.');
+      // Llamamos a la lógica para generar la preferencia de pago de la mesa VIP.
+      return this.birthdayService.claimVipBenefit(req.user);
     }
   }
 }
