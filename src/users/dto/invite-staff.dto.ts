@@ -1,3 +1,4 @@
+// src/users/dto/invite-staff.dto.ts
 import { IsEmail, IsNotEmpty, IsArray, IsEnum } from 'class-validator';
 import { UserRole } from '../user.entity';
 

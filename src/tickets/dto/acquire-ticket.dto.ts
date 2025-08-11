@@ -1,3 +1,4 @@
+// src/tickets/dto/acquire-ticket.dto.ts
 import { IsString, IsNotEmpty, IsInt, Min, IsOptional, IsEnum } from 'class-validator';
 
 export class AcquireTicketDto {

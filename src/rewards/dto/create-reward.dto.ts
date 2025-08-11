@@ -1,3 +1,4 @@
+// backend/src/rewards/create-reward.dto.ts
 import { IsString, IsNotEmpty, IsInt, Min, IsOptional, IsUrl, IsBoolean } from 'class-validator';
 
 export class CreateRewardDto {

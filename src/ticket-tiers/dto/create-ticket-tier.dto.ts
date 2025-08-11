@@ -2,40 +2,53 @@ import { IsNotEmpty, IsString, IsNumber, Min, IsDateString, IsOptional, IsEnum, 
 import { ProductType } from '../ticket-tier.entity';
 
 export class CreateTicketTierDto {
-  @IsNotEmpty()
-  @IsString()
-  name: string;
+  @IsNotEmpty()
+  @IsString()
+  name: string;
 
-  @IsNotEmpty()
-  @IsNumber()
-  @Min(0)
-  price: number;
+  @IsNotEmpty()
+  @IsNumber()
+  @Min(0)
+  price: number;
 
-  @IsNotEmpty()
-  @IsNumber()
-  @Min(1)
-  quantity: number;
+  @IsNotEmpty()
+  @IsNumber()
+  @Min(1)
+  quantity: number;
 
-  @IsOptional()
-  @IsDateString()
-  validUntil?: Date;
+  @IsOptional()
+  @IsDateString()
+  validUntil?: Date;
 
-  // --- NUEVOS CAMPOS ---
-  @IsNotEmpty() // CORRECCIÓN: 'productType' es obligatorio
-  @IsEnum(ProductType)
-  productType: ProductType;
+  @IsNotEmpty()
+  @IsEnum(ProductType)
+  productType: ProductType;
 
-  // CORRECCIÓN: 'isFree' es una nueva propiedad para distinguir las entradas
-  @IsNotEmpty()
-  @IsBoolean()
-  isFree: boolean;
+  @IsNotEmpty()
+  @IsBoolean()
+  isFree: boolean;
 
-  @IsOptional()
-  @IsBoolean()
-  allowPartialPayment?: boolean;
+  @IsOptional()
+  @IsBoolean()
+  allowPartialPayment?: boolean;
 
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  partialPaymentPrice?: number;
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  partialPaymentPrice?: number;
+
+  // --- NUEVOS CAMPOS AÑADIDOS AL DTO ---
+
+  @IsOptional()
+  @IsBoolean()
+  isBirthdayDefault?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isBirthdayVipOffer?: boolean;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  consumptionCredit?: number;
 }

@@ -1,3 +1,4 @@
+// src/app.module.ts
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -16,7 +17,6 @@ import { MailModule } from './mail/mail.module';
 import { PointTransactionsModule } from './point-transactions/point-transactions.module';
 import { RewardsModule } from './rewards/rewards.module';
 import { StoreModule } from './store/store.module';
-import { BirthdayModule } from './birthday/birthday.module';
 import { ScanModule } from './scan/scan.module';
 
 @Module({
@@ -52,7 +52,6 @@ import { ScanModule } from './scan/scan.module';
     PointTransactionsModule,
     RewardsModule,
     StoreModule,
-    BirthdayModule,
     ScanModule,
   ],
   controllers: [],

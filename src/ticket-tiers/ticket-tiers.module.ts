@@ -1,3 +1,4 @@
+// src/ticket-tiers/ticket-tiers.module.ts
 import { Module } from '@nestjs/common';
 import { TicketTiersService } from './ticket-tiers.service';
 import { TicketTiersController } from './ticket-tiers.controller';

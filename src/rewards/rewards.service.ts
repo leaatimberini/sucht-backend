@@ -1,5 +1,3 @@
-// backend/src/rewards/rewards.service.ts
-
 import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, Not, IsNull } from 'typeorm';
@@ -13,111 +11,143 @@ import { UserReward } from './user-reward.entity';
 
 @Injectable()
 export class RewardsService {
-  private readonly logger = new Logger(RewardsService.name);
+  private readonly logger = new Logger(RewardsService.name);
 
-  constructor(
-    @InjectRepository(Reward)
-    private rewardsRepository: Repository<Reward>,
-    @InjectRepository(UserReward)
-    private userRewardsRepository: Repository<UserReward>,
-    private pointTransactionsService: PointTransactionsService,
-    private dataSource: DataSource,
-  ) {}
+  constructor(
+    @InjectRepository(Reward)
+    private rewardsRepository: Repository<Reward>,
+    @InjectRepository(UserReward)
+    private userRewardsRepository: Repository<UserReward>,
+    private pointTransactionsService: PointTransactionsService,
+    private dataSource: DataSource,
+  ) {}
 
-  async create(createRewardDto: CreateRewardDto): Promise<Reward> {
-    const newReward = this.rewardsRepository.create(createRewardDto);
-    return this.rewardsRepository.save(newReward);
-  }
+  async create(createRewardDto: CreateRewardDto): Promise<Reward> {
+    const newReward = this.rewardsRepository.create(createRewardDto);
+    return this.rewardsRepository.save(newReward);
+  }
 
-  async findAll(): Promise<Reward[]> {
-    return this.rewardsRepository.find({ order: { pointsCost: 'ASC' } });
-  }
+  async findAll(): Promise<Reward[]> {
+    return this.rewardsRepository.find({ order: { pointsCost: 'ASC' } });
+  }
 
-  async findOne(id: string): Promise<Reward> {
-    const reward = await this.rewardsRepository.findOneBy({ id });
-    if (!reward) {
-      throw new NotFoundException(`Reward with ID "${id}" not found`);
-    }
-    return reward;
-  }
+  async findOne(id: string): Promise<Reward> {
+    const reward = await this.rewardsRepository.findOneBy({ id });
+    if (!reward) {
+      throw new NotFoundException(`Reward with ID "${id}" not found`);
+    }
+    return reward;
+  }
 
-  async update(id: string, updateRewardDto: UpdateRewardDto): Promise<Reward> {
-    const reward = await this.findOne(id);
-    this.rewardsRepository.merge(reward, updateRewardDto);
-    return this.rewardsRepository.save(reward);
-  }
+  async update(id: string, updateRewardDto: UpdateRewardDto): Promise<Reward> {
+    const reward = await this.findOne(id);
+    this.rewardsRepository.merge(reward, updateRewardDto);
+    return this.rewardsRepository.save(reward);
+  }
 
-  async remove(id: string): Promise<void> {
-    const result = await this.rewardsRepository.delete(id);
-    if (result.affected === 0) {
-      throw new NotFoundException(`Reward with ID "${id}" not found`);
-    }
-  }
+  async remove(id: string): Promise<void> {
+    const result = await this.rewardsRepository.delete(id);
+    if (result.affected === 0) {
+      throw new NotFoundException(`Reward with ID "${id}" not found`);
+    }
+  }
 
-  async redeem(rewardId: string, user: User): Promise<UserReward> {
-    const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
-    
-    this.logger.log(`[redeem] Usuario ${user.email} intentando canjear premio ${rewardId}`);
+  /**
+   * Asigna un premio a un usuario de forma gratuita, sin descontar puntos.
+   * Ideal para regalos, como el beneficio de cumpleaños.
+   * @param user El usuario que recibe el premio.
+   * @param rewardId El ID del 'Reward' plantilla (ej. "Champagne de Regalo").
+   * @param origin Un string para identificar la fuente de este regalo (ej. "BIRTHDAY").
+   */
+  async assignFreeReward(user: User, rewardId: string, origin: string): Promise<UserReward> {
+    this.logger.log(`[assignFreeReward] Asignando premio gratuito ${rewardId} a ${user.email} con origen ${origin}`);
+    
+    const reward = await this.findOne(rewardId);
+    if (!reward) {
+      throw new NotFoundException('La plantilla del premio no fue encontrada.');
+    }
+    if (!reward.isActive) {
+      throw new BadRequestException('Este premio no se encuentra activo.');
+    }
 
-    try {
-      const reward = await queryRunner.manager.findOneBy(Reward, { id: rewardId });
-      const currentUserState = await queryRunner.manager.findOneBy(User, { id: user.id });
+    const userReward = this.userRewardsRepository.create({
+      user,
+      userId: user.id,
+      reward,
+      rewardId: reward.id,
+      origin, // Guardamos la bandera de origen
+    });
 
-      if (!reward) throw new NotFoundException('Premio no encontrado.');
-      if (!currentUserState) throw new NotFoundException('Usuario no encontrado.');
-      if (!reward.isActive) throw new BadRequestException('Este premio no está activo actualmente.');
-      if (currentUserState.points < reward.pointsCost) throw new BadRequestException('No tienes suficientes puntos.');
-      if (reward.stock !== null && reward.stock <= 0) throw new BadRequestException('Este premio está agotado.');
+    const savedUserReward = await this.userRewardsRepository.save(userReward);
+    this.logger.log(`[assignFreeReward] Premio gratuito asignado. UserReward ID: ${savedUserReward.id}`);
+    
+    return savedUserReward;
+  }
 
-      if (reward.stock !== null) {
-        reward.stock -= 1;
-        await queryRunner.manager.save(reward);
-      }
-      
-      const newTotalPoints = currentUserState.points - reward.pointsCost;
-      await queryRunner.manager.update(User, user.id, { points: newTotalPoints });
+  async redeem(rewardId: string, user: User): Promise<UserReward> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+    
+    this.logger.log(`[redeem] Usuario ${user.email} intentando canjear premio ${rewardId}`);
 
-      const pointTransaction = queryRunner.manager.create(PointTransaction, {
-        user: currentUserState,
-        userId: user.id,
-        points: -reward.pointsCost,
-        reason: PointTransactionReason.REWARD_REDEMPTION,
-        description: `Canje del premio: ${reward.name}`,
-        relatedEntityId: reward.id,
-      });
-      await queryRunner.manager.save(pointTransaction);
+    try {
+      const reward = await queryRunner.manager.findOneBy(Reward, { id: rewardId });
+      const currentUserState = await queryRunner.manager.findOneBy(User, { id: user.id });
 
-      const userReward = this.userRewardsRepository.create({
-        user: currentUserState,
-        userId: user.id,
-        reward,
-        rewardId: reward.id,
-      });
-      const savedUserReward = await queryRunner.manager.save(userReward);
+      if (!reward) throw new NotFoundException('Premio no encontrado.');
+      if (!currentUserState) throw new NotFoundException('Usuario no encontrado.');
+      if (!reward.isActive) throw new BadRequestException('Este premio no está activo actualmente.');
+      if (currentUserState.points < reward.pointsCost) throw new BadRequestException('No tienes suficientes puntos.');
+      if (reward.stock !== null && reward.stock <= 0) throw new BadRequestException('Este premio está agotado.');
 
-      await queryRunner.commitTransaction();
-      this.logger.log(`[redeem] Canje exitoso para ${user.email}. Se generó UserReward ID: ${savedUserReward.id}. Puntos restantes: ${newTotalPoints}`);
-      return savedUserReward;
-    } catch (error) {
-      await queryRunner.rollbackTransaction();
-      this.logger.error(`[redeem] Falló el canje para el usuario ${user.email}`, error);
-      throw error;
-    } finally {
-      await queryRunner.release();
-    }
-  }
+      if (reward.stock !== null) {
+        reward.stock -= 1;
+        await queryRunner.manager.save(reward);
+      }
+      
+      const newTotalPoints = currentUserState.points - reward.pointsCost;
+      await queryRunner.manager.update(User, user.id, { points: newTotalPoints });
 
-  async findUserRewards(userId: string): Promise<UserReward[]> {
-    return this.userRewardsRepository.find({
-      where: { userId },
-      relations: ['reward'],
-      order: { createdAt: 'DESC' },
-    });
-  }
+      const pointTransaction = queryRunner.manager.create(PointTransaction, {
+        user: currentUserState,
+        userId: user.id,
+        points: -reward.pointsCost,
+        reason: PointTransactionReason.REWARD_REDEMPTION,
+        description: `Canje del premio: ${reward.name}`,
+        relatedEntityId: reward.id,
+      });
+      await queryRunner.manager.save(pointTransaction);
 
-  // ===== NUEVO MÉTODO PARA VALIDAR EL QR DEL PREMIO =====
+      const userReward = this.userRewardsRepository.create({
+        user: currentUserState,
+        userId: user.id,
+        reward,
+        rewardId: reward.id,
+        origin: 'LOYALTY', // Los canjes por puntos tienen origen 'LOYALTY'
+      });
+      const savedUserReward = await queryRunner.manager.save(userReward);
+
+      await queryRunner.commitTransaction();
+      this.logger.log(`[redeem] Canje exitoso para ${user.email}. Se generó UserReward ID: ${savedUserReward.id}. Puntos restantes: ${newTotalPoints}`);
+      return savedUserReward;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      this.logger.error(`[redeem] Falló el canje para el usuario ${user.email}`, error);
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  async findUserRewards(userId: string): Promise<UserReward[]> {
+    return this.userRewardsRepository.find({
+      where: { userId },
+      relations: ['reward'],
+      order: { createdAt: 'DESC' },
+    });
+  }
+
   async validateUserReward(userRewardId: string) {
     this.logger.log(`[validateUserReward] Intento de validación para el UserReward ID: ${userRewardId}`);
 
@@ -148,14 +178,15 @@ export class RewardsService {
       redeemedAt: userReward.redeemedAt,
     };
   }
+
   async getRedeemedRewardsHistory(): Promise<UserReward[]> {
-  this.logger.log(`[getRedeemedRewardsHistory] Obteniendo historial de premios canjeados.`);
-  return this.userRewardsRepository.find({
-    where: {
-      redeemedAt: Not(IsNull()), // Filtramos solo los que tienen fecha de canje
-    },
-    relations: ['user', 'reward'], // Cargamos la info del usuario y del premio
-    order: { redeemedAt: 'DESC' }, // Mostramos los más recientes primero
-  });
+    this.logger.log(`[getRedeemedRewardsHistory] Obteniendo historial de premios canjeados.`);
+    return this.userRewardsRepository.find({
+      where: {
+        redeemedAt: Not(IsNull()),
+      },
+      relations: ['user', 'reward'],
+      order: { redeemedAt: 'DESC' },
+    });
   }
 }

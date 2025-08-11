@@ -1,3 +1,4 @@
+// backend/src/rewards/rewards.module.ts
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Reward } from './reward.entity';

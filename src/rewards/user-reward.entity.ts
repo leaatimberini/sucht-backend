@@ -27,7 +27,14 @@ export class UserReward {
   rewardId: string;
 
   @Column({ type: 'timestamp', nullable: true })
-  redeemedAt: Date | null; // Se actualizará cuando el rol BARRA escanee el QR
+  redeemedAt: Date | null;
+
+  /**
+   * NUEVA COLUMNA: Indica el origen del premio (ej. 'BIRTHDAY', 'LOYALTY').
+   * Nos permitirá filtrar y hacer seguimiento.
+   */
+  @Column({ type: 'varchar', nullable: true })
+  origin: string | null;
 
   @CreateDateColumn({ type: 'timestamp' })
   createdAt: Date;

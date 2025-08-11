@@ -1,3 +1,4 @@
+// backend/src/rewards/reward.entity.ts
 import {
   Entity,
   PrimaryGeneratedColumn,
