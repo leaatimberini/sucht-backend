@@ -1,4 +1,5 @@
-import { Module } from '@nestjs/common';
+// backend/src/payments/payments.module.ts
+import { Module, forwardRef } from '@nestjs/common'; // 1. Importar forwardRef
 import { PaymentsService } from './payments.service';
 import { PaymentsController } from './payments.controller';
 import { ConfigModule } from '@nestjs/config';
@@ -10,15 +11,14 @@ import { ConfigurationModule } from 'src/configuration/configuration.module';
 @Module({
   imports: [
     ConfigModule,
-    TicketsModule,
-    UsersModule,
-    TicketTiersModule,
-    ConfigurationModule,
+    // 2. Envolver los módulos en forwardRef
+    forwardRef(() => TicketsModule),
+    forwardRef(() => UsersModule),
+    forwardRef(() => TicketTiersModule),
+    forwardRef(() => ConfigurationModule),
   ],
   controllers: [PaymentsController],
   providers: [PaymentsService],
-  // --- LÍNEA AÑADIDA ---
-  // Exportamos el servicio para que otros módulos puedan inyectarlo.
   exports: [PaymentsService],
 })
 export class PaymentsModule {}

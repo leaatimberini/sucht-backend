@@ -1,3 +1,4 @@
+// src/birthday/birthday.service.ts
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { UsersService } from '../users/users.service';
 import { EventsService } from '../events/events.service';

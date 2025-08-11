@@ -1,3 +1,4 @@
+// src/birthday/birthday.controller.ts
 import { Controller, Post, UseGuards, Req, Body, Get } from '@nestjs/common'; // <-- SE AÑADE 'Get'
 import { BirthdayService } from './birthday.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
