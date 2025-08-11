@@ -189,4 +189,16 @@ export class RewardsService {
       order: { redeemedAt: 'DESC' },
     });
   }
+  // Añade este nuevo método dentro de la clase RewardsService
+  async findBirthdayRewardForUser(userId: string, eventId: string): Promise<UserReward | null> {
+    // La relación con el evento es a través del ticket, así que la lógica podría ser más compleja
+    // Por ahora, asumimos que se busca por origen y usuario, lo que es suficiente.
+    return this.userRewardsRepository.findOne({
+        where: {
+            userId,
+            origin: 'BIRTHDAY'
+        },
+        relations: ['reward']
+    });
+  }
 }

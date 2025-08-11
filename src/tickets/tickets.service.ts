@@ -342,4 +342,15 @@ export class TicketsService {
       this.logger.log(`[CronJob] ❌ Ticket ${ticket.id} invalidado por falta de confirmación.`);
     }
   }
+  // Añade este nuevo método dentro de la clase TicketsService para buscar tickets de cumpleaños
+  async findBirthdayTicketForUser(userId: string, eventId: string): Promise<Ticket | null> {
+    return this.ticketsRepository.findOne({
+      where: {
+        user: { id: userId },
+        event: { id: eventId },
+        origin: 'BIRTHDAY',
+      },
+      relations: ['event', 'tier'],
+    });
+  }
 }
