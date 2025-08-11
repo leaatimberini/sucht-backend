@@ -111,4 +111,38 @@ export class BirthdayService {
       paymentType: 'partial', // Especificamos que es para pagar la seña
     });
   }
+    /**
+   * Verifica qué ofertas de cumpleaños están disponibles para el usuario.
+   */
+  async checkAvailableOffers(user: User) {
+    const response = {
+      isBirthdayWeek: false,
+      isClassicOfferAvailable: false,
+      isVipOfferAvailable: false,
+      claimedBenefit: null as any, // Cambiado para evitar error de tipo
+    };
+
+    const userProfile = await this.usersService.getProfile(user.id);
+    response.isBirthdayWeek = userProfile.isBirthdayWeek;
+    if (!response.isBirthdayWeek) return response;
+
+    const upcomingEvent = await this.eventsService.findNextUpcomingEvent();
+    if (!upcomingEvent) return response;
+    
+    // Verificar si ya reclamó algo
+    const existingTicket = await this.ticketsService.findBirthdayTicketForUser(user.id, upcomingEvent.id);
+    if (existingTicket) {
+      const existingReward = await this.rewardsService.findBirthdayRewardForUser(user.id, upcomingEvent.id);
+      response.claimedBenefit = { ticket: existingTicket, reward: existingReward };
+      return response;
+    }
+
+    const classicTier = await this.ticketTiersService.findBirthdayTierForEvent(upcomingEvent.id);
+    const vipTier = await this.ticketTiersService.findBirthdayVipOfferForEvent(upcomingEvent.id);
+
+    if (classicTier) response.isClassicOfferAvailable = true;
+    if (vipTier && vipTier.quantity > 0) response.isVipOfferAvailable = true;
+
+    return response;
+  }
 }
