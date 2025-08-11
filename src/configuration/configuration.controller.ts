@@ -1,3 +1,4 @@
+// src/configuration/configuration.controller.ts
 import { Controller, Body, UseGuards, Get, Patch, HttpCode, HttpStatus } from '@nestjs/common';
 import { ConfigurationService } from './configuration.service';
 import { UpdateConfigurationDto } from './dto/update-configuration.dto';
