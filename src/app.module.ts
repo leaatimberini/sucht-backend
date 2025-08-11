@@ -17,7 +17,7 @@ import { MailModule } from './mail/mail.module';
 import { PointTransactionsModule } from './point-transactions/point-transactions.module';
 import { RewardsModule } from './rewards/rewards.module';
 import { StoreModule } from './store/store.module';
-import { ScanModule } from './scan/scan.module';
+
 
 @Module({
   imports: [
@@ -52,7 +52,6 @@ import { ScanModule } from './scan/scan.module';
     PointTransactionsModule,
     RewardsModule,
     StoreModule,
-    ScanModule,
   ],
   controllers: [],
   providers: [],
