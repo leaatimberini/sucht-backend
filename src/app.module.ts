@@ -18,7 +18,7 @@ import { PointTransactionsModule } from './point-transactions/point-transactions
 import { RewardsModule } from './rewards/rewards.module';
 import { StoreModule } from './store/store.module';
 import { AdminBirthdayModule } from './admin-birthday/admin-birthday.module';
-
+import { BirthdayModule } from './birthday/birthday.module';
 
 
 @Module({
@@ -55,6 +55,7 @@ import { AdminBirthdayModule } from './admin-birthday/admin-birthday.module';
     RewardsModule,
     StoreModule,
     AdminBirthdayModule,
+    BirthdayModule,
   ],
   controllers: [],
   providers: [],
