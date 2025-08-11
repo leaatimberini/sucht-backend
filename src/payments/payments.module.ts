@@ -1,4 +1,3 @@
-// src/payments/payments.module.ts
 import { Module } from '@nestjs/common';
 import { PaymentsService } from './payments.service';
 import { PaymentsController } from './payments.controller';
@@ -6,7 +5,7 @@ import { ConfigModule } from '@nestjs/config';
 import { TicketsModule } from 'src/tickets/tickets.module';
 import { UsersModule } from 'src/users/users.module';
 import { TicketTiersModule } from 'src/ticket-tiers/ticket-tiers.module';
-import { ConfigurationModule } from 'src/configuration/configuration.module'; // 1. IMPORTAR
+import { ConfigurationModule } from 'src/configuration/configuration.module';
 
 @Module({
   imports: [
@@ -14,9 +13,12 @@ import { ConfigurationModule } from 'src/configuration/configuration.module'; //
     TicketsModule,
     UsersModule,
     TicketTiersModule,
-    ConfigurationModule, // 2. AÑADIR A LOS IMPORTS
+    ConfigurationModule,
   ],
   controllers: [PaymentsController],
   providers: [PaymentsService],
+  // --- LÍNEA AÑADIDA ---
+  // Exportamos el servicio para que otros módulos puedan inyectarlo.
+  exports: [PaymentsService],
 })
 export class PaymentsModule {}
