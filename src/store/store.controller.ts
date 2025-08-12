@@ -1,4 +1,3 @@
-// src/store/store.controller.ts
 import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, HttpCode, HttpStatus, Request } from '@nestjs/common';
 import { StoreService } from './store.service';
 import { CreateProductDto } from './dto/create-product.dto';
@@ -40,12 +39,23 @@ export class StoreController {
         return this.storeService.removeProduct(id);
     }
 
-    // --- Endpoints para Clientes ---
+    // --- Endpoints para Clientes y Usos Generales ---
 
     @Public()
     @Get('products')
     findAllProducts() {
         return this.storeService.findAllProducts();
+    }
+
+    /**
+     * NUEVO ENDPOINT: Específico para el panel del Dueño.
+     * Devuelve todos los productos activos que se pueden regalar.
+     */
+    @Get('products/giftable')
+    @UseGuards(JwtAuthGuard, RolesGuard)
+    @Roles(UserRole.ADMIN, UserRole.OWNER)
+    findGiftable() {
+      return this.storeService.findAllProducts();
     }
 
     @Public()
@@ -69,10 +79,9 @@ export class StoreController {
         return this.storeService.findProductsByUserId(req.user.id);
     }
 
-    // --- NUEVO ENDPOINT para validar una compra de producto ---
     @Post('purchase/validate/:id')
     @UseGuards(JwtAuthGuard, RolesGuard)
-    @Roles(UserRole.VERIFIER, UserRole.ADMIN, UserRole.OWNER)
+    @Roles(UserRole.VERIFIER, UserRole.ADMIN, UserRole.OWNER, UserRole.BARRA) // Se añade BARRA para consistencia
     async validateProductPurchase(@Param('id') id: string): Promise<ProductPurchase> {
         return this.storeService.validatePurchase(id);
     }
