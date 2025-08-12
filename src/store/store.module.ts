@@ -1,23 +1,27 @@
-// backend/src/store/store.module.ts
-
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Product } from './product.entity';
 import { ProductPurchase } from './product-purchase.entity';
 import { StoreService } from './store.service';
 import { StoreController } from './store.controller';
-import { UsersModule } from 'src/users/users.module'; // 1. Se importa UsersModule
-import { ConfigModule } from '@nestjs/config'; // 2. Se importa ConfigModule
-import { PointTransactionsModule } from 'src/point-transactions/point-transactions.module'; // 3. Se importa PointTransactionsModule
+import { UsersModule } from 'src/users/users.module';
+import { ConfigModule } from '@nestjs/config';
+import { PointTransactionsModule } from 'src/point-transactions/point-transactions.module';
+import { EventsModule } from 'src/events/events.module';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([Product, ProductPurchase]),
-    UsersModule, // 4. Se añade a los imports
-    ConfigModule, // 4. Se añade a los imports
-    PointTransactionsModule, // 4. Se añade a los imports
-  ],
-  providers: [StoreService],
-  controllers: [StoreController],
+  imports: [
+    TypeOrmModule.forFeature([Product, ProductPurchase]),
+    // Usamos forwardRef para evitar dependencias circulares con otros módulos
+    forwardRef(() => UsersModule),
+    forwardRef(() => EventsModule),
+    ConfigModule,
+    PointTransactionsModule,
+  ],
+  providers: [StoreService],
+  controllers: [StoreController],
+  // --- LÍNEA AÑADIDA ---
+  // Exportamos el servicio para que otros módulos puedan inyectarlo y utilizarlo.
+  exports: [StoreService],
 })
 export class StoreModule {}
