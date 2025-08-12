@@ -20,7 +20,7 @@ export class OwnerInvitationService {
     private readonly eventsService: EventsService,
     private readonly ticketTiersService: TicketTiersService,
     private readonly ticketsService: TicketsService,
-    private readonly storeService: StoreService, // Se inyecta el StoreService
+    private readonly storeService: StoreService,
     private readonly mailService: MailService,
     private readonly configurationService: ConfigurationService,
   ) {}
@@ -29,16 +29,17 @@ export class OwnerInvitationService {
     this.logger.log(`Dueño ${owner.email} creando invitación para ${dto.email}`);
     const { email, guestCount, isVipAccess, giftedProducts } = dto;
 
-    // 1. Buscar o crear al usuario invitado
-    const invitedUser = await this.usersService.findOrCreateByEmail(email);
+    // 1. Cargamos los datos completos del Dueño para tener su nombre
+    const fullOwner = await this.usersService.findOneById(owner.id);
+    if (!fullOwner) {
+      throw new NotFoundException('No se encontraron los datos del Dueño.');
+    }
 
-    // 2. Encontrar el próximo evento
+    const invitedUser = await this.usersService.findOrCreateByEmail(email);
     const upcomingEvent = await this.eventsService.findNextUpcomingEvent();
     if (!upcomingEvent) {
       throw new NotFoundException('No hay un evento próximo para crear la invitación.');
     }
-
-    // 3. Crear el ticket de ingreso principal
     const entryTier = await this.ticketTiersService.findDefaultFreeTierForEvent(upcomingEvent.id);
     if (!entryTier) {
       throw new NotFoundException('No se encontró un tipo de entrada gratuita para asignar a la invitación.');
@@ -46,46 +47,51 @@ export class OwnerInvitationService {
 
     const mainTicket = await this.ticketsService.createTicketInternal(
       invitedUser,
-      {
-        eventId: upcomingEvent.id,
-        ticketTierId: entryTier.id,
-        quantity: guestCount + 1,
-      },
-      null, 0, null,
-      'OWNER_INVITATION',
-      isVipAccess,
-      'INGRESO SIN FILA'
+      { eventId: upcomingEvent.id, ticketTierId: entryTier.id, quantity: guestCount + 1 },
+      null, 0, null, 'OWNER_INVITATION', isVipAccess, 'INGRESO SIN FILA'
     );
 
-    // 4. Crear las "compras gratuitas" de productos regalados
+    // 2. CORRECCIÓN: Creamos un registro ProductPurchase por cada unidad de producto
     const giftedPurchases: ProductPurchase[] = [];
     for (const product of giftedProducts) {
-      // Usamos el nuevo método en StoreService
-      const purchase = await this.storeService.createFreePurchase(
-        invitedUser,
-        product.productId,
-        upcomingEvent.id,
-        product.quantity,
-        'OWNER_GIFT'
-      );
-      giftedPurchases.push(purchase);
+      for (let i = 0; i < product.quantity; i++) {
+        const purchase = await this.storeService.createFreePurchase(
+          invitedUser, product.productId, upcomingEvent.id, 1, 'OWNER_GIFT' // Siempre cantidad 1
+        );
+        giftedPurchases.push(purchase);
+      }
     }
-    this.logger.log(`Se crearon ${giftedPurchases.length} registros de productos de regalo.`);
-
-    // 5. Enviar el email consolidado (cargando las relaciones necesarias)
+    this.logger.log(`Se crearon ${giftedPurchases.length} QRs de regalo individuales.`);
+    
     const finalTicket = await this.ticketsService.findOne(mainTicket.id);
-    const finalVouchers = await Promise.all(
-        giftedPurchases.map(p => this.storeService.findPurchaseById(p.id))
-    );
+    const finalVouchers = await Promise.all(giftedPurchases.map(p => this.storeService.findPurchaseById(p.id)));
 
+    // 3. CORRECCIÓN: Lógica para generar el HTML de los QRs para el email
     const frontendUrl = await this.configurationService.get('FRONTEND_URL') || 'https://sucht.com.ar';
-    const giftsHtml = finalVouchers.length > 0
+    const qrBoxStyle = "background-color: white; padding: 15px; border-radius: 8px; margin: 10px auto; max-width: 180px;";
+    const qrApiUrl = "https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=";
+    
+    const mainTicketQrHtml = `
+      <div style="margin-bottom: 20px; border: 2px solid #ffd700; border-radius: 12px; padding: 20px; background-color: #2a2a2a;">
+        <p style="color: #ffd700; margin:0; font-size: 12px; text-transform: uppercase;">Invitado/a Especial de ${fullOwner.name}</p>
+        <h3 style="color: #ffffff; margin: 5px 0 15px 0; font-size: 22px;">QR de Ingreso</h3>
+        <div style="${qrBoxStyle}"><img src="${qrApiUrl}${finalTicket.id}" alt="QR de Ingreso" /></div>
+        <p style="color: #bbbbbb; margin-top: 15px; font-size: 16px;">Válido para ${finalTicket.quantity} personas</p>
+        <p style="color: #ffd700; font-weight: bold; margin-top: 5px;">${finalTicket.specialInstructions}</p>
+      </div>
+    `;
+
+    const giftsQrHtml = finalVouchers.length > 0
       ? `
-        <h3 style="color: #D6006D; margin-top: 25px; border-bottom: 1px solid #444; padding-bottom: 10px;">Regalos Adicionales</h3>
-        <ul style="padding-left: 20px; text-align: left; list-style: none;">
-          ${finalVouchers.map(v => `<li><strong style="color: #ffffff;">(x${v.quantity}) ${v.product.name}</strong></li>`).join('')}
-        </ul>
-        <p style="color: #bbbbbb; font-size: 14px; text-align: left;">Podrás ver los QRs de tus regalos en la sección "Mis Productos" de tu cuenta.</p>
+        <h2 style="color: #ffffff; font-size: 24px; margin-top: 40px;">Tus Regalos</h2>
+        ${finalVouchers.map(v => `
+          <div style="margin-bottom: 20px; border: 1px solid #D6006D; border-radius: 12px; padding: 20px; background-color: #2a2a2a;">
+            <p style="color: #D6006D; margin:0; font-size: 12px; text-transform: uppercase;">Regalo de ${fullOwner.name}</p>
+            <h3 style="color: #ffffff; margin: 5px 0 15px 0; font-size: 22px;">${v.product.name}</h3>
+            <div style="${qrBoxStyle}"><img src="${qrApiUrl}${v.id}" alt="QR de Regalo" /></div>
+            <p style="color: #bbbbbb; margin-top: 15px; font-size: 14px;">Presenta este QR en la barra para canjear.</p>
+          </div>
+        `).join('')}
       `
       : '';
 
@@ -97,20 +103,12 @@ export class OwnerInvitationService {
           </div>
           <div style="padding: 30px;">
             <h2 style="color: #ffffff; font-size: 24px; margin-top: 0;">Hola ${invitedUser.name || invitedUser.email.split('@')[0]},</h2>
-            <p style="color: #bbbbbb; font-size: 16px;">Has recibido una invitación muy especial de parte de <strong>${owner.name}</strong>.</p>
+            <p style="color: #bbbbbb; font-size: 16px;">Has recibido una invitación muy especial de parte de <strong>${fullOwner.name}</strong> para el evento <strong>${upcomingEvent.title}</strong>.</p>
             
-            <div style="padding: 15px; margin: 20px 0; border: 1px solid #ffd700; background-color: #2b2b1a; color: #ffd700; border-radius: 8px; font-weight: bold; text-transform: uppercase; font-size: 16px;">${finalTicket.specialInstructions}</div>
-
-            <div style="background-color: #2a2a2a; border-radius: 8px; padding: 20px; margin: 30px 0; text-align: left;">
-              <h3 style="color: #D6006D; margin-top: 0; border-bottom: 1px solid #444; padding-bottom: 10px;">Tu Invitación</h3>
-              <p style="margin: 10px 0;"><strong style="color: #ffffff;">Evento:</strong> ${upcomingEvent.title}</p>
-              <p style="margin: 10px 0;"><strong style="color: #ffffff;">Válida para:</strong> ${finalTicket.quantity} personas</p>
-              ${finalTicket.isVipAccess ? `<p style="margin: 10px 0;"><strong style="color: #ffffff;">Acceso:</strong> <span style="color: #ffd700; font-weight: bold;">VIP</span></p>` : ''}
-            </div>
-
-            ${giftsHtml}
+            ${mainTicketQrHtml}
+            ${giftsQrHtml}
             
-            <a href="${frontendUrl}/mi-cuenta" target="_blank" style="display: inline-block; background-color: #D6006D; color: #ffffff; padding: 15px 30px; margin-top: 20px; text-decoration: none; border-radius: 8px; font-weight: bold;">VER INVITACIÓN EN MI CUENTA</a>
+            <a href="${frontendUrl}/mi-cuenta" target="_blank" style="display: inline-block; background-color: #D6006D; color: #ffffff; padding: 15px 30px; margin-top: 20px; text-decoration: none; border-radius: 8px; font-weight: bold;">VER EN MI CUENTA</a>
           </div>
           <div style="padding: 20px; font-size: 12px; color: #777777; background-color: #000000;">
             <p style="margin: 0;">Nos vemos en la fiesta.</p>
@@ -119,11 +117,10 @@ export class OwnerInvitationService {
       </div>
     `;
     
-    await this.mailService.sendMail(invitedUser.email, `Una invitación especial de ${owner.name} para SUCHT`, emailHtml);
+    // 4. CORRECCIÓN: Usamos el nombre del Dueño en el título del mail
+    await this.mailService.sendMail(invitedUser.email, `Una invitación especial de ${fullOwner.name} para SUCHT`, emailHtml);
     
     this.logger.log(`Invitación para ${email} creada y email enviado exitosamente.`);
-    return {
-      message: `Invitación especial enviada a ${email}.`,
-    };
+    return { message: `Invitación especial enviada a ${email}.` };
   }
 }
