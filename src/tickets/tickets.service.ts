@@ -30,10 +30,6 @@ export class TicketsService {
     private pointTransactionsService: PointTransactionsService,
     private configurationService: ConfigurationService,
   ) {}
-
-  /**
-   * MÉTODO INTERNO: Crea un ticket en la base de datos SIN enviar un email.
-   */
   public async createTicketInternal(
     user: User, 
     data: { eventId: string, ticketTierId: string, quantity: number },
@@ -73,10 +69,6 @@ export class TicketsService {
     this.logger.log(`[createTicketInternal] Ticket ${savedTicket.id} guardado en DB.`);
     return savedTicket;
   }
-  
-  /**
-   * MÉTODO PÚBLICO: Crea un ticket y envía el email de confirmación.
-   */
   public async createTicketAndSendEmail(
     user: User, 
     data: { eventId: string, ticketTierId: string, quantity: number },
@@ -88,11 +80,42 @@ export class TicketsService {
     specialInstructions: string | null = null
   ): Promise<Ticket> {
     
-    const savedTicket = await this.createTicketInternal(user, data, promoter, amountPaid, paymentId, origin, isVipAccess, specialInstructions);
+    this.logger.log(`[createTicket] Creando ticket para: ${user.email} | Origen: ${origin} | RRPP: ${promoter ? promoter.username : 'N/A'}`);
+    const { eventId, ticketTierId, quantity } = data;
+    const event = await this.eventsService.findOne(eventId);
+    if (!event) throw new NotFoundException('Evento no encontrado.');
+    if (new Date() > new Date(event.endDate)) {
+      throw new BadRequestException('Este evento ya ha finalizado.');
+    }
+    const tier = await this.ticketTiersRepository.findOneBy({ id: ticketTierId });
+    if (!tier) throw new NotFoundException('Tipo de entrada no encontrado.');
+    if (tier.quantity < quantity) throw new BadRequestException(`No quedan suficientes. Disponibles: ${tier.quantity}.`);
+    
+    let status = TicketStatus.VALID;
+    const totalPrice = tier.price * quantity;
+    if (amountPaid > 0 && amountPaid < totalPrice) {
+      status = TicketStatus.PARTIALLY_PAID;
+    }
 
-    // Recargamos el ticket con todas sus relaciones para el email
-    const fullTicket = await this.findOne(savedTicket.id);
-    const { event, tier, quantity } = fullTicket;
+    const newTicket = this.ticketsRepository.create({ 
+      user, 
+      event, 
+      tier, 
+      quantity, 
+      promoter,
+      amountPaid,
+      status,
+      paymentId,
+      origin,
+      isVipAccess,
+      specialInstructions,
+    });
+    
+    tier.quantity -= quantity;
+    await this.ticketTiersRepository.save(tier);
+
+    const savedTicket = await this.ticketsRepository.save(newTicket);
+    this.logger.log(`[createTicket] Ticket ${savedTicket.id} guardado en DB.`);
 
     const emailHtml = `
       <div style="background-color: #121212; color: #ffffff; font-family: Arial, sans-serif; padding: 40px; text-align: center;">
@@ -140,6 +163,31 @@ export class TicketsService {
       tickets.push(ticket);
     }
     
+    const event = await this.eventsService.findOne(eventId);
+    const emailHtml = `
+      <div style="background-color: #121212; color: #ffffff; font-family: Arial, sans-serif; padding: 40px; text-align: center;">
+        <div style="max-width: 600px; margin: auto; background-color: #1e1e1e; border-radius: 12px; overflow: hidden; border: 1px solid #333;">
+          <div style="padding: 24px; background-color: #000000;">
+            <h1 style="color: #ffffff; font-size: 28px; margin: 0;">SUCHT</h1>
+          </div>
+          <div style="padding: 30px;">
+            <h2 style="color: #ffffff; font-size: 24px; margin-top: 0;">Hola ${user.name || user.email.split('@')[0]},</h2>
+            <p style="color: #bbbbbb; font-size: 16px;">¡Estás invitado! <strong>${promoter.name}</strong> te ha enviado ${quantity} entrada(s) para el próximo evento.</p>
+            <div style="background-color: #2a2a2a; border-radius: 8px; padding: 20px; margin: 30px 0; text-align: left;">
+              <h3 style="color: #D6006D; margin-top: 0; border-bottom: 1px solid #444; padding-bottom: 10px;">Detalles del Evento</h3>
+              <p style="margin: 10px 0;"><strong style="color: #ffffff;">Evento:</strong> ${event.title}</p>
+            </div>
+            <a href="${await this.configurationService.get('FRONTEND_URL')}/mi-cuenta" target="_blank" style="display: inline-block; background-color: #D6006D; color: #ffffff; padding: 15px 30px; margin-top: 20px; text-decoration: none; border-radius: 8px; font-weight: bold;">ACEPTAR Y VER ENTRADAS</a>
+          </div>
+          <div style="padding: 20px; font-size: 12px; color: #777777; background-color: #000000;">
+            <p style="margin: 0;">Nos vemos en la fiesta.</p>
+          </div>
+        </div>
+      </div>
+    `;
+
+    await this.mailService.sendMail(user.email, `🎟️ ¡${promoter.name} te invitó a SUCHT!`, emailHtml);
+
     return tickets;
   }
 
