@@ -91,7 +91,10 @@ export class TicketsService {
   ): Promise<Ticket> {
     
     const savedTicket = await this.createTicketInternal(user, data, promoter, amountPaid, paymentId, origin, isVipAccess, specialInstructions);
-    const { event, tier, quantity } = savedTicket;
+
+    // Recargamos las relaciones para asegurarnos de tener todos los datos para el email
+    const fullTicket = await this.findOne(savedTicket.id);
+    const { event, tier, quantity } = fullTicket;
 
     const emailHtml = `
       <div style="background-color: #121212; color: #ffffff; font-family: Arial, sans-serif; padding: 40px; text-align: center;">
