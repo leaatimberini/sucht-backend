@@ -120,12 +120,10 @@ export class TicketsService {
     const emailHtml = `
       <div style="background-color: #121212; color: #ffffff; font-family: Arial, sans-serif; padding: 40px; text-align: center;">
         <div style="max-width: 600px; margin: auto; background-color: #1e1e1e; border-radius: 12px; overflow: hidden; border: 1px solid #333;">
-          <div style="padding: 24px; background-color: #000000;">
-            <h1 style="color: #ffffff; font-size: 28px; margin: 0;">SUCHT</h1>
-          </div>
+          {/* ... (header del email sin cambios) ... */}
           <div style="padding: 30px;">
             <h2 style="color: #ffffff; font-size: 24px; margin-top: 0;">Hola ${user.name || user.email.split('@')[0]},</h2>
-            <p style="color: #bbbbbb; font-size: 16px;">${origin === 'OWNER_INVITATION' ? 'Has recibido una invitación especial.' : (origin === 'BIRTHDAY' ? '¡Feliz cumpleaños! Aquí tienes tu beneficio.' : '¡Tu entrada está confirmada!')}</p>
+            <p style="color: #bbbbbb; font-size: 16px;">${origin === 'OWNER_INVITATION' ? `Has recibido una invitación muy especial de parte de <strong>${promoter?.name || 'SUCHT'}</strong>.` : (origin === 'BIRTHDAY' ? '¡Feliz cumpleaños! Aquí tienes tu beneficio.' : '¡Tu entrada está confirmada!')}</p>
             
             ${specialInstructions ? `<div style="padding: 15px; margin: 20px 0; border: 1px solid #ffd700; background-color: #2b2b1a; color: #ffd700; border-radius: 8px; font-weight: bold; text-transform: uppercase; font-size: 16px;">${specialInstructions}</div>` : ''}
 
@@ -133,7 +131,10 @@ export class TicketsService {
               <h3 style="color: #D6006D; margin-top: 0; border-bottom: 1px solid #444; padding-bottom: 10px;">Detalles del Evento</h3>
               <p style="margin: 10px 0;"><strong style="color: #ffffff;">Evento:</strong> ${event.title}</p>
               <p style="margin: 10px 0;"><strong style="color: #ffffff;">Entrada:</strong> ${tier.name} (x${quantity})</p>
+              
+              {/* --- CORRECCIÓN CLAVE --- */}
               ${isVipAccess ? `<p style="margin: 10px 0;"><strong style="color: #ffffff;">Acceso:</strong> <span style="color: #ffd700; font-weight: bold;">VIP</span></p>` : ''}
+              
               <p style="margin: 10px 0;"><strong style="color: #ffffff;">Fecha:</strong> ${new Date(event.startDate).toLocaleDateString('es-AR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
             </div>
             
