@@ -1,8 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-// 1. Importar 'Not' y 'DataSource'
 import { Repository, DataSource, Not } from 'typeorm'; 
-import { TicketTier } from './ticket-tier.entity';
+import { TicketTier, ProductType } from './ticket-tier.entity';
 import { EventsService } from 'src/events/events.service';
 import { CreateTicketTierDto } from './dto/create-ticket-tier.dto';
 import { UpdateTicketTierDto } from './dto/update-ticket-tier.dto';
@@ -83,36 +82,28 @@ export class TicketTiersService {
     try {
       const eventId = tierToUpdate.event.id;
       
-      // Si se está intentando activar la opción de cumpleaños por defecto
       if (updateTicketTierDto.isBirthdayDefault) {
-        // --- CORRECCIÓN ---
-        // Se resetea la bandera en todos los otros tiers del mismo evento
         await queryRunner.manager.update(
             TicketTier,
-            { event: { id: eventId }, id: Not(tierId) }, // Usamos Not()
+            { event: { id: eventId }, id: Not(tierId) },
             { isBirthdayDefault: false }
         );
       }
       
-      // Si se está intentando activar la oferta VIP de cumpleaños
       if (updateTicketTierDto.isBirthdayVipOffer) {
-        // --- CORRECCIÓN ---
-        // Se resetea la bandera en todos los otros tiers del mismo evento
         await queryRunner.manager.update(
             TicketTier,
-            { event: { id: eventId }, id: Not(tierId) }, // Usamos Not()
+            { event: { id: eventId }, id: Not(tierId) },
             { isBirthdayVipOffer: false }
         );
       }
 
-      // Se utiliza preload para cargar la entidad y fusionar los nuevos datos
       const updatedTier = await queryRunner.manager.preload(TicketTier, {
         id: tierId,
         ...updateTicketTierDto,
       });
 
       if (!updatedTier) {
-        // Esta comprobación es redundante si findOne tuvo éxito, pero es una buena práctica
         throw new NotFoundException(`Ticket Tier with ID "${tierId}" not found during preload`);
       }
 
@@ -135,8 +126,6 @@ export class TicketTiersService {
     }
   }
 
-  // --- NUEVOS MÉTODOS PARA EL BIRTHDAY SERVICE ---
-
   async findBirthdayTierForEvent(eventId: string): Promise<TicketTier | null> {
     return this.ticketTiersRepository.findOne({
       where: {
@@ -153,6 +142,41 @@ export class TicketTiersService {
         event: { id: eventId },
         isBirthdayVipOffer: true,
       },
+    });
+  }
+
+  async findGiftableProducts(): Promise<TicketTier[]> {
+    const upcomingEvent = await this.eventsService.findNextUpcomingEvent();
+    if (!upcomingEvent) {
+      return [];
+    }
+
+    return this.ticketTiersRepository.find({
+      where: {
+        event: { id: upcomingEvent.id },
+        productType: ProductType.VOUCHER,
+        quantity: Not(0),
+      },
+      order: {
+        price: 'ASC',
+      },
+    });
+  }
+
+  /**
+   * NUEVO MÉTODO DE APOYO: Busca un tier gratuito genérico para un evento.
+   * Usado por el OwnerInvitationService para encontrar una entrada base para las invitaciones.
+   */
+  async findDefaultFreeTierForEvent(eventId: string): Promise<TicketTier | null> {
+    return this.ticketTiersRepository.findOne({
+      where: {
+        event: { id: eventId },
+        isFree: true,
+        productType: ProductType.TICKET, // Nos aseguramos de que sea una entrada, no un voucher
+      },
+      order: {
+        createdAt: 'ASC', // Tomamos el primero que se haya creado
+      }
     });
   }
 }

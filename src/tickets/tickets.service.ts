@@ -31,6 +31,54 @@ export class TicketsService {
     private configurationService: ConfigurationService,
   ) {}
 
+  /**
+   * NUEVO MÉTODO INTERNO: Crea un ticket en la base de datos SIN enviar un email.
+   * Esta es la lógica central que ahora será reutilizable por otros servicios.
+   */
+  public async createTicketInternal(
+    user: User, 
+    data: { eventId: string, ticketTierId: string, quantity: number },
+    promoter: User | null,
+    amountPaid: number,
+    paymentId: string | null,
+    origin: string | null = null,
+    isVipAccess: boolean = false,
+    specialInstructions: string | null = null
+  ): Promise<Ticket> {
+    this.logger.log(`[createTicketInternal] Creando ticket para: ${user.email} | Origen: ${origin}`);
+    const { eventId, ticketTierId, quantity } = data;
+    const event = await this.eventsService.findOne(eventId);
+    if (!event) throw new NotFoundException('Evento no encontrado.');
+    const tier = await this.ticketTiersRepository.findOneBy({ id: ticketTierId });
+    if (!tier) throw new NotFoundException('Tipo de entrada no encontrado.');
+    
+    // No descontar stock para invitaciones de Dueño
+    if (origin !== 'OWNER_INVITATION' && tier.quantity < quantity) {
+      throw new BadRequestException(`No quedan suficientes. Disponibles: ${tier.quantity}.`);
+    }
+
+    let status = TicketStatus.VALID;
+    if (amountPaid > 0 && amountPaid < (tier.price * quantity)) {
+      status = TicketStatus.PARTIALLY_PAID;
+    }
+
+    const newTicket = this.ticketsRepository.create({ 
+      user, event, tier, quantity, promoter, amountPaid, status, paymentId, origin, isVipAccess, specialInstructions,
+    });
+    
+    if (origin !== 'OWNER_INVITATION') {
+      tier.quantity -= quantity;
+      await this.ticketTiersRepository.save(tier);
+    }
+
+    const savedTicket = await this.ticketsRepository.save(newTicket);
+    this.logger.log(`[createTicketInternal] Ticket ${savedTicket.id} guardado en DB.`);
+    return savedTicket;
+  }
+  
+  /**
+   * MÉTODO REFACTORIZADO: Ahora usa el método interno y luego se encarga del email.
+   */
   public async createTicketAndSendEmail(
     user: User, 
     data: { eventId: string, ticketTierId: string, quantity: number },
@@ -41,45 +89,9 @@ export class TicketsService {
     isVipAccess: boolean = false,
     specialInstructions: string | null = null
   ): Promise<Ticket> {
-    this.logger.log(`[createTicket] Creando ticket para: ${user.email} | Origen: ${origin} | RRPP: ${promoter ? promoter.username : 'N/A'}`);
-    const { eventId, ticketTierId, quantity } = data;
-    const event = await this.eventsService.findOne(eventId);
-    if (!event) throw new NotFoundException('Evento no encontrado.');
-    if (new Date() > new Date(event.endDate)) {
-      throw new BadRequestException('Este evento ya ha finalizado.');
-    }
-    const tier = await this.ticketTiersRepository.findOneBy({ id: ticketTierId });
-    if (!tier) throw new NotFoundException('Tipo de entrada no encontrado.');
-    if (tier.quantity < quantity) throw new BadRequestException(`No quedan suficientes. Disponibles: ${tier.quantity}.`);
     
-    let status = TicketStatus.VALID;
-    const totalPrice = tier.price * quantity;
-    if (amountPaid > 0 && amountPaid < totalPrice) {
-      status = TicketStatus.PARTIALLY_PAID;
-    }
-
-    const newTicket = this.ticketsRepository.create({ 
-      user, 
-      event, 
-      tier, 
-      quantity, 
-      promoter,
-      amountPaid,
-      status,
-      paymentId,
-      origin,
-      isVipAccess,
-      specialInstructions,
-    });
-    
-    // Solo descontar del stock si no es una invitación de dueño
-    if (origin !== 'OWNER_INVITATION') {
-        tier.quantity -= quantity;
-        await this.ticketTiersRepository.save(tier);
-    }
-
-    const savedTicket = await this.ticketsRepository.save(newTicket);
-    this.logger.log(`[createTicket] Ticket ${savedTicket.id} guardado en DB.`);
+    const savedTicket = await this.createTicketInternal(user, data, promoter, amountPaid, paymentId, origin, isVipAccess, specialInstructions);
+    const { event, tier, quantity } = savedTicket;
 
     const emailHtml = `
       <div style="background-color: #121212; color: #ffffff; font-family: Arial, sans-serif; padding: 40px; text-align: center;">
@@ -101,7 +113,7 @@ export class TicketsService {
               <p style="margin: 10px 0;"><strong style="color: #ffffff;">Fecha:</strong> ${new Date(event.startDate).toLocaleDateString('es-AR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
             </div>
             
-            <a href="${this.configurationService.get('FRONTEND_URL')}/mi-cuenta" target="_blank" style="display: inline-block; background-color: #D6006D; color: #ffffff; padding: 15px 30px; margin-top: 20px; text-decoration: none; border-radius: 8px; font-weight: bold;">VER MIS ENTRADAS</a>
+            <a href="${await this.configurationService.get('FRONTEND_URL')}/mi-cuenta" target="_blank" style="display: inline-block; background-color: #D6006D; color: #ffffff; padding: 15px 30px; margin-top: 20px; text-decoration: none; border-radius: 8px; font-weight: bold;">VER MIS ENTRADAS</a>
           </div>
           <div style="padding: 20px; font-size: 12px; color: #777777; background-color: #000000;">
             <p style="margin: 0;">Gracias por ser parte de la comunidad SUCHT.</p>
@@ -141,7 +153,7 @@ export class TicketsService {
               <h3 style="color: #D6006D; margin-top: 0; border-bottom: 1px solid #444; padding-bottom: 10px;">Detalles del Evento</h3>
               <p style="margin: 10px 0;"><strong style="color: #ffffff;">Evento:</strong> ${event.title}</p>
             </div>
-            <a href="${this.configurationService.get('FRONTEND_URL')}/mi-cuenta" target="_blank" style="display: inline-block; background-color: #D6006D; color: #ffffff; padding: 15px 30px; margin-top: 20px; text-decoration: none; border-radius: 8px; font-weight: bold;">ACEPTAR Y VER ENTRADAS</a>
+            <a href="${await this.configurationService.get('FRONTEND_URL')}/mi-cuenta" target="_blank" style="display: inline-block; background-color: #D6006D; color: #ffffff; padding: 15px 30px; margin-top: 20px; text-decoration: none; border-radius: 8px; font-weight: bold;">ACEPTAR Y VER ENTRADAS</a>
           </div>
           <div style="padding: 20px; font-size: 12px; color: #777777; background-color: #000000;">
             <p style="margin: 0;">Nos vemos en la fiesta.</p>
@@ -258,7 +270,7 @@ export class TicketsService {
     const shouldAwardPoints = ticket.redeemedCount === 0;
 
     if (new Date() > new Date(ticket.event.endDate)) {
-      this.logger.warn(`[redeemTicket] FALLO: El evento ya finalizó. Fecha actual: ${new Date()}, Fecha fin evento: ${new Date(ticket.event.endDate)}`);
+      this.logger.warn(`[redeemTicket] FALLO: El evento ya finalizó.`);
       throw new BadRequestException('Event has already finished.');
     }
 

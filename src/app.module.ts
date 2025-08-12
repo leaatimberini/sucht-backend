@@ -19,7 +19,7 @@ import { RewardsModule } from './rewards/rewards.module';
 import { StoreModule } from './store/store.module';
 import { AdminBirthdayModule } from './admin-birthday/admin-birthday.module';
 import { BirthdayModule } from './birthday/birthday.module';
-
+import { OwnerInvitationModule } from './owner-invitations/owner-invitations.module';
 
 @Module({
   imports: [
@@ -56,6 +56,7 @@ import { BirthdayModule } from './birthday/birthday.module';
     StoreModule,
     AdminBirthdayModule,
     BirthdayModule,
+    OwnerInvitationModule,
   ],
   controllers: [],
   providers: [],

@@ -1,15 +1,16 @@
-// src/ticket-tiers/ticket-tiers.module.ts
 import { Module } from '@nestjs/common';
 import { TicketTiersService } from './ticket-tiers.service';
-import { TicketTiersController } from './ticket-tiers.controller';
+// Se importa el nuevo controlador
+import { TicketTiersController, RootTicketTiersController } from './ticket-tiers.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { TicketTier } from './ticket-tier.entity';
 import { EventsModule } from 'src/events/events.module';
 
 @Module({
   imports: [TypeOrmModule.forFeature([TicketTier]), EventsModule],
-  controllers: [TicketTiersController],
+  // Se añade el nuevo controlador a la lista
+  controllers: [TicketTiersController, RootTicketTiersController],
   providers: [TicketTiersService],
-  exports: [TicketTiersService], // <-- 👈 ¡ESTO FALTABA!
+  exports: [TicketTiersService],
 })
 export class TicketTiersModule {}
