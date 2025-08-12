@@ -1,3 +1,4 @@
+// src/store/dto/create-purchase.dto.ts
 import { IsNotEmpty, IsUUID, IsInt, Min, IsArray, ValidateNested, ArrayMinSize } from 'class-validator';
 import { Type } from 'class-transformer';
 

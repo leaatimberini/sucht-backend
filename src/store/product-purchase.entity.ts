@@ -27,7 +27,6 @@ export class ProductPurchase {
   @Column()
   productId: string;
 
-  // Vinculamos la compra a un evento específico
   @ManyToOne(() => Event)
   event: Event;
 
@@ -40,11 +39,17 @@ export class ProductPurchase {
   @Column({ type: 'decimal', precision: 10, scale: 2 })
   amountPaid: number;
 
-  @Column({ type: 'varchar' })
-  paymentId: string; // ID del pago de Mercado Pago
+  @Column({ type: 'varchar', nullable: true }) // Se hace nullable para regalos
+  paymentId: string | null;
+
+  /**
+   * NUEVA COLUMNA: Indica el origen de la compra (ej. 'OWNER_GIFT', 'PURCHASE').
+   */
+  @Column({ type: 'varchar', nullable: true })
+  origin: string | null;
 
   @Column({ type: 'timestamp', nullable: true })
-  redeemedAt: Date | null; // Se actualizará cuando el rol BARRA escanee el QR
+  redeemedAt: Date | null;
 
   @CreateDateColumn({ type: 'timestamp' })
   createdAt: Date;

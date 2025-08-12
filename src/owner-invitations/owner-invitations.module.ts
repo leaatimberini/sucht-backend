@@ -7,6 +7,7 @@ import { TicketTiersModule } from '../ticket-tiers/ticket-tiers.module';
 import { TicketsModule } from '../tickets/tickets.module';
 import { MailModule } from '../mail/mail.module';
 import { ConfigurationModule } from '../configuration/configuration.module';
+import { StoreModule } from '../store/store.module'; // Se importa el módulo de la tienda
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { ConfigurationModule } from '../configuration/configuration.module';
     EventsModule,
     TicketTiersModule,
     TicketsModule,
+    StoreModule, // Se añade StoreModule para poder usar StoreService
     MailModule,
     ConfigurationModule,
   ],

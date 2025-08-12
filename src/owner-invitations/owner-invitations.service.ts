@@ -8,6 +8,8 @@ import { TicketsService } from '../tickets/tickets.service';
 import { MailService } from '../mail/mail.service';
 import { ConfigurationService } from '../configuration/configuration.service';
 import { Ticket } from '../tickets/ticket.entity';
+import { StoreService } from '../store/store.service';
+import { ProductPurchase } from '../store/product-purchase.entity';
 
 @Injectable()
 export class OwnerInvitationService {
@@ -18,6 +20,7 @@ export class OwnerInvitationService {
     private readonly eventsService: EventsService,
     private readonly ticketTiersService: TicketTiersService,
     private readonly ticketsService: TicketsService,
+    private readonly storeService: StoreService, // Se inyecta el StoreService
     private readonly mailService: MailService,
     private readonly configurationService: ConfigurationService,
   ) {}
@@ -54,37 +57,33 @@ export class OwnerInvitationService {
       'INGRESO SIN FILA'
     );
 
-    // 4. Crear los vouchers de productos regalados
-    const giftedVouchers: Ticket[] = [];
+    // 4. Crear las "compras gratuitas" de productos regalados
+    const giftedPurchases: ProductPurchase[] = [];
     for (const product of giftedProducts) {
-      // Verificamos que el tierId del producto regalado exista y sea un voucher
-      const tier = await this.ticketTiersService.findOne(product.tierId);
-      if (!tier || tier.event.id !== upcomingEvent.id) continue; // Salta si el tier no es válido o no es del evento
-
-      for (let i = 0; i < product.quantity; i++) {
-        const voucherTicket = await this.ticketsService.createTicketInternal(
-          invitedUser,
-          {
-            eventId: upcomingEvent.id,
-            ticketTierId: product.tierId,
-            quantity: 1,
-          },
-          null, 0, null,
-          'OWNER_GIFT',
-          false, null
-        );
-        giftedVouchers.push(voucherTicket);
-      }
+      // Usamos el nuevo método en StoreService
+      const purchase = await this.storeService.createFreePurchase(
+        invitedUser,
+        product.productId,
+        upcomingEvent.id,
+        product.quantity,
+        'OWNER_GIFT'
+      );
+      giftedPurchases.push(purchase);
     }
-    this.logger.log(`Se crearon ${giftedVouchers.length} vouchers de regalo.`);
+    this.logger.log(`Se crearon ${giftedPurchases.length} registros de productos de regalo.`);
 
-    // 5. Enviar el email consolidado
+    // 5. Enviar el email consolidado (cargando las relaciones necesarias)
+    const finalTicket = await this.ticketsService.findOne(mainTicket.id);
+    const finalVouchers = await Promise.all(
+        giftedPurchases.map(p => this.storeService.findPurchaseById(p.id))
+    );
+
     const frontendUrl = await this.configurationService.get('FRONTEND_URL') || 'https://sucht.com.ar';
-    const giftsHtml = giftedVouchers.length > 0
+    const giftsHtml = finalVouchers.length > 0
       ? `
         <h3 style="color: #D6006D; margin-top: 25px; border-bottom: 1px solid #444; padding-bottom: 10px;">Regalos Adicionales</h3>
-        <ul style="padding-left: 20px; text-align: left;">
-          ${giftedVouchers.map(v => `<li><strong style="color: #ffffff;">${v.tier.name}</strong></li>`).join('')}
+        <ul style="padding-left: 20px; text-align: left; list-style: none;">
+          ${finalVouchers.map(v => `<li><strong style="color: #ffffff;">(x${v.quantity}) ${v.product.name}</strong></li>`).join('')}
         </ul>
         <p style="color: #bbbbbb; font-size: 14px; text-align: left;">Podrás ver los QRs de tus regalos en la sección "Mis Productos" de tu cuenta.</p>
       `
@@ -100,13 +99,13 @@ export class OwnerInvitationService {
             <h2 style="color: #ffffff; font-size: 24px; margin-top: 0;">Hola ${invitedUser.name || invitedUser.email.split('@')[0]},</h2>
             <p style="color: #bbbbbb; font-size: 16px;">Has recibido una invitación muy especial de parte de <strong>${owner.name}</strong>.</p>
             
-            <div style="padding: 15px; margin: 20px 0; border: 1px solid #ffd700; background-color: #2b2b1a; color: #ffd700; border-radius: 8px; font-weight: bold; text-transform: uppercase; font-size: 16px;">${mainTicket.specialInstructions}</div>
+            <div style="padding: 15px; margin: 20px 0; border: 1px solid #ffd700; background-color: #2b2b1a; color: #ffd700; border-radius: 8px; font-weight: bold; text-transform: uppercase; font-size: 16px;">${finalTicket.specialInstructions}</div>
 
             <div style="background-color: #2a2a2a; border-radius: 8px; padding: 20px; margin: 30px 0; text-align: left;">
               <h3 style="color: #D6006D; margin-top: 0; border-bottom: 1px solid #444; padding-bottom: 10px;">Tu Invitación</h3>
               <p style="margin: 10px 0;"><strong style="color: #ffffff;">Evento:</strong> ${upcomingEvent.title}</p>
-              <p style="margin: 10px 0;"><strong style="color: #ffffff;">Válida para:</strong> ${mainTicket.quantity} personas</p>
-              ${mainTicket.isVipAccess ? `<p style="margin: 10px 0;"><strong style="color: #ffffff;">Acceso:</strong> <span style="color: #ffd700; font-weight: bold;">VIP</span></p>` : ''}
+              <p style="margin: 10px 0;"><strong style="color: #ffffff;">Válida para:</strong> ${finalTicket.quantity} personas</p>
+              ${finalTicket.isVipAccess ? `<p style="margin: 10px 0;"><strong style="color: #ffffff;">Acceso:</strong> <span style="color: #ffd700; font-weight: bold;">VIP</span></p>` : ''}
             </div>
 
             ${giftsHtml}
@@ -125,8 +124,6 @@ export class OwnerInvitationService {
     this.logger.log(`Invitación para ${email} creada y email enviado exitosamente.`);
     return {
       message: `Invitación especial enviada a ${email}.`,
-      mainTicket,
-      giftedVouchers,
     };
   }
 }

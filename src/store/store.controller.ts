@@ -1,3 +1,4 @@
+// src/store/store.controller.ts
 import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, HttpCode, HttpStatus, Request } from '@nestjs/common';
 import { StoreService } from './store.service';
 import { CreateProductDto } from './dto/create-product.dto';

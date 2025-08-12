@@ -1,11 +1,10 @@
 import { Type } from 'class-transformer';
 import { IsEmail, IsNotEmpty, IsInt, Min, IsBoolean, IsArray, ValidateNested, IsUUID, Max } from 'class-validator';
 
-// Un DTO interno para validar cada objeto en la lista de productos regalados
 class GiftedProductDto {
   @IsUUID()
   @IsNotEmpty()
-  tierId: string;
+  productId: string; // <-- CORRECCIÓN: Renombrado de 'tierId' a 'productId'
 
   @IsInt()
   @Min(1)
@@ -19,14 +18,14 @@ export class CreateInvitationDto {
 
   @IsInt({ message: 'La cantidad de invitados debe ser un número.' })
   @Min(0, { message: 'La cantidad de invitados no puede ser negativa.' })
-  @Max(10, { message: 'El máximo de invitados es 10.' }) // Límite de la mesa
+  @Max(10, { message: 'El máximo de invitados es 10.' })
   guestCount: number;
 
   @IsBoolean()
   isVipAccess: boolean;
 
   @IsArray()
-  @ValidateNested({ each: true }) // Valida cada objeto del array
-  @Type(() => GiftedProductDto) // Especifica el tipo de objeto anidado
+  @ValidateNested({ each: true })
+  @Type(() => GiftedProductDto)
   giftedProducts: GiftedProductDto[];
 }
