@@ -1,3 +1,4 @@
+// src/ticket-tiers/ticket-tier.entity.ts
 import {
   Entity,
   PrimaryGeneratedColumn,

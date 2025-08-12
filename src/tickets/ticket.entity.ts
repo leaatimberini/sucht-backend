@@ -1,3 +1,4 @@
+// src/tickets/ticket.entity.ts
 import {
   Entity,
   PrimaryGeneratedColumn,
@@ -46,9 +47,6 @@ export class Ticket {
   })
   status: TicketStatus;
   
-  /**
-   * NUEVA COLUMNA: Indica el origen del ticket (ej. 'BIRTHDAY', 'RRPP', 'PURCHASE').
-   */
   @Column({ type: 'varchar', nullable: true })
   origin: string | null;
 
@@ -63,6 +61,24 @@ export class Ticket {
   
   @Column({ type: 'varchar', nullable: true, unique: true })
   paymentId: string | null;
+
+  // --- NUEVOS CAMPOS PARA INVITACIONES ESPECIALES ---
+
+  /**
+   * Si es 'true', este ticket otorga acceso al sector VIP.
+   * El verificador verá una alerta especial.
+   */
+  @Column({ type: 'boolean', default: false })
+  isVipAccess: boolean;
+
+  /**
+   * Instrucciones especiales para el personal de puerta.
+   * Ej: "INGRESO SIN FILA".
+   */
+  @Column({ type: 'varchar', nullable: true })
+  specialInstructions: string | null;
+
+  // --- FIN DE NUEVOS CAMPOS ---
 
   @Column({ type: 'timestamp', nullable: true })
   confirmedAt: Date | null;

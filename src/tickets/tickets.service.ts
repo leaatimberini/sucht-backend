@@ -38,6 +38,8 @@ export class TicketsService {
     amountPaid: number,
     paymentId: string | null,
     origin: string | null = null,
+    isVipAccess: boolean = false,
+    specialInstructions: string | null = null
   ): Promise<Ticket> {
     this.logger.log(`[createTicket] Creando ticket para: ${user.email} | Origen: ${origin} | RRPP: ${promoter ? promoter.username : 'N/A'}`);
     const { eventId, ticketTierId, quantity } = data;
@@ -66,10 +68,15 @@ export class TicketsService {
       status,
       paymentId,
       origin,
+      isVipAccess,
+      specialInstructions,
     });
     
-    tier.quantity -= quantity;
-    await this.ticketTiersRepository.save(tier);
+    // Solo descontar del stock si no es una invitación de dueño
+    if (origin !== 'OWNER_INVITATION') {
+        tier.quantity -= quantity;
+        await this.ticketTiersRepository.save(tier);
+    }
 
     const savedTicket = await this.ticketsRepository.save(newTicket);
     this.logger.log(`[createTicket] Ticket ${savedTicket.id} guardado en DB.`);
@@ -82,14 +89,18 @@ export class TicketsService {
           </div>
           <div style="padding: 30px;">
             <h2 style="color: #ffffff; font-size: 24px; margin-top: 0;">Hola ${user.name || user.email.split('@')[0]},</h2>
-            <p style="color: #bbbbbb; font-size: 16px;">¡Tu entrada está confirmada! Prepárate para una noche increíble.</p>
+            <p style="color: #bbbbbb; font-size: 16px;">${origin === 'OWNER_INVITATION' ? 'Has recibido una invitación especial.' : (origin === 'BIRTHDAY' ? '¡Feliz cumpleaños! Aquí tienes tu beneficio.' : '¡Tu entrada está confirmada!')}</p>
+            
+            ${specialInstructions ? `<div style="padding: 15px; margin: 20px 0; border: 1px solid #ffd700; background-color: #2b2b1a; color: #ffd700; border-radius: 8px; font-weight: bold; text-transform: uppercase; font-size: 16px;">${specialInstructions}</div>` : ''}
+
             <div style="background-color: #2a2a2a; border-radius: 8px; padding: 20px; margin: 30px 0; text-align: left;">
               <h3 style="color: #D6006D; margin-top: 0; border-bottom: 1px solid #444; padding-bottom: 10px;">Detalles del Evento</h3>
               <p style="margin: 10px 0;"><strong style="color: #ffffff;">Evento:</strong> ${event.title}</p>
               <p style="margin: 10px 0;"><strong style="color: #ffffff;">Entrada:</strong> ${tier.name} (x${quantity})</p>
+              ${isVipAccess ? `<p style="margin: 10px 0;"><strong style="color: #ffffff;">Acceso:</strong> <span style="color: #ffd700; font-weight: bold;">VIP</span></p>` : ''}
               <p style="margin: 10px 0;"><strong style="color: #ffffff;">Fecha:</strong> ${new Date(event.startDate).toLocaleDateString('es-AR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
             </div>
-            ${tier.productType === ProductType.VIP_TABLE ? `<p style="background-color: #332b00; color: #ffc107; padding: 15px; border-radius: 8px; font-size: 14px;"><strong>Atención Mesa VIP:</strong> Por favor, <a href="https://wa.me/5491152738137?text=Hola!%20Hice%20una%20reserva%20de%20mesa%20VIP%20desde%20sucht.com.ar" target="_blank" style="color: #25D366;">contáctanos por WhatsApp</a> para finalizar los detalles de tu reserva.</p>` : ''}
+            
             <a href="${this.configurationService.get('FRONTEND_URL')}/mi-cuenta" target="_blank" style="display: inline-block; background-color: #D6006D; color: #ffffff; padding: 15px 30px; margin-top: 20px; text-decoration: none; border-radius: 8px; font-weight: bold;">VER MIS ENTRADAS</a>
           </div>
           <div style="padding: 20px; font-size: 12px; color: #777777; background-color: #000000;">
@@ -342,7 +353,7 @@ export class TicketsService {
       this.logger.log(`[CronJob] ❌ Ticket ${ticket.id} invalidado por falta de confirmación.`);
     }
   }
-  // Añade este nuevo método dentro de la clase TicketsService para buscar tickets de cumpleaños
+  
   async findBirthdayTicketForUser(userId: string, eventId: string): Promise<Ticket | null> {
     return this.ticketsRepository.findOne({
       where: {
