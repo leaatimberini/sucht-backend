@@ -1,5 +1,3 @@
-// backend/src/events/events.service.ts
-
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -14,7 +12,6 @@ export class EventsService {
     private eventsRepository: Repository<Event>,
   ) {}
 
-  // --- LÓGICA DE CREACIÓN CORREGIDA ---
   async create(createEventDto: CreateEventDto, flyerImageUrl?: string): Promise<Event> {
     const { startDate, endDate, ...restOfDto } = createEventDto;
     const eventData: Partial<Event> = {
@@ -36,7 +33,6 @@ export class EventsService {
     if (startDate) updatePayload.startDate = new Date(startDate);
     if (endDate) updatePayload.endDate = new Date(endDate);
     
-    // CORRECCIÓN: Manejamos la flyerImageUrl
     if (flyerImageUrl !== undefined) {
       updatePayload.flyerImageUrl = flyerImageUrl;
     }
@@ -69,6 +65,7 @@ export class EventsService {
     event.confirmationSentAt = new Date();
     return this.eventsRepository.save(event);
   }
+
   async findAllForSelect(): Promise<{ id: string; title: string }[]> {
     return this.eventsRepository.find({
       select: ['id', 'title'],
@@ -78,10 +75,9 @@ export class EventsService {
     });
   }
 
-  // --- NUEVO MÉTODO AÑADIDO ---
   /**
    * Encuentra el próximo evento activo cuya fecha de inicio sea en el futuro.
-   * Esencial para el módulo de cumpleaños.
+   * Usado por varios módulos para determinar el contexto del próximo evento.
    */
   async findNextUpcomingEvent(): Promise<Event | null> {
     return this.eventsRepository
