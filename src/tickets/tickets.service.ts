@@ -30,6 +30,10 @@ export class TicketsService {
     private pointTransactionsService: PointTransactionsService,
     private configurationService: ConfigurationService,
   ) {}
+
+  /**
+   * MÉTODO INTERNO: Crea un ticket en la base de datos SIN enviar un email.
+   */
   public async createTicketInternal(
     user: User, 
     data: { eventId: string, ticketTierId: string, quantity: number },
@@ -69,6 +73,10 @@ export class TicketsService {
     this.logger.log(`[createTicketInternal] Ticket ${savedTicket.id} guardado en DB.`);
     return savedTicket;
   }
+  
+  /**
+   * MÉTODO PÚBLICO: Crea un ticket y envía el email de confirmación.
+   */
   public async createTicketAndSendEmail(
     user: User, 
     data: { eventId: string, ticketTierId: string, quantity: number },
@@ -80,50 +88,31 @@ export class TicketsService {
     specialInstructions: string | null = null
   ): Promise<Ticket> {
     
-    this.logger.log(`[createTicket] Creando ticket para: ${user.email} | Origen: ${origin} | RRPP: ${promoter ? promoter.username : 'N/A'}`);
-    const { eventId, ticketTierId, quantity } = data;
-    const event = await this.eventsService.findOne(eventId);
-    if (!event) throw new NotFoundException('Evento no encontrado.');
-    if (new Date() > new Date(event.endDate)) {
-      throw new BadRequestException('Este evento ya ha finalizado.');
-    }
-    const tier = await this.ticketTiersRepository.findOneBy({ id: ticketTierId });
-    if (!tier) throw new NotFoundException('Tipo de entrada no encontrado.');
-    if (tier.quantity < quantity) throw new BadRequestException(`No quedan suficientes. Disponibles: ${tier.quantity}.`);
-    
-    let status = TicketStatus.VALID;
-    const totalPrice = tier.price * quantity;
-    if (amountPaid > 0 && amountPaid < totalPrice) {
-      status = TicketStatus.PARTIALLY_PAID;
-    }
+    const savedTicket = await this.createTicketInternal(user, data, promoter, amountPaid, paymentId, origin, isVipAccess, specialInstructions);
 
-    const newTicket = this.ticketsRepository.create({ 
-      user, 
-      event, 
-      tier, 
-      quantity, 
-      promoter,
-      amountPaid,
-      status,
-      paymentId,
-      origin,
-      isVipAccess,
-      specialInstructions,
-    });
+    const fullTicket = await this.findOne(savedTicket.id);
+    const { event, tier, quantity } = fullTicket;
     
-    tier.quantity -= quantity;
-    await this.ticketTiersRepository.save(tier);
+    const frontendUrl = await this.configurationService.get('FRONTEND_URL') || 'https://sucht.com.ar';
+    const senderName = promoter?.name || 'SUCHT';
+    
+    let actionUrl = `${frontendUrl}/mi-cuenta`;
+    let buttonText = 'VER EN MI CUENTA';
 
-    const savedTicket = await this.ticketsRepository.save(newTicket);
-    this.logger.log(`[createTicket] Ticket ${savedTicket.id} guardado en DB.`);
+    if (user.invitationToken) {
+      actionUrl = `${frontendUrl}/auth/complete-invitation?token=${user.invitationToken}`;
+      buttonText = 'ACTIVAR CUENTA Y VER INVITACIÓN';
+    }
 
     const emailHtml = `
       <div style="background-color: #121212; color: #ffffff; font-family: Arial, sans-serif; padding: 40px; text-align: center;">
         <div style="max-width: 600px; margin: auto; background-color: #1e1e1e; border-radius: 12px; overflow: hidden; border: 1px solid #333;">
-          {/* ... (header del email sin cambios) ... */}
+          <div style="padding: 24px; background-color: #000000;">
+            <h1 style="color: #ffffff; font-size: 28px; margin: 0;">SUCHT</h1>
+          </div>
           <div style="padding: 30px;">
             <h2 style="color: #ffffff; font-size: 24px; margin-top: 0;">Hola ${user.name || user.email.split('@')[0]},</h2>
-            <p style="color: #bbbbbb; font-size: 16px;">${origin === 'OWNER_INVITATION' ? `Has recibido una invitación muy especial de parte de <strong>${promoter?.name || 'SUCHT'}</strong>.` : (origin === 'BIRTHDAY' ? '¡Feliz cumpleaños! Aquí tienes tu beneficio.' : '¡Tu entrada está confirmada!')}</p>
+            <p style="color: #bbbbbb; font-size: 16px;">${origin === 'OWNER_INVITATION' ? `Has recibido una invitación muy especial de parte de <strong>${senderName}</strong>.` : (origin === 'BIRTHDAY' ? '¡Feliz cumpleaños! Aquí tienes tu beneficio.' : '¡Tu entrada está confirmada!')}</p>
             
             ${specialInstructions ? `<div style="padding: 15px; margin: 20px 0; border: 1px solid #ffd700; background-color: #2b2b1a; color: #ffd700; border-radius: 8px; font-weight: bold; text-transform: uppercase; font-size: 16px;">${specialInstructions}</div>` : ''}
 
@@ -131,14 +120,11 @@ export class TicketsService {
               <h3 style="color: #D6006D; margin-top: 0; border-bottom: 1px solid #444; padding-bottom: 10px;">Detalles del Evento</h3>
               <p style="margin: 10px 0;"><strong style="color: #ffffff;">Evento:</strong> ${event.title}</p>
               <p style="margin: 10px 0;"><strong style="color: #ffffff;">Entrada:</strong> ${tier.name} (x${quantity})</p>
-              
-              {/* --- CORRECCIÓN CLAVE --- */}
               ${isVipAccess ? `<p style="margin: 10px 0;"><strong style="color: #ffffff;">Acceso:</strong> <span style="color: #ffd700; font-weight: bold;">VIP</span></p>` : ''}
-              
               <p style="margin: 10px 0;"><strong style="color: #ffffff;">Fecha:</strong> ${new Date(event.startDate).toLocaleDateString('es-AR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
             </div>
             
-            <a href="${await this.configurationService.get('FRONTEND_URL')}/mi-cuenta" target="_blank" style="display: inline-block; background-color: #D6006D; color: #ffffff; padding: 15px 30px; margin-top: 20px; text-decoration: none; border-radius: 8px; font-weight: bold;">VER MIS ENTRADAS</a>
+            <a href="${actionUrl}" target="_blank" style="display: inline-block; background-color: #D6006D; color: #ffffff; padding: 15px 30px; margin-top: 20px; text-decoration: none; border-radius: 8px; font-weight: bold;">${buttonText}</a>
           </div>
           <div style="padding: 20px; font-size: 12px; color: #777777; background-color: #000000;">
             <p style="margin: 0;">Gracias por ser parte de la comunidad SUCHT.</p>
@@ -148,110 +134,54 @@ export class TicketsService {
       </div>
     `;
 
-    await this.mailService.sendMail(user.email, '🎟️ ¡Tu entrada para SUCHT está lista!', emailHtml);
+    const subject = origin === 'OWNER_INVITATION' ? `¡${senderName} te ha invitado a SUCHT!` : '🎟️ ¡Tu entrada para SUCHT está lista!';
+    await this.mailService.sendMail(user.email, subject, emailHtml);
 
     return savedTicket;
   }
 
   async createByRRPP(createTicketDto: CreateTicketDto, promoter: User): Promise<Ticket[]> {
-    this.logger.log(`[createByRRPP] RRPP ${promoter.email} generando ${createTicketDto.quantity} ticket(s) para ${createTicketDto.userEmail}`);
     const { userEmail, eventId, ticketTierId, quantity = 1 } = createTicketDto;
     const user = await this.usersService.findOrCreateByEmail(userEmail);
-    
     const tickets: Ticket[] = [];
     for (let i = 0; i < quantity; i++) {
+      // Pasamos el promotor a la función de creación
       const ticket = await this.createTicketAndSendEmail(user, { eventId, ticketTierId, quantity: 1 }, promoter, 0, null, 'RRPP');
       tickets.push(ticket);
     }
-    
-    const event = await this.eventsService.findOne(eventId);
-    const emailHtml = `
-      <div style="background-color: #121212; color: #ffffff; font-family: Arial, sans-serif; padding: 40px; text-align: center;">
-        <div style="max-width: 600px; margin: auto; background-color: #1e1e1e; border-radius: 12px; overflow: hidden; border: 1px solid #333;">
-          <div style="padding: 24px; background-color: #000000;">
-            <h1 style="color: #ffffff; font-size: 28px; margin: 0;">SUCHT</h1>
-          </div>
-          <div style="padding: 30px;">
-            <h2 style="color: #ffffff; font-size: 24px; margin-top: 0;">Hola ${user.name || user.email.split('@')[0]},</h2>
-            <p style="color: #bbbbbb; font-size: 16px;">¡Estás invitado! <strong>${promoter.name}</strong> te ha enviado ${quantity} entrada(s) para el próximo evento.</p>
-            <div style="background-color: #2a2a2a; border-radius: 8px; padding: 20px; margin: 30px 0; text-align: left;">
-              <h3 style="color: #D6006D; margin-top: 0; border-bottom: 1px solid #444; padding-bottom: 10px;">Detalles del Evento</h3>
-              <p style="margin: 10px 0;"><strong style="color: #ffffff;">Evento:</strong> ${event.title}</p>
-            </div>
-            <a href="${await this.configurationService.get('FRONTEND_URL')}/mi-cuenta" target="_blank" style="display: inline-block; background-color: #D6006D; color: #ffffff; padding: 15px 30px; margin-top: 20px; text-decoration: none; border-radius: 8px; font-weight: bold;">ACEPTAR Y VER ENTRADAS</a>
-          </div>
-          <div style="padding: 20px; font-size: 12px; color: #777777; background-color: #000000;">
-            <p style="margin: 0;">Nos vemos en la fiesta.</p>
-          </div>
-        </div>
-      </div>
-    `;
-
-    await this.mailService.sendMail(user.email, `🎟️ ¡${promoter.name} te invitó a SUCHT!`, emailHtml);
-
     return tickets;
   }
 
-  async acquireForClient(
-    user: User, 
-    acquireTicketDto: AcquireTicketDto, 
-    promoterUsername: string | null,
-    amountPaid: number,
-    paymentId: string | null,
-  ): Promise<Ticket> {
-    this.logger.log(`[acquireForClient] Adquiriendo ticket para ${user.email} con RRPP username: ${promoterUsername || 'N/A'}`);
+  async acquireForClient( user: User, acquireTicketDto: AcquireTicketDto, promoterUsername: string | null, amountPaid: number, paymentId: string | null ): Promise<Ticket> {
     let promoter: User | null = null;
     if (promoterUsername) {
       promoter = await this.usersService.findOneByUsername(promoterUsername); 
-      this.logger.log(`[acquireForClient] Búsqueda de RRPP "${promoterUsername}" resultó en: ${promoter ? promoter.email : 'No encontrado'}`);
     }
     return this.createTicketAndSendEmail(user, acquireTicketDto, promoter, amountPaid, paymentId, 'PURCHASE');
   }
   
   async getFullHistory(filters: DashboardQueryDto): Promise<Ticket[]> {
     const { eventId, startDate, endDate } = filters;
-    const queryOptions: any = {
-      relations: ['user', 'event', 'tier', 'promoter'],
-      order: { createdAt: 'DESC' },
-      where: {},
-    };
-
+    const queryOptions: any = { relations: ['user', 'event', 'tier', 'promoter'], order: { createdAt: 'DESC' }, where: {},};
     if (eventId) queryOptions.where.event = { id: eventId };
     if (startDate && endDate) queryOptions.where.createdAt = Between(new Date(startDate), new Date(endDate));
-    
     return this.ticketsRepository.find(queryOptions);
   }
 
   async getScanHistory(eventId: string): Promise<Ticket[]> {
-    return this.ticketsRepository.find({
-      where: { event: { id: eventId }, validatedAt: Not(IsNull()) },
-      relations: ['user', 'tier'],
-      order: { validatedAt: 'DESC' },
-      take: 50,
-    });
+    return this.ticketsRepository.find({ where: { event: { id: eventId }, validatedAt: Not(IsNull()) }, relations: ['user', 'tier'], order: { validatedAt: 'DESC' }, take: 50, });
   }
 
   async getPremiumProducts(eventId: string): Promise<Ticket[]> {
-    return this.ticketsRepository.find({
-      where: { event: { id: eventId }, tier: { productType: In([ProductType.VIP_TABLE, ProductType.VOUCHER]) } },
-      relations: ['user', 'tier'],
-      order: { createdAt: 'ASC' },
-    });
+    return this.ticketsRepository.find({ where: { event: { id: eventId }, tier: { productType: In([ProductType.VIP_TABLE, ProductType.VOUCHER]) } }, relations: ['user', 'tier'], order: { createdAt: 'ASC' }, });
   }
 
   async findTicketsByUser(userId: string): Promise<Ticket[]> {
-    return this.ticketsRepository.find({
-      where: { user: { id: userId } },
-      relations: ['event', 'tier', 'promoter'],
-      order: { createdAt: 'DESC' },
-    });
+    return this.ticketsRepository.find({ where: { user: { id: userId } }, relations: ['event', 'tier', 'promoter'], order: { createdAt: 'DESC' }, });
   }
 
   async findOne(ticketId: string): Promise<Ticket> {
-    const ticket = await this.ticketsRepository.findOne({ 
-      where: { id: ticketId },
-      relations: ['user', 'event', 'tier', 'promoter'],
-    });
+    const ticket = await this.ticketsRepository.findOne({  where: { id: ticketId }, relations: ['user', 'event', 'tier', 'promoter'], });
     if (!ticket) throw new NotFoundException('Entrada no válida o no encontrada.');
     return ticket;
   }
@@ -262,9 +192,7 @@ export class TicketsService {
 
   async confirmAttendance(ticketId: string, userId: string): Promise<Ticket> {
     const ticket = await this.ticketsRepository.findOne({ where: { id: ticketId, user: { id: userId } }, relations: ['event'] });
-    if (!ticket) {
-      throw new NotFoundException('Entrada no encontrada o no te pertenece.');
-    }
+    if (!ticket) { throw new NotFoundException('Entrada no encontrada o no te pertenece.'); }
     ticket.confirmedAt = new Date();
     return this.ticketsRepository.save(ticket);
   }
@@ -272,57 +200,27 @@ export class TicketsService {
   async deleteTicket(id: string): Promise<boolean> {
     const ticketToDelete = await this.ticketsRepository.findOne({ where: { id }, relations: ['tier'] });
     if (!ticketToDelete) return false;
-
     const tier = ticketToDelete.tier;
     if (tier) {
       tier.quantity += ticketToDelete.quantity;
       await this.ticketTiersRepository.save(tier);
     }
-    
     const result: DeleteResult = await this.ticketsRepository.delete(id);
     return (result.affected ?? 0) > 0;
   }
   
   async redeemTicket(id: string, quantityToRedeem: number): Promise<any> {
-    this.logger.log(`[redeemTicket] Iniciando canje para ticket ID: ${id} | Cantidad: ${quantityToRedeem}`);
     const ticket = await this.ticketsRepository.findOne({ where: { id }, relations: ['user', 'event', 'tier', 'promoter'] });
-
-    if (!ticket) {
-      this.logger.error(`[redeemTicket] FALLO: No se encontró el ticket con ID ${id}.`);
-      throw new NotFoundException('Ticket not found.');
-    }
-    this.logger.log(`[redeemTicket] Ticket encontrado para el evento: ${ticket.event.title}`);
+    if (!ticket) { throw new NotFoundException('Ticket not found.'); }
     const shouldAwardPoints = ticket.redeemedCount === 0;
-
-    if (new Date() > new Date(ticket.event.endDate)) {
-      this.logger.warn(`[redeemTicket] FALLO: El evento ya finalizó.`);
-      throw new BadRequestException('Event has already finished.');
-    }
-
+    if (new Date() > new Date(ticket.event.endDate)) { throw new BadRequestException('Event has already finished.'); }
     const remaining = ticket.quantity - (ticket.redeemedCount || 0);
-    this.logger.log(`[redeemTicket] Ticket válido. Entradas totales: ${ticket.quantity}, Ya canjeadas: ${ticket.redeemedCount}, Restantes: ${remaining}`);
-
-    if (remaining === 0) {
-      this.logger.warn(`[redeemTicket] FALLO: El ticket ya fue canjeado por completo.`);
-      throw new BadRequestException('Ticket has been fully redeemed.');
-    }
-
-    if (quantityToRedeem > remaining) {
-      this.logger.warn(`[redeemTicket] FALLO: Se intentan canjear ${quantityToRedeem} pero solo quedan ${remaining}.`);
-      throw new BadRequestException(`Only ${remaining} entries remaining on this ticket.`);
-    }
-
+    if (remaining === 0) { throw new BadRequestException('Ticket has been fully redeemed.'); }
+    if (quantityToRedeem > remaining) { throw new BadRequestException(`Only ${remaining} entries remaining on this ticket.`); }
     ticket.redeemedCount += quantityToRedeem;
-    if (ticket.redeemedCount >= ticket.quantity) {
-      ticket.status = TicketStatus.REDEEMED;
-    } else {
-      ticket.status = TicketStatus.PARTIALLY_USED;
-    }
+    ticket.status = ticket.redeemedCount >= ticket.quantity ? TicketStatus.REDEEMED : TicketStatus.PARTIALLY_USED;
     ticket.validatedAt = new Date();
-    
-    this.logger.log('[redeemTicket] VALIDACIÓN OK. Guardando nuevos datos en la DB:', { status: ticket.status, redeemedCount: ticket.redeemedCount });
     await this.ticketsRepository.save(ticket);
-    this.logger.log(`[redeemTicket] DATOS GUARDADOS EXITOSAMENTE para ticket ${id}.`);
 
     if (shouldAwardPoints) {
       try {
