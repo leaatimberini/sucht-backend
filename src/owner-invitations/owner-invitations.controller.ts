@@ -1,4 +1,4 @@
-import { Controller, Post, Body, UseGuards, Req } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Req, Get } from '@nestjs/common';
 import { OwnerInvitationService } from './owner-invitations.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -8,7 +8,7 @@ import { CreateInvitationDto } from './dto/create-invitation.dto';
 
 @Controller('owner/invitations')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.OWNER, UserRole.ADMIN) // Solo Owners y Admins pueden usar este módulo
+@Roles(UserRole.OWNER, UserRole.ADMIN) // Protegemos todo el controlador
 export class OwnerInvitationController {
   constructor(private readonly ownerInvitationService: OwnerInvitationService) {}
 
@@ -20,8 +20,15 @@ export class OwnerInvitationController {
     @Req() req: { user: User },
     @Body() createInvitationDto: CreateInvitationDto,
   ) {
-    // El 'owner' es el usuario autenticado que realiza la petición
     const owner = req.user;
     return this.ownerInvitationService.createInvitation(owner, createInvitationDto);
+  }
+
+  /**
+   * NUEVO ENDPOINT: Obtiene el historial de invitaciones enviadas por el Dueño logueado.
+   */
+  @Get('my-history')
+  getMySentInvitations(@Req() req: { user: User }) {
+    return this.ownerInvitationService.getMySentInvitations(req.user.id);
   }
 }

@@ -10,12 +10,18 @@ import { ConfigurationService } from '../configuration/configuration.service';
 import { Ticket } from '../tickets/ticket.entity';
 import { StoreService } from '../store/store.service';
 import { ProductPurchase } from '../store/product-purchase.entity';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository, In } from 'typeorm';
 
 @Injectable()
 export class OwnerInvitationService {
   private readonly logger = new Logger(OwnerInvitationService.name);
 
   constructor(
+    @InjectRepository(Ticket)
+    private readonly ticketsRepository: Repository<Ticket>,
+    @InjectRepository(ProductPurchase)
+    private readonly productPurchasesRepository: Repository<ProductPurchase>,
     private readonly usersService: UsersService,
     private readonly eventsService: EventsService,
     private readonly ticketTiersService: TicketTiersService,
@@ -29,7 +35,6 @@ export class OwnerInvitationService {
     this.logger.log(`Dueño ${owner.email} creando invitación para ${dto.email}`);
     const { email, guestCount, isVipAccess, giftedProducts } = dto;
 
-    // 1. Cargamos los datos completos del Dueño para tener su nombre
     const fullOwner = await this.usersService.findOneById(owner.id);
     if (!fullOwner) {
       throw new NotFoundException('No se encontraron los datos del Dueño.');
@@ -48,7 +53,7 @@ export class OwnerInvitationService {
     const mainTicket = await this.ticketsService.createTicketInternal(
       invitedUser,
       { eventId: upcomingEvent.id, ticketTierId: entryTier.id, quantity: guestCount + 1 },
-      fullOwner, // Asignamos al Dueño como promotor para que su nombre aparezca
+      fullOwner,
       0, null, 'OWNER_INVITATION', isVipAccess, 'INGRESO SIN FILA'
     );
 
@@ -67,10 +72,6 @@ export class OwnerInvitationService {
     const finalVouchers = await Promise.all(giftedPurchases.map(p => this.storeService.findPurchaseById(p.id)));
 
     const frontendUrl = await this.configurationService.get('FRONTEND_URL') || 'https://sucht.com.ar';
-    const qrBoxStyle = "background-color: white; padding: 15px; border-radius: 8px; margin: 10px auto; max-width: 180px;";
-    const qrApiUrl = "https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=";
-    
-    // --- LÓGICA CORREGIDA PARA EL ENLACE DEL EMAIL ---
     let actionUrl = `${frontendUrl}/mi-cuenta`;
     let buttonText = 'VER INVITACIÓN EN MI CUENTA';
 
@@ -79,8 +80,33 @@ export class OwnerInvitationService {
       buttonText = 'ACTIVAR CUENTA Y VER INVITACIÓN';
     }
     
-    const mainTicketQrHtml = `...`; // (código del QR de ingreso)
-    const giftsQrHtml = `...`; // (código de los QRs de regalos)
+    const qrBoxStyle = "background-color: white; padding: 15px; border-radius: 8px; margin: 10px auto; max-width: 180px;";
+    const qrApiUrl = "https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=";
+    
+    const mainTicketQrHtml = `
+      <div style="margin-bottom: 20px; border: 2px solid #ffd700; border-radius: 12px; padding: 20px; background-color: #2a2a2a;">
+        <p style="color: #ffd700; margin:0; font-size: 12px; text-transform: uppercase;">Invitado/a Especial de ${fullOwner.name}</p>
+        <h3 style="color: #ffffff; margin: 5px 0 15px 0; font-size: 22px;">QR de Ingreso</h3>
+        <div style="${qrBoxStyle}"><img src="${qrApiUrl}${finalTicket.id}" alt="QR de Ingreso" /></div>
+        <p style="color: #bbbbbb; margin-top: 15px; font-size: 16px;">Válido para ${finalTicket.quantity} personas</p>
+        ${finalTicket.isVipAccess ? `<p style="color: #ffd700; font-weight: bold; margin-top: 10px;">ACCESO VIP</p>` : ''}
+        <p style="color: #ffd700; font-weight: bold; margin-top: 5px;">${finalTicket.specialInstructions}</p>
+      </div>
+    `;
+
+    const giftsQrHtml = finalVouchers.length > 0
+      ? `
+        <h2 style="color: #ffffff; font-size: 24px; margin-top: 40px;">Tus Regalos</h2>
+        ${finalVouchers.map(v => `
+          <div style="margin-bottom: 20px; border: 1px solid #D6006D; border-radius: 12px; padding: 20px; background-color: #2a2a2a;">
+            <p style="color: #D6006D; margin:0; font-size: 12px; text-transform: uppercase;">Regalo de ${fullOwner.name}</p>
+            <h3 style="color: #ffffff; margin: 5px 0 15px 0; font-size: 22px;">${v.product.name}</h3>
+            <div style="${qrBoxStyle}"><img src="${qrApiUrl}${v.id}" alt="QR de Regalo" /></div>
+            <p style="color: #bbbbbb; margin-top: 15px; font-size: 14px;">Presenta este QR en la barra para canjear.</p>
+          </div>
+        `).join('')}
+      `
+      : '';
 
     const emailHtml = `
       <div style="background-color: #121212; color: #ffffff; font-family: Arial, sans-serif; padding: 40px; text-align: center;">
@@ -108,5 +134,61 @@ export class OwnerInvitationService {
     
     this.logger.log(`Invitación para ${email} creada y email enviado exitosamente.`);
     return { message: `Invitación especial enviada a ${email}.` };
+  }
+
+  /**
+   * NUEVO MÉTODO: Obtiene el historial de invitaciones enviadas por un Dueño.
+   */
+  async getMySentInvitations(ownerId: string) {
+    this.logger.log(`Buscando invitaciones enviadas por el Dueño ID: ${ownerId}`);
+
+    const invitationTickets = await this.ticketsRepository.find({
+      where: {
+        promoter: { id: ownerId },
+        origin: 'OWNER_INVITATION',
+      },
+      relations: ['user', 'event', 'tier'],
+      order: { createdAt: 'DESC' },
+    });
+
+    if (invitationTickets.length === 0) {
+      return [];
+    }
+
+    const invitedUserIds = invitationTickets.map(ticket => ticket.user.id);
+    const eventIds = invitationTickets.map(ticket => ticket.event.id);
+
+    const giftedProducts = await this.productPurchasesRepository.find({
+      where: {
+        userId: In(invitedUserIds),
+        eventId: In(eventIds),
+        origin: 'OWNER_GIFT',
+      },
+      relations: ['product'],
+    });
+
+    const consolidatedInvitations = invitationTickets.map(ticket => {
+      const giftsForThisInvitation = giftedProducts.filter(
+        gift => gift.userId === ticket.user.id && gift.eventId === ticket.event.id
+      );
+
+      return {
+        invitedUser: ticket.user,
+        event: ticket.event,
+        ticket: {
+          id: ticket.id,
+          quantity: ticket.quantity,
+          redeemedCount: ticket.redeemedCount,
+          isVipAccess: ticket.isVipAccess,
+          status: ticket.status,
+        },
+        gifts: giftsForThisInvitation.reduce((acc, current) => {
+            acc[current.product.name] = (acc[current.product.name] || 0) + 1;
+            return acc;
+        }, {} as Record<string, number>)
+      };
+    });
+
+    return consolidatedInvitations;
   }
 }
