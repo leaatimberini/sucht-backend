@@ -31,9 +31,6 @@ export class TicketsService {
     private configurationService: ConfigurationService,
   ) {}
 
-  /**
-   * MÉTODO INTERNO: Crea un ticket en la base de datos SIN enviar un email.
-   */
   public async createTicketInternal(
     user: User, 
     data: { eventId: string, ticketTierId: string, quantity: number },
@@ -74,11 +71,8 @@ export class TicketsService {
     return savedTicket;
   }
   
-  /**
-   * MÉTODO PÚBLICO: Crea un ticket y envía el email de confirmación.
-   */
   public async createTicketAndSendEmail(
-    user: User, 
+    user: User, // <--- ESTE es el objeto 'user' que tiene el token
     data: { eventId: string, ticketTierId: string, quantity: number },
     promoter: User | null,
     amountPaid: number,
@@ -94,16 +88,19 @@ export class TicketsService {
     const { event, tier, quantity } = fullTicket;
     
     const frontendUrl = await this.configurationService.get('FRONTEND_URL') || 'https://sucht.com.ar';
-    const senderName = promoter?.name || 'SUCHT';
     
     let actionUrl = `${frontendUrl}/mi-cuenta`;
     let buttonText = 'VER EN MI CUENTA';
 
+    // --- CORRECCIÓN DEFINITIVA ---
+    // Usamos el objeto 'user' original que fue pasado a la función,
+    // que es el único que garantiza tener el invitationToken.
     if (user.invitationToken) {
       actionUrl = `${frontendUrl}/auth/complete-invitation?token=${user.invitationToken}`;
       buttonText = 'ACTIVAR CUENTA Y VER INVITACIÓN';
     }
 
+    const senderName = promoter?.name || 'SUCHT';
     const emailHtml = `
       <div style="background-color: #121212; color: #ffffff; font-family: Arial, sans-serif; padding: 40px; text-align: center;">
         <div style="max-width: 600px; margin: auto; background-color: #1e1e1e; border-radius: 12px; overflow: hidden; border: 1px solid #333;">
@@ -145,7 +142,6 @@ export class TicketsService {
     const user = await this.usersService.findOrCreateByEmail(userEmail);
     const tickets: Ticket[] = [];
     for (let i = 0; i < quantity; i++) {
-      // Pasamos el promotor a la función de creación
       const ticket = await this.createTicketAndSendEmail(user, { eventId, ticketTierId, quantity: 1 }, promoter, 0, null, 'RRPP');
       tickets.push(ticket);
     }
