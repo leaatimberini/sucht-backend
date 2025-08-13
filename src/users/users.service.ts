@@ -1,5 +1,3 @@
-// backend/src/users/users.service.ts
-
 import { ConflictException, Injectable, InternalServerErrorException, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -11,19 +9,18 @@ import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ConfigurationService } from 'src/configuration/configuration.service';
 import { NotificationsService } from 'src/notifications/notifications.service';
 import { startOfWeek, endOfWeek, isWithinInterval } from 'date-fns';
+import { CompleteInvitationDto } from './dto/complete-invitation.dto';
+import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class UsersService {
-  constructor(
-    @InjectRepository(User)
-    private usersRepository: Repository<User>,
-    private readonly configService: ConfigurationService,
-    private readonly notificationsService: NotificationsService,
-  ) {}
+  constructor(
+    @InjectRepository(User)
+    private usersRepository: Repository<User>,
+    private readonly configService: ConfigurationService,
+    private readonly notificationsService: NotificationsService,
+  ) {}
 
-  /**
-   * Calcula el nivel de lealtad y el progreso del usuario de forma dinámica.
-   */
   private async calculateLoyaltyTier(userPoints: number) {
     const silverMin = parseInt(await this.configService.get('loyalty_tier_silver_points') || '1000', 10);
     const goldMin = parseInt(await this.configService.get('loyalty_tier_gold_points') || '5000', 10);
@@ -58,202 +55,210 @@ export class UsersService {
     };
   }
 
-  /**
-   * Determina si la fecha actual está dentro de la semana de cumpleaños del usuario.
-   * La semana se considera de Domingo a Sábado.
-   */
-  private isBirthdayWeek(dateOfBirth: Date | null): boolean {
+  public isBirthdayWeek(dateOfBirth: Date | null): boolean {
     if (!dateOfBirth) return false;
-
     const now = new Date();
     const birthdayThisYear = new Date(dateOfBirth);
     birthdayThisYear.setFullYear(now.getFullYear());
-
-    const startOfBirthdayWeek = startOfWeek(birthdayThisYear, { weekStartsOn: 0 }); // 0 para Domingo
+    const startOfBirthdayWeek = startOfWeek(birthdayThisYear, { weekStartsOn: 0 });
     const endOfBirthdayWeek = endOfWeek(birthdayThisYear, { weekStartsOn: 0 });
-
     return isWithinInterval(now, { start: startOfBirthdayWeek, end: endOfBirthdayWeek });
   }
 
-  async getProfile(userId: string) {
-    const user = await this.findOneById(userId);
-    const isPushSubscribed = await this.notificationsService.isUserSubscribed(userId);
-    const loyaltyInfo = await this.calculateLoyaltyTier(user.points);
-    
-    const { password, invitationToken, mpAccessToken, ...profileData } = user;
-
-    return {
-      ...profileData,
-      isPushSubscribed,
-      isMpLinked: !!user.mpUserId,
+  async getProfile(userId: string) {
+    const user = await this.findOneById(userId);
+    const isPushSubscribed = await this.notificationsService.isUserSubscribed(userId);
+    const loyaltyInfo = await this.calculateLoyaltyTier(user.points);
+    const { password, invitationToken, mpAccessToken, ...profileData } = user;
+    return {
+      ...profileData,
+      isPushSubscribed,
+      isMpLinked: !!user.mpUserId,
       loyalty: loyaltyInfo,
-      isBirthdayWeek: this.isBirthdayWeek(user.dateOfBirth), // Se añade el flag de cumpleaños
-    };
-  }
+      isBirthdayWeek: this.isBirthdayWeek(user.dateOfBirth),
+    };
+  }
 
-  async findOneById(id: string): Promise<User> {
-    const user = await this.usersRepository.findOneBy({ id });
-    if (!user) { throw new NotFoundException(`User with ID "${id}" not found`); }
-    return user;
-  }
+  async findOneById(id: string): Promise<User> {
+    const user = await this.usersRepository.findOneBy({ id });
+    if (!user) { throw new NotFoundException(`User with ID "${id}" not found`); }
+    return user;
+  }
 
-  async findOneByEmail(email: string): Promise<User | null> {
-    return this.usersRepository
-      .createQueryBuilder('user')
-      .where('user.email = :email', { email: email.toLowerCase() })
-      .addSelect('user.password')
-      .getOne();
-  }
-  
-  async findOneByUsername(username: string): Promise<User | null> {
-    return this.usersRepository.findOne({ where: { username } });
-  }
+  async findOneByEmail(email: string): Promise<User | null> {
+    return this.usersRepository
+      .createQueryBuilder('user')
+      .where('user.email = :email', { email: email.toLowerCase() })
+      .addSelect('user.password')
+      .getOne();
+  }
+  
+  async findOneByUsername(username: string): Promise<User | null> {
+    return this.usersRepository.findOne({ where: { username } });
+  }
 
-  async create(registerAuthDto: RegisterAuthDto): Promise<User> {
-    const { email, name, password, dateOfBirth } = registerAuthDto;
-    const lowerCaseEmail = email.toLowerCase();
-    const existingUser = await this.findOneByEmail(lowerCaseEmail);
-    if (existingUser) { throw new ConflictException('Email already registered'); }
-    const newUser = this.usersRepository.create({ email: lowerCaseEmail, name, password, dateOfBirth: new Date(dateOfBirth), roles: [UserRole.CLIENT] });
-    try { return await this.usersRepository.save(newUser); } catch (error) { throw new InternalServerErrorException('Something went wrong, user not created'); }
-  }
+  async create(registerAuthDto: RegisterAuthDto): Promise<User> {
+    const { email, name, password, dateOfBirth } = registerAuthDto;
+    const lowerCaseEmail = email.toLowerCase();
+    const existingUser = await this.findOneByEmail(lowerCaseEmail);
+    if (existingUser) { throw new ConflictException('Email already registered'); }
+    const newUser = this.usersRepository.create({ email: lowerCaseEmail, name, password, dateOfBirth: new Date(dateOfBirth), roles: [UserRole.CLIENT] });
+    try { return await this.usersRepository.save(newUser); } catch (error) { throw new InternalServerErrorException('Something went wrong, user not created'); }
+  }
 
-  async updateProfile(userId: string, updateProfileDto: UpdateProfileDto): Promise<User> {
-    const userToUpdate = await this.findOneById(userId);
-
-    // ===== REGLA DE NEGOCIO: BLOQUEO DE FECHA DE NACIMIENTO =====
+  async updateProfile(userId: string, updateProfileDto: UpdateProfileDto): Promise<User> {
+    const userToUpdate = await this.findOneById(userId);
     if (userToUpdate.dateOfBirth && updateProfileDto.dateOfBirth && formatDateToInput(userToUpdate.dateOfBirth) !== formatDateToInput(updateProfileDto.dateOfBirth)) {
       throw new BadRequestException('La fecha de nacimiento no se puede modificar una vez establecida.');
     }
-    
-    const { username, ...restOfDto } = updateProfileDto;
+    const { username, ...restOfDto } = updateProfileDto;
+    if (username && username !== userToUpdate.username) {
+      const existing = await this.findOneByUsername(username);
+      if (existing && existing.id !== userId) {
+        throw new ConflictException('El nombre de usuario ya está en uso.');
+      }
+    }
+    Object.assign(userToUpdate, updateProfileDto);
+    return this.usersRepository.save(userToUpdate);
+  }
 
-    if (username && username !== userToUpdate.username) {
-      const existing = await this.findOneByUsername(username);
-      if (existing && existing.id !== userId) {
-        throw new ConflictException('El nombre de usuario ya está en uso.');
-      }
-    }
-    
-    Object.assign(userToUpdate, updateProfileDto);
-    return this.usersRepository.save(userToUpdate);
-  }
+  async findOrCreateByEmail(email: string): Promise<User> {
+    const lowerCaseEmail = email.toLowerCase();
+    let user = await this.findOneByEmail(lowerCaseEmail);
+    if (user) { return user; }
+    const nameParts = lowerCaseEmail.split('@');
+    const tempName = nameParts[0];
+    const invitationToken = randomBytes(32).toString('hex');
+    const newUser = this.usersRepository.create({
+      email: lowerCaseEmail,
+      name: tempName,
+      roles: [UserRole.CLIENT],
+      invitationToken,
+    });
+    console.log(`INVITATION TOKEN for new invited user ${lowerCaseEmail}: ${invitationToken}`);
+    return this.usersRepository.save(newUser);
+  }
 
-  async findOrCreateByEmail(email: string): Promise<User> {
-    const lowerCaseEmail = email.toLowerCase();
-    let user = await this.findOneByEmail(lowerCaseEmail);
-    if (user) { return user; }
-    const tempPassword = randomBytes(16).toString('hex');
-    const nameParts = lowerCaseEmail.split('@');
-    const tempName = nameParts[0];
-    const newUser = this.usersRepository.create({ email: lowerCaseEmail, name: tempName, password: tempPassword, roles: [UserRole.CLIENT], });
-    return this.usersRepository.save(newUser);
-  }
+  /**
+   * NUEVO MÉTODO: Finaliza el registro de un usuario invitado.
+   */
+  async completeInvitation(dto: CompleteInvitationDto): Promise<User> {
+    const { token, name, dateOfBirth, password } = dto;
 
-  async inviteOrUpdateStaff(inviteStaffDto: InviteStaffDto): Promise<User> {
-    const { email, roles } = inviteStaffDto;
-    const lowerCaseEmail = email.toLowerCase();
-    let user = await this.findOneByEmail(lowerCaseEmail);
-    if (user) {
-      const newRoles = Array.from(new Set([...user.roles, ...roles]));
-        if (!newRoles.includes(UserRole.CLIENT)) {
-            newRoles.push(UserRole.CLIENT);
-        }
-      user.roles = newRoles;
-      return this.usersRepository.save(user);
-    } else {
-      const nameParts = lowerCaseEmail.split('@');
-      const tempName = nameParts[0];
-      const invitationToken = randomBytes(32).toString('hex');
-      const newUser = this.usersRepository.create({ email: lowerCaseEmail, name: tempName, roles, invitationToken });
-      console.log(`INVITATION TOKEN for ${lowerCaseEmail}: ${invitationToken}`);
-      return this.usersRepository.save(newUser);
-    }
-  }
+    const user = await this.usersRepository.findOne({ where: { invitationToken: token } });
+    if (!user) {
+      throw new BadRequestException('El token de invitación no es válido o ha expirado.');
+    }
 
-  async findAll(): Promise<User[]> { return this.usersRepository.find({ order: { createdAt: 'DESC' } }); }
-  async findStaff(): Promise<User[]> { const allUsers = await this.findAll(); return allUsers.filter(user => !(user.roles.length === 1 && user.roles[0] === UserRole.CLIENT)); }
-  async findClients(): Promise<User[]> { const allUsers = await this.findAll(); return allUsers.filter(user => user.roles.length === 1 && user.roles[0] === UserRole.CLIENT); }
-  
-  async updateUserRoles(id: string, roles: UserRole[]): Promise<User> {
-    const user = await this.findOneById(id);
-    const finalRoles = roles.length === 0 ? [UserRole.CLIENT] : Array.from(new Set([...roles, UserRole.CLIENT]));
-    user.roles = finalRoles;
-    return this.usersRepository.save(user);
-  }
-  
-  async getAdminConfig(): Promise<{ serviceFee: number; accessToken: string | null }> {
-    const serviceFeeStr = await this.configService.get('adminServiceFee');
-    const adminUser = await this.findAdmin();
-    return {
-      serviceFee: serviceFeeStr ? parseFloat(serviceFeeStr) : 0,
-      accessToken: adminUser?.mpAccessToken || null,
-    };
-  }
+    user.name = name;
+    user.dateOfBirth = new Date(dateOfBirth);
+    user.password = await bcrypt.hash(password, 10);
+    user.invitationToken = null;
 
-  private async findUserByRole(role: UserRole): Promise<User | null> {
-    return this.usersRepository
-      .createQueryBuilder("user")
-      .addSelect('user.mpAccessToken')
-      .where(`:role = ANY(string_to_array(user.roles, ','))`, { role })
-      .getOne();
-  }
-  
-  async findAdmin(): Promise<User | null> {
-    return this.findUserByRole(UserRole.ADMIN);
-  }
-  
-  async findOwner(): Promise<User | null> {
-    return this.findUserByRole(UserRole.OWNER);
-  }
-  
-  async findUpcomingBirthdays(days: number): Promise<User[]> {
-    const today = new Date();
-    const futureDate = new Date();
-    futureDate.setDate(today.getDate() + days);
+    return this.usersRepository.save(user);
+  }
 
-    const todayMonthDay = `${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-    const futureMonthDay = `${String(futureDate.getMonth() + 1).padStart(2, '0')}-${String(futureDate.getDate()).padStart(2, '0')}`;
-    
-    let queryBuilder = this.usersRepository.createQueryBuilder('user');
-    
-    if (todayMonthDay <= futureMonthDay) {
-      queryBuilder = queryBuilder.where("to_char(\"dateOfBirth\", 'MM-DD') BETWEEN :today AND :future", { today: todayMonthDay, future: futureMonthDay });
-    } else {
-      queryBuilder = queryBuilder.where(
-        "(to_char(\"dateOfBirth\", 'MM-DD') >= :today OR to_char(\"dateOfBirth\", 'MM-DD') <= :future)",
-        { today: todayMonthDay, future: futureMonthDay }
-      );
-    }
+  async inviteOrUpdateStaff(inviteStaffDto: InviteStaffDto): Promise<User> {
+    const { email, roles } = inviteStaffDto;
+    const lowerCaseEmail = email.toLowerCase();
+    let user = await this.findOneByEmail(lowerCaseEmail);
+    if (user) {
+      const newRoles = Array.from(new Set([...user.roles, ...roles]));
+      if (!newRoles.includes(UserRole.CLIENT)) {
+        newRoles.push(UserRole.CLIENT);
+      }
+      user.roles = newRoles;
+      return this.usersRepository.save(user);
+    } else {
+      const nameParts = lowerCaseEmail.split('@');
+      const tempName = nameParts[0];
+      const invitationToken = randomBytes(32).toString('hex');
+      const newUser = this.usersRepository.create({ email: lowerCaseEmail, name: tempName, roles, invitationToken });
+      console.log(`INVITATION TOKEN for ${lowerCaseEmail}: ${invitationToken}`);
+      return this.usersRepository.save(newUser);
+    }
+  }
 
-    queryBuilder = queryBuilder.andWhere(`:role = ANY(string_to_array(user.roles, ','))`, { role: UserRole.CLIENT });
+  async findAll(): Promise<User[]> { return this.usersRepository.find({ order: { createdAt: 'DESC' } }); }
+  async findStaff(): Promise<User[]> { const allUsers = await this.findAll(); return allUsers.filter(user => !(user.roles.length === 1 && user.roles[0] === UserRole.CLIENT)); }
+  async findClients(): Promise<User[]> { const allUsers = await this.findAll(); return allUsers.filter(user => user.roles.length === 1 && user.roles[0] === UserRole.CLIENT); }
+  
+  async updateUserRoles(id: string, roles: UserRole[]): Promise<User> {
+    const user = await this.findOneById(id);
+    const finalRoles = roles.length === 0 ? [UserRole.CLIENT] : Array.from(new Set([...roles, UserRole.CLIENT]));
+    user.roles = finalRoles;
+    return this.usersRepository.save(user);
+  }
+  
+  async getAdminConfig(): Promise<{ serviceFee: number; accessToken: string | null }> {
+    const serviceFeeStr = await this.configService.get('adminServiceFee');
+    const adminUser = await this.findAdmin();
+    return {
+      serviceFee: serviceFeeStr ? parseFloat(serviceFeeStr) : 0,
+      accessToken: adminUser?.mpAccessToken || null,
+    };
+  }
 
-    return queryBuilder
-      .orderBy("to_char(\"dateOfBirth\", 'MM-DD')")
-      .getMany();
-  }
+  private async findUserByRole(role: UserRole): Promise<User | null> {
+    return this.usersRepository
+      .createQueryBuilder("user")
+      .addSelect('user.mpAccessToken')
+      .where(`:role = ANY(string_to_array(user.roles, ','))`, { role })
+      .getOne();
+  }
+  
+  async findAdmin(): Promise<User | null> {
+    return this.findUserByRole(UserRole.ADMIN);
+  }
+  
+  async findOwner(): Promise<User | null> {
+    return this.findUserByRole(UserRole.OWNER);
+  }
+  
+  async findUpcomingBirthdays(days: number): Promise<User[]> {
+    const today = new Date();
+    const futureDate = new Date();
+    futureDate.setDate(today.getDate() + days);
 
-  async updateMercadoPagoCredentials(
-    userId: string,
-    accessToken: string | null,
-    mpUserId: string | number | null,
-  ): Promise<void> {
-    if (!userId) {
-      throw new NotFoundException('Se requiere un ID de usuario.');
-    }
+    const todayMonthDay = `${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    const futureMonthDay = `${String(futureDate.getMonth() + 1).padStart(2, '0')}-${String(futureDate.getDate()).padStart(2, '0')}`;
+    
+    let queryBuilder = this.usersRepository.createQueryBuilder('user');
+    
+    if (todayMonthDay <= futureMonthDay) {
+      queryBuilder = queryBuilder.where("to_char(\"dateOfBirth\", 'MM-DD') BETWEEN :today AND :future", { today: todayMonthDay, future: futureMonthDay });
+    } else {
+      queryBuilder = queryBuilder.where(
+        "(to_char(\"dateOfBirth\", 'MM-DD') >= :today OR to_char(\"dateOfBirth\", 'MM-DD') <= :future)",
+        { today: todayMonthDay, future: futureMonthDay }
+      );
+    }
 
-    const updatePayload = {
-      mpAccessToken: accessToken,
-      mpUserId: mpUserId ? Number(mpUserId) : null,
-    };
+    queryBuilder = queryBuilder.andWhere(`:role = ANY(string_to_array(user.roles, ','))`, { role: UserRole.CLIENT });
 
-    await this.usersRepository.update(userId, updatePayload);
-  }
+    return queryBuilder
+      .orderBy("to_char(\"dateOfBirth\", 'MM-DD')")
+      .getMany();
+  }
+
+  async updateMercadoPagoCredentials(
+    userId: string,
+    accessToken: string | null,
+    mpUserId: string | number | null,
+  ): Promise<void> {
+    if (!userId) {
+      throw new NotFoundException('Se requiere un ID de usuario.');
+    }
+    const updatePayload = {
+      mpAccessToken: accessToken,
+      mpUserId: mpUserId ? Number(mpUserId) : null,
+    };
+    await this.usersRepository.update(userId, updatePayload);
+  }
 }
 
-// Función auxiliar para comparar fechas sin tener en cuenta la zona horaria
 const formatDateToInput = (date?: Date | string | null): string => {
-  if (!date) return '';
-  const d = new Date(date);
-  return d.toISOString().split('T')[0];
+  if (!date) return '';
+  const d = new Date(date);
+  return d.toISOString().split('T')[0];
 };

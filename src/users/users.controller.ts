@@ -1,5 +1,3 @@
-// backend/src/users/users.controller.ts
-
 import { Controller, Get, Param, Body, UseGuards, Post, NotFoundException, Patch, UseInterceptors, UploadedFile, Request, HttpCode, HttpStatus, ConflictException } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
@@ -12,6 +10,8 @@ import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UpdateUserRoleDto } from './dto/update-user-role.dto';
 import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
 import { unlink } from 'fs/promises';
+import { Public } from 'src/auth/decorators/public.decorator';
+import { CompleteInvitationDto } from './dto/complete-invitation.dto';
 
 @Controller('users')
 export class UsersController {
@@ -19,6 +19,18 @@ export class UsersController {
     private readonly usersService: UsersService,
     private readonly cloudinaryService: CloudinaryService,
   ) {}
+
+  /**
+   * NUEVO ENDPOINT PÚBLICO: Permite a un nuevo usuario finalizar su registro.
+   */
+  @Public()
+  @Post('complete-invitation')
+  async completeInvitation(@Body() completeInvitationDto: CompleteInvitationDto) {
+    const user = await this.usersService.completeInvitation(completeInvitationDto);
+    // No devolvemos la contraseña
+    const { password, ...result } = user;
+    return result;
+  }
 
   @Get('profile/me')
   @UseGuards(JwtAuthGuard)
@@ -38,7 +50,6 @@ export class UsersController {
     if (profileImage) {
       const uploadResult = await this.cloudinaryService.uploadImage(profileImage, 'sucht/profiles');
       updateProfileDto.profileImageUrl = uploadResult.secure_url;
-      // Opcional: Eliminar la imagen temporal si se guardó en el servidor local
       try {
         await unlink(profileImage.path);
       } catch (err) {
@@ -102,7 +113,6 @@ export class UsersController {
     return result;
   }
 
-  // REORGANIZADO: Los métodos no duplicados se mueven al final del archivo
   @Get('by-username/:username')
   async findByUsername(@Param('username') username: string) {
     const user = await this.usersService.findOneByUsername(username);
