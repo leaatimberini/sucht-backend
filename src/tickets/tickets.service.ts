@@ -295,4 +295,18 @@ export class TicketsService {
       relations: ['event', 'tier'],
     });
   }
+
+    /**
+   * NUEVO MÉTODO DE APOYO: Busca todos los tickets para un evento antes de una fecha límite.
+   * Usado por el RaffleService para encontrar a los participantes elegibles.
+   */
+  async findTicketsForRaffle(eventId: string, deadline: Date): Promise<Ticket[]> {
+    return this.ticketsRepository.find({
+      where: {
+        event: { id: eventId },
+        createdAt: LessThan(deadline), // Creados antes de la fecha límite
+      },
+      relations: ['user', 'tier'], // Cargamos las relaciones que necesitamos
+    });
+  }
 }

@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Between, Repository } from 'typeorm';
 import { Event } from './event.entity';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
@@ -85,5 +85,13 @@ export class EventsService {
       .where('event.startDate >= :now', { now: new Date() })
       .orderBy('event.startDate', 'ASC')
       .getOne();
+  }
+
+    async findEventBetweenDates(start: Date, end: Date): Promise<Event | null> {
+    return this.eventsRepository.findOne({
+        where: {
+            startDate: Between(start, end)
+        }
+    });
   }
 }
