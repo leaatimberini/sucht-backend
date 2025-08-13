@@ -12,8 +12,9 @@ import { ConfigService } from '@nestjs/config';
 import { MercadoPagoConfig, Preference } from 'mercadopago';
 import { PointTransactionsService } from 'src/point-transactions/point-transactions.service';
 import { PointTransactionReason } from 'src/point-transactions/point-transaction.entity';
+import { GiftProductDto } from './dto/gift-product.dto';
+import { EventsService } from 'src/events/events.service';
 
-// Se define el tipo del item de preferencia localmente para evitar problemas de importación del SDK.
 interface PreferenceItem {
   id: string;
   title: string;
@@ -35,6 +36,7 @@ export class StoreService {
     private configService: ConfigService,
     private pointTransactionsService: PointTransactionsService,
     private dataSource: DataSource,
+    private eventsService: EventsService, // Inyectamos EventsService
   ) {}
 
   // --- Gestión de Productos (Admin) ---
@@ -83,9 +85,6 @@ export class StoreService {
     return purchases;
   }
   
-  /**
-   * NUEVO MÉTODO DE APOYO: Busca una compra de producto por su ID, incluyendo las relaciones.
-   */
   async findPurchaseById(purchaseId: string): Promise<ProductPurchase> {
     const purchase = await this.purchasesRepository.findOne({
         where: { id: purchaseId },
@@ -141,6 +140,28 @@ export class StoreService {
     } finally {
       await queryRunner.release();
     }
+  }
+
+  // --- NUEVO MÉTODO PARA QUE EL ADMIN REGALE PRODUCTOS ---
+  async giftProductByAdmin(dto: GiftProductDto): Promise<ProductPurchase[]> {
+    const { email, productId, eventId, quantity } = dto;
+    this.logger.log(`Admin regalando ${quantity}x producto ${productId} a ${email} para el evento ${eventId}`);
+
+    const user = await this.usersService.findOrCreateByEmail(email);
+    const event = await this.eventsService.findOne(eventId); // Validamos que el evento exista
+    if (!event) {
+        throw new NotFoundException(`Evento con ID "${eventId}" no encontrado.`);
+    }
+
+    const purchases: ProductPurchase[] = [];
+    // Creamos una compra individual por cada unidad para que tengan QR separados
+    for (let i = 0; i < quantity; i++) {
+        const purchase = await this.createFreePurchase(user, productId, eventId, 1, 'ADMIN_GIFT');
+        purchases.push(purchase);
+    }
+
+    // Aquí podría ir una lógica de notificación por email si se desea
+    return purchases;
   }
 
   // --- Lógica de Compra con Carrito ---
@@ -220,7 +241,7 @@ export class StoreService {
         quantity: item.quantity,
         amountPaid: amountPaid,
         paymentId,
-        origin: 'PURCHASE',
+        origin: 'PURCHASE', // CORRECCIÓN: Se añade el origen
       });
       purchases.push(await this.purchasesRepository.save(purchase));
     }
@@ -259,5 +280,13 @@ export class StoreService {
 
       purchase.redeemedAt = new Date();
       return this.purchasesRepository.save(purchase);
+  }
+
+  async getFullPurchaseHistory(): Promise<ProductPurchase[]> {
+    this.logger.log(`[getFullPurchaseHistory] Obteniendo historial completo de compras de productos.`);
+    return this.purchasesRepository.find({
+      relations: ['user', 'product', 'event'],
+      order: { createdAt: 'DESC' },
+    });
   }
 }

@@ -10,6 +10,7 @@ import { Public } from 'src/auth/decorators/public.decorator';
 import { AuthenticatedRequest } from 'src/auth/interfaces/authenticated-request.interface';
 import { CreatePurchaseDto } from './dto/create-purchase.dto';
 import { ProductPurchase } from './product-purchase.entity';
+import { GiftProductDto } from './dto/gift-product.dto';
 
 @Controller('store')
 export class StoreController {
@@ -39,6 +40,16 @@ export class StoreController {
         return this.storeService.removeProduct(id);
     }
 
+    /**
+     * NUEVO ENDPOINT: Permite a un Admin regalar un producto a un cliente.
+     */
+    @Post('products/gift')
+    @UseGuards(JwtAuthGuard, RolesGuard)
+    @Roles(UserRole.ADMIN)
+    giftProductByAdmin(@Body() giftProductDto: GiftProductDto) {
+      return this.storeService.giftProductByAdmin(giftProductDto);
+    }
+
     // --- Endpoints para Clientes y Usos Generales ---
 
     @Public()
@@ -47,10 +58,6 @@ export class StoreController {
         return this.storeService.findAllProducts();
     }
 
-    /**
-     * NUEVO ENDPOINT: Específico para el panel del Dueño.
-     * Devuelve todos los productos activos que se pueden regalar.
-     */
     @Get('products/giftable')
     @UseGuards(JwtAuthGuard, RolesGuard)
     @Roles(UserRole.ADMIN, UserRole.OWNER)
@@ -78,10 +85,21 @@ export class StoreController {
     async getMyProducts(@Request() req: AuthenticatedRequest): Promise<ProductPurchase[]> {
         return this.storeService.findProductsByUserId(req.user.id);
     }
+    
+    /**
+     * NUEVO ENDPOINT: Obtiene el historial completo de compras de productos.
+     * Solo accesible para el rol ADMIN.
+     */
+    @Get('purchase/history')
+    @UseGuards(JwtAuthGuard, RolesGuard)
+    @Roles(UserRole.ADMIN)
+    getFullPurchaseHistory() {
+      return this.storeService.getFullPurchaseHistory();
+    }
 
     @Post('purchase/validate/:id')
     @UseGuards(JwtAuthGuard, RolesGuard)
-    @Roles(UserRole.VERIFIER, UserRole.ADMIN, UserRole.OWNER, UserRole.BARRA) // Se añade BARRA para consistencia
+    @Roles(UserRole.VERIFIER, UserRole.ADMIN, UserRole.OWNER, UserRole.BARRA)
     async validateProductPurchase(@Param('id') id: string): Promise<ProductPurchase> {
         return this.storeService.validatePurchase(id);
     }
