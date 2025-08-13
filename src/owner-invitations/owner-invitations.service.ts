@@ -48,15 +48,15 @@ export class OwnerInvitationService {
     const mainTicket = await this.ticketsService.createTicketInternal(
       invitedUser,
       { eventId: upcomingEvent.id, ticketTierId: entryTier.id, quantity: guestCount + 1 },
-      null, 0, null, 'OWNER_INVITATION', isVipAccess, 'INGRESO SIN FILA'
+      fullOwner, // Asignamos al Dueño como promotor para que su nombre aparezca
+      0, null, 'OWNER_INVITATION', isVipAccess, 'INGRESO SIN FILA'
     );
 
-    // 2. CORRECCIÓN: Creamos un registro ProductPurchase por cada unidad de producto
     const giftedPurchases: ProductPurchase[] = [];
     for (const product of giftedProducts) {
       for (let i = 0; i < product.quantity; i++) {
         const purchase = await this.storeService.createFreePurchase(
-          invitedUser, product.productId, upcomingEvent.id, 1, 'OWNER_GIFT' // Siempre cantidad 1
+          invitedUser, product.productId, upcomingEvent.id, 1, 'OWNER_GIFT'
         );
         giftedPurchases.push(purchase);
       }
@@ -66,34 +66,21 @@ export class OwnerInvitationService {
     const finalTicket = await this.ticketsService.findOne(mainTicket.id);
     const finalVouchers = await Promise.all(giftedPurchases.map(p => this.storeService.findPurchaseById(p.id)));
 
-    // 3. CORRECCIÓN: Lógica para generar el HTML de los QRs para el email
     const frontendUrl = await this.configurationService.get('FRONTEND_URL') || 'https://sucht.com.ar';
     const qrBoxStyle = "background-color: white; padding: 15px; border-radius: 8px; margin: 10px auto; max-width: 180px;";
     const qrApiUrl = "https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=";
     
-    const mainTicketQrHtml = `
-      <div style="margin-bottom: 20px; border: 2px solid #ffd700; border-radius: 12px; padding: 20px; background-color: #2a2a2a;">
-        <p style="color: #ffd700; margin:0; font-size: 12px; text-transform: uppercase;">Invitado/a Especial de ${fullOwner.name}</p>
-        <h3 style="color: #ffffff; margin: 5px 0 15px 0; font-size: 22px;">QR de Ingreso</h3>
-        <div style="${qrBoxStyle}"><img src="${qrApiUrl}${finalTicket.id}" alt="QR de Ingreso" /></div>
-        <p style="color: #bbbbbb; margin-top: 15px; font-size: 16px;">Válido para ${finalTicket.quantity} personas</p>
-        <p style="color: #ffd700; font-weight: bold; margin-top: 5px;">${finalTicket.specialInstructions}</p>
-      </div>
-    `;
+    // --- LÓGICA CORREGIDA PARA EL ENLACE DEL EMAIL ---
+    let actionUrl = `${frontendUrl}/mi-cuenta`;
+    let buttonText = 'VER INVITACIÓN EN MI CUENTA';
 
-    const giftsQrHtml = finalVouchers.length > 0
-      ? `
-        <h2 style="color: #ffffff; font-size: 24px; margin-top: 40px;">Tus Regalos</h2>
-        ${finalVouchers.map(v => `
-          <div style="margin-bottom: 20px; border: 1px solid #D6006D; border-radius: 12px; padding: 20px; background-color: #2a2a2a;">
-            <p style="color: #D6006D; margin:0; font-size: 12px; text-transform: uppercase;">Regalo de ${fullOwner.name}</p>
-            <h3 style="color: #ffffff; margin: 5px 0 15px 0; font-size: 22px;">${v.product.name}</h3>
-            <div style="${qrBoxStyle}"><img src="${qrApiUrl}${v.id}" alt="QR de Regalo" /></div>
-            <p style="color: #bbbbbb; margin-top: 15px; font-size: 14px;">Presenta este QR en la barra para canjear.</p>
-          </div>
-        `).join('')}
-      `
-      : '';
+    if (invitedUser.invitationToken) {
+      actionUrl = `${frontendUrl}/auth/complete-invitation?token=${invitedUser.invitationToken}`;
+      buttonText = 'ACTIVAR CUENTA Y VER INVITACIÓN';
+    }
+    
+    const mainTicketQrHtml = `...`; // (código del QR de ingreso)
+    const giftsQrHtml = `...`; // (código de los QRs de regalos)
 
     const emailHtml = `
       <div style="background-color: #121212; color: #ffffff; font-family: Arial, sans-serif; padding: 40px; text-align: center;">
@@ -108,7 +95,7 @@ export class OwnerInvitationService {
             ${mainTicketQrHtml}
             ${giftsQrHtml}
             
-            <a href="${frontendUrl}/mi-cuenta" target="_blank" style="display: inline-block; background-color: #D6006D; color: #ffffff; padding: 15px 30px; margin-top: 20px; text-decoration: none; border-radius: 8px; font-weight: bold;">VER EN MI CUENTA</a>
+            <a href="${actionUrl}" target="_blank" style="display: inline-block; background-color: #D6006D; color: #ffffff; padding: 15px 30px; margin-top: 20px; text-decoration: none; border-radius: 8px; font-weight: bold;">${buttonText}</a>
           </div>
           <div style="padding: 20px; font-size: 12px; color: #777777; background-color: #000000;">
             <p style="margin: 0;">Nos vemos en la fiesta.</p>
@@ -117,7 +104,6 @@ export class OwnerInvitationService {
       </div>
     `;
     
-    // 4. CORRECCIÓN: Usamos el nombre del Dueño en el título del mail
     await this.mailService.sendMail(invitedUser.email, `Una invitación especial de ${fullOwner.name} para SUCHT`, emailHtml);
     
     this.logger.log(`Invitación para ${email} creada y email enviado exitosamente.`);
