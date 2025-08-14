@@ -1,11 +1,9 @@
-import { Module } from '@nestjs/common';
-import { CloudinaryProvider } from './cloudinary.provider';
+import { Module, Global } from '@nestjs/common'; // 1. Importar Global
 import { CloudinaryService } from './cloudinary.service';
-import { CloudinaryController } from './cloudinary.controller'; // Importar
 
+@Global() // 2. Hacer el módulo global
 @Module({
-  providers: [CloudinaryProvider, CloudinaryService],
-  exports: [CloudinaryProvider, CloudinaryService],
-  controllers: [CloudinaryController], // Añadir
+  providers: [CloudinaryService],
+  exports: [CloudinaryService],
 })
 export class CloudinaryModule {}
