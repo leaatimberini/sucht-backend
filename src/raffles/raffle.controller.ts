@@ -17,10 +17,7 @@ export class RaffleController {
   @Public()
   @Get('status/:eventId')
   getRaffleStatus(@Param('eventId', ParseUUIDPipe) eventId: string) {
-    // Este método necesita ser creado en RaffleService
-    // return this.raffleService.getRaffleStatusForEvent(eventId);
-    // Por ahora, devolvemos un placeholder:
-    return { message: 'Endpoint de estado de sorteo listo.' };
+    return this.raffleService.getRaffleStatusForEvent(eventId);
   }
 
   /**

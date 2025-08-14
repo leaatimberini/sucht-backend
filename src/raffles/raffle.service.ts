@@ -1,7 +1,7 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { RaffleWinner } from './raffle-winner.entity';
-import { Repository } from 'typeorm';
+import { Repository, In, Between } from 'typeorm';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { EventsService } from '../events/events.service';
 import { TicketsService } from '../tickets/tickets.service';
@@ -11,8 +11,9 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { UsersService } from '../users/users.service';
 import { Ticket } from '../tickets/ticket.entity';
 import { ProductType } from '../ticket-tiers/ticket-tier.entity';
-import { endOfDay, startOfDay } from 'date-fns';
+import { endOfDay, startOfDay, set } from 'date-fns';
 import { toZonedTime } from 'date-fns-tz';
+import { Event } from 'src/events/event.entity';
 
 @Injectable()
 export class RaffleService {
@@ -40,7 +41,6 @@ export class RaffleService {
   async handleWeeklyRaffle() {
     this.logger.log('--- INICIANDO SORTEO SEMANAL ---');
 
-    // Buscamos el evento que ocurra hoy
     const timeZone = 'America/Argentina/Buenos_Aires';
     const now = toZonedTime(new Date(), timeZone);
     const startOfToday = startOfDay(now);
@@ -61,55 +61,53 @@ export class RaffleService {
    * Realiza el sorteo para un evento específico.
    */
   async performDraw(eventId: string) {
-    // 1. Obtener la lista ponderada de participantes
+    this.logger.log(`[performDraw] Iniciando sorteo para el evento ID: ${eventId}`);
     const weightedEntries = await this.getEligibleEntries(eventId);
     if (weightedEntries.length === 0) {
-      this.logger.log('No hay participantes elegibles para el sorteo.');
+      this.logger.log('[performDraw] No hay participantes elegibles para el sorteo.');
       return;
     }
-    this.logger.log(`Total de chances en el sorteo: ${weightedEntries.length}`);
+    this.logger.log(`[performDraw] Total de chances en el sorteo: ${weightedEntries.length}`);
 
-    // 2. Seleccionar un ganador al azar
     const winnerIndex = Math.floor(Math.random() * weightedEntries.length);
     const winnerId = weightedEntries[winnerIndex];
     const winner = await this.usersService.findOneById(winnerId);
-    this.logger.log(`🎉 ¡El ganador es ${winner.email}!`);
+    this.logger.log(`[performDraw] 🎉 ¡El ganador es ${winner.email}!`);
 
-    // 3. Obtener el premio configurado por el admin
     const prizeProductId = await this.configurationService.get('raffle_prize_product_id');
     if (!prizeProductId) {
-      this.logger.error('ERROR: No hay un premio configurado para el sorteo. No se puede asignar.');
+      this.logger.error('[performDraw] ERROR: No hay un premio configurado para el sorteo. No se puede asignar.');
       return;
     }
+    
+    const prizeProduct = await this.storeService.findOneProduct(prizeProductId);
 
-    // 4. Asignar el premio al ganador (creando una "compra gratuita")
     const prizePurchase = await this.storeService.createFreePurchase(
       winner,
       prizeProductId,
       eventId,
-      1, // El premio es siempre 1 unidad
+      1,
       'RAFFLE_PRIZE'
     );
-    this.logger.log(`Premio asignado. ID de la compra: ${prizePurchase.id}`);
+    this.logger.log(`[performDraw] Premio asignado. ID de la compra: ${prizePurchase.id}`);
 
-    // 5. Guardar el registro del ganador en el historial
+    const event = await this.eventsService.findOne(eventId);
     const raffleWinner = this.raffleWinnerRepository.create({
       winner,
       winnerUserId: winner.id,
-      event: { id: eventId } as any,
+      event,
       eventId,
       prize: prizePurchase,
       prizePurchaseId: prizePurchase.id,
     });
     await this.raffleWinnerRepository.save(raffleWinner);
-    this.logger.log(`Registro del ganador guardado en el historial. ID: ${raffleWinner.id}`);
+    this.logger.log(`[performDraw] Registro del ganador guardado en el historial. ID: ${raffleWinner.id}`);
 
-    // 6. Notificar al ganador
     await this.notificationsService.sendNotificationToUser(winner, {
         title: '¡Felicitaciones, ganaste el sorteo! 🏆',
-        body: `Ganaste: ${prizePurchase.product.name}. ¡Reclámalo en la barra con tu QR!`,
+        body: `Ganaste: ${prizeProduct.name}. ¡Reclámalo en la barra con tu QR!`,
     });
-    this.logger.log(`Notificación enviada al ganador.`);
+    this.logger.log(`[performDraw] Notificación enviada al ganador.`);
     this.logger.log('--- SORTEO SEMANAL FINALIZADO ---');
   }
 
@@ -117,25 +115,26 @@ export class RaffleService {
    * Obtiene una lista ponderada de IDs de usuario que participan en el sorteo.
    */
   private async getEligibleEntries(eventId: string): Promise<string[]> {
-    const deadline = new Date();
-    // La hora del sorteo es a las 20:00, así que esa es la fecha límite
-    deadline.setHours(20, 0, 0, 0); 
+    const event = await this.eventsService.findOne(eventId);
+    if (!event) return [];
+
+    const timeZone = 'America/Argentina/Buenos_Aires';
+    const eventDateInTz = toZonedTime(event.startDate, timeZone);
+    const deadline = set(eventDateInTz, { hours: 20, minutes: 0, seconds: 0, milliseconds: 0 });
     
     const tickets = await this.ticketsService.findTicketsForRaffle(eventId, deadline);
     
     const weightedEntries: string[] = [];
     for (const ticket of tickets) {
       let chances = 0;
-      // Asignamos chances según las reglas
       if (ticket.tier.productType === ProductType.VIP_TABLE) {
-        chances = 3; // Triple chance
+        chances = 3;
       } else if (!ticket.tier.isFree) {
-        chances = 2; // Doble chance
+        chances = 2;
       } else {
-        chances = 1; // Una chance
+        chances = 1;
       }
 
-      // Añadimos el ID del usuario a la lista tantas veces como chances tenga
       for (let i = 0; i < chances; i++) {
         weightedEntries.push(ticket.user.id);
       }
@@ -149,7 +148,32 @@ export class RaffleService {
   async getHistory() {
     return this.raffleWinnerRepository.find({
       order: { drawnAt: 'DESC' },
-      // Las relaciones 'winner', 'event' y 'prize' ya se cargan con eager: true
     });
+  }
+  
+  /**
+   * Obtiene el estado del sorteo para un evento específico.
+   */
+  async getRaffleStatusForEvent(eventId: string) {
+    const event = await this.eventsService.findOne(eventId);
+    if (!event) {
+      throw new NotFoundException('Evento no encontrado.');
+    }
+
+    const prizeProductId = await this.configurationService.get('raffle_prize_product_id');
+    if (!prizeProductId) {
+      throw new NotFoundException('El premio para el sorteo no está configurado.');
+    }
+
+    const prizeProduct = await this.storeService.findOneProduct(prizeProductId);
+
+    const timeZone = 'America/Argentina/Buenos_Aires';
+    const eventDateInTz = toZonedTime(event.startDate, timeZone);
+    const deadline = set(eventDateInTz, { hours: 20, minutes: 0, seconds: 0, milliseconds: 0 });
+
+    return {
+      prizeName: prizeProduct.name,
+      deadline: deadline.toISOString(),
+    };
   }
 }
