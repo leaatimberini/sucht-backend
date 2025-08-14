@@ -164,9 +164,6 @@ export class NotificationsService {
    * NUEVO MÉTODO: Obtiene el historial completo de notificaciones enviadas.
    */
   async getHistory(): Promise<Notification[]> {
-    // Buscamos todas las notificaciones, sin agrupar por usuario, y las ordenamos por fecha.
-    // Esto mostrará una línea por cada usuario que recibió una notificación masiva.
-    // Una lógica más avanzada podría agruparlas por 'title' y 'body' para resumir.
     return this.notificationRepository.find({
         order: {
             createdAt: 'DESC'
