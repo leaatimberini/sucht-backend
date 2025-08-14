@@ -43,6 +43,16 @@ export class NotificationsController {
     return this.notificationsService.findMyNotifications(req.user.id);
   }
   
+  /**
+   * NUEVO ENDPOINT: Obtiene el historial completo de notificaciones para el Admin.
+   */
+  @Get('history')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.OWNER)
+  getHistory() {
+    return this.notificationsService.getHistory();
+  }
+  
   @Patch('mark-as-read')
   markAsRead(@Request() req: { user: User }, @Body() body: MarkAsReadDto) {
     return this.notificationsService.markAsRead(req.user.id, body.notificationIds);

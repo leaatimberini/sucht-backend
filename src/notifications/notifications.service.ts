@@ -16,7 +16,6 @@ export class NotificationsService {
     private readonly subscriptionRepository: Repository<PushSubscription>,
     @InjectRepository(Notification)
     private readonly notificationRepository: Repository<Notification>,
-    // Inyectamos UsersService para poder buscar a todos los usuarios
     private readonly usersService: UsersService,
   ) {
     if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
@@ -30,9 +29,6 @@ export class NotificationsService {
     }
   }
 
-  /**
-   * Guarda una notificación en la base de datos para un usuario.
-   */
   private async createNotification(user: User, title: string, body: string): Promise<Notification> {
     const notification = this.notificationRepository.create({
       user,
@@ -44,7 +40,6 @@ export class NotificationsService {
 
   async addSubscription(user: User, subscriptionData: webPush.PushSubscription) {
     const existingSubscription = await this.subscriptionRepository.findOne({ where: { endpoint: subscriptionData.endpoint } });
-
     if (existingSubscription) {
       if (existingSubscription.user?.id !== user.id) {
         existingSubscription.user = user;
@@ -52,18 +47,13 @@ export class NotificationsService {
       }
       return existingSubscription;
     }
-
     const newSubscription = this.subscriptionRepository.create({
       ...subscriptionData,
       user: user,
     });
-
     return this.subscriptionRepository.save(newSubscription);
   }
 
-  /**
-   * NUEVO MÉTODO: Elimina una suscripción de notificación push.
-   */
   async removeSubscription(endpoint: string, userId: string) {
       const result = await this.subscriptionRepository.delete({ endpoint, user: { id: userId } });
       if(result.affected === 0) {
@@ -77,19 +67,14 @@ export class NotificationsService {
     return count > 0;
   }
   
-  /**
-   * MÉTODO MEJORADO: Envía una notificación a todos los usuarios suscritos y guarda el registro.
-   */
   async sendNotificationToAll(payload: { title: string; body: string; icon?: string }) {
-    const allUsers = await this.usersService.findAll(); // Obtenemos todos los usuarios
+    const allUsers = await this.usersService.findAll();
     this.logger.log(`Creando notificaciones para ${allUsers.length} usuarios.`);
     
-    // Guardamos la notificación en la BD para cada usuario
     for (const user of allUsers) {
         await this.createNotification(user, payload.title, payload.body);
     }
 
-    // Enviamos la notificación push a todos los dispositivos suscritos
     const allSubscriptions = await this.subscriptionRepository.find();
     this.logger.log(`Enviando notificación push a ${allSubscriptions.length} suscriptores.`);
     const notificationPayload = JSON.stringify(payload);
@@ -98,9 +83,6 @@ export class NotificationsService {
     await Promise.all(promises);
   }
 
-  /**
-   * MÉTODO MEJORADO: Envía una notificación a un usuario y guarda el registro.
-   */
   async sendNotificationToUser(user: User, payload: { title: string; body: string; icon?: string }) {
     await this.createNotification(user, payload.title, payload.body);
     
@@ -153,9 +135,6 @@ export class NotificationsService {
     return { message: 'Notificaciones marcadas como leídas.' };
   }
   
-  /**
-   * NUEVO MÉTODO: Permite a un usuario eliminar una notificación de su vista.
-   */
   async deleteForUser(userId: string, notificationId: string) {
     const result = await this.notificationRepository.delete({ id: notificationId, user: { id: userId } });
     if (result.affected === 0) {
@@ -164,9 +143,6 @@ export class NotificationsService {
     return { message: 'Notificación eliminada.' };
   }
 
-  /**
-   * NUEVO MÉTODO: Registra el feedback (like/dislike) de un usuario en una notificación.
-   */
   async giveFeedback(notificationId: string, feedback: 'like' | 'dislike') {
       const notification = await this.notificationRepository.findOneBy({ id: notificationId });
       if (!notification) {
@@ -182,5 +158,20 @@ export class NotificationsService {
       }
       
       return this.notificationRepository.save(notification);
+  }
+  
+  /**
+   * NUEVO MÉTODO: Obtiene el historial completo de notificaciones enviadas.
+   */
+  async getHistory(): Promise<Notification[]> {
+    // Buscamos todas las notificaciones, sin agrupar por usuario, y las ordenamos por fecha.
+    // Esto mostrará una línea por cada usuario que recibió una notificación masiva.
+    // Una lógica más avanzada podría agruparlas por 'title' y 'body' para resumir.
+    return this.notificationRepository.find({
+        order: {
+            createdAt: 'DESC'
+        },
+        take: 100 // Limitamos a las últimas 100 para no sobrecargar el panel
+    });
   }
 }
