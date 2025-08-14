@@ -1,8 +1,6 @@
 import { IsOptional, IsString, IsNotEmpty, IsBoolean, IsNumber, IsUUID } from 'class-validator';
 import { Type } from 'class-transformer';
 
-// Este DTO define los datos que el frontend puede enviar para actualizar la configuración.
-// Todos los campos son opcionales para permitir actualizaciones parciales (PATCH).
 export class UpdateConfigurationDto {
   @IsOptional()
   @IsString()
@@ -35,8 +33,13 @@ export class UpdateConfigurationDto {
   @IsBoolean()
   isRewardsStoreEnabled?: boolean;
 
-  // --- CAMPO AÑADIDO PARA EL PREMIO DE CUMPLEAÑOS ---
+  // --- CAMPO CORREGIDO Y AÑADIDO ---
   @IsOptional()
   @IsUUID('4', { message: 'El ID del premio de cumpleaños debe ser un UUID válido.' })
   birthday_reward_id?: string;
+
+  // --- NUEVO CAMPO PARA EL PREMIO DEL SORTEO ---
+  @IsOptional()
+  @IsUUID('4', { message: 'El ID del premio del sorteo debe ser un UUID válido.' })
+  raffle_prize_product_id?: string;
 }
