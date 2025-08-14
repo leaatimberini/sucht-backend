@@ -1,19 +1,19 @@
-// src/users/users.module.ts
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common'; // 1. Importar forwardRef
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { User } from './user.entity';
 import { UsersService } from './users.service';
 import { UsersController } from './users.controller';
 import { CloudinaryModule } from 'src/cloudinary/cloudinary.module';
 import { ConfigurationModule } from 'src/configuration/configuration.module';
-import { NotificationsModule } from 'src/notifications/notifications.module'; // 1. IMPORTAR
+import { NotificationsModule } from 'src/notifications/notifications.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([User]),
     CloudinaryModule,
     ConfigurationModule,
-    NotificationsModule, // 2. AÑADIR A LOS IMPORTS
+    // 2. Envolvemos NotificationsModule en forwardRef
+    forwardRef(() => NotificationsModule),
   ],
   providers: [UsersService],
   exports: [UsersService],
