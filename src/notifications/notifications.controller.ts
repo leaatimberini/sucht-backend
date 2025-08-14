@@ -1,18 +1,18 @@
-import { Controller, Post, Body, UseGuards, Request, Get, Patch } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Request, Get, Patch, Delete, Param, ParseUUIDPipe } from '@nestjs/common';
 import { NotificationsService } from './notifications.service';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import { User, UserRole } from 'src/users/user.entity';
 import { IsArray, IsUUID } from 'class-validator';
+import { UnsubscribeDto } from './dto/unsubscribe.dto';
+import { FeedbackDto } from './dto/feedback.dto';
 
-// DTO para validar el cuerpo de la petición de marcar como leído
 class MarkAsReadDto {
   @IsArray()
   @IsUUID('4', { each: true })
   notificationIds: string[];
 }
-
 
 @Controller('notifications')
 @UseGuards(JwtAuthGuard)
@@ -21,9 +21,12 @@ export class NotificationsController {
 
   @Post('subscribe')
   subscribe(@Request() req: { user: User }, @Body() subscription: any) {
-    const userId = req.user.id;
-    // El servicio espera el objeto User completo, no solo el ID
     return this.notificationsService.addSubscription(req.user, subscription);
+  }
+
+  @Post('unsubscribe')
+  unsubscribe(@Request() req: { user: User }, @Body() unsubscribeDto: UnsubscribeDto) {
+    return this.notificationsService.removeSubscription(unsubscribeDto.endpoint, req.user.id);
   }
   
   @Post('send-to-all')
@@ -35,21 +38,23 @@ export class NotificationsController {
     return { message: 'Notificación enviada a todos los suscriptores.' };
   }
 
-  // --- NUEVOS ENDPOINTS PARA EL HEADER ---
-
-  /**
-   * Obtiene las notificaciones del usuario logueado.
-   */
   @Get('my-notifications')
   findMyNotifications(@Request() req: { user: User }) {
     return this.notificationsService.findMyNotifications(req.user.id);
   }
   
-  /**
-   * Marca un conjunto de notificaciones como leídas.
-   */
   @Patch('mark-as-read')
   markAsRead(@Request() req: { user: User }, @Body() body: MarkAsReadDto) {
     return this.notificationsService.markAsRead(req.user.id, body.notificationIds);
+  }
+
+  @Delete(':id')
+  deleteForUser(@Request() req: { user: User }, @Param('id', ParseUUIDPipe) id: string) {
+      return this.notificationsService.deleteForUser(req.user.id, id);
+  }
+
+  @Post(':id/feedback')
+  giveFeedback(@Param('id', ParseUUIDPipe) id: string, @Body() feedbackDto: FeedbackDto) {
+      return this.notificationsService.giveFeedback(id, feedbackDto.feedback);
   }
 }
