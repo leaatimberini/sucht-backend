@@ -1,15 +1,20 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, forwardRef, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Between, Repository } from 'typeorm';
 import { Event } from './event.entity';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
+import { NotificationsService } from 'src/notifications/notifications.service';
+import { ConfigurationService } from 'src/configuration/configuration.service';
 
 @Injectable()
 export class EventsService {
   constructor(
     @InjectRepository(Event)
     private eventsRepository: Repository<Event>,
+    // Inyectamos los servicios necesarios
+    private readonly notificationsService: NotificationsService,
+    private readonly configService: ConfigurationService,
   ) {}
 
   async create(createEventDto: CreateEventDto, flyerImageUrl?: string): Promise<Event> {
@@ -21,7 +26,18 @@ export class EventsService {
       endDate: new Date(endDate),
     };
     const event = this.eventsRepository.create(eventData);
-    return this.eventsRepository.save(event);
+    const savedEvent = await this.eventsRepository.save(event);
+
+    // --- LÓGICA DEL DISPARADOR DE NOTIFICACIÓN ---
+    const isNewEventNotificationEnabled = await this.configService.get('notifications_newEvent_enabled');
+    if (isNewEventNotificationEnabled === 'true') {
+        this.notificationsService.sendNotificationToAll({
+            title: '¡Nuevo Evento! 🎉',
+            body: `¡Ya puedes conseguir tus entradas para ${savedEvent.title}!`,
+        });
+    }
+
+    return savedEvent;
   }
 
   async update(id: string, updateEventDto: UpdateEventDto, flyerImageUrl?: string): Promise<Event> {
@@ -75,10 +91,6 @@ export class EventsService {
     });
   }
 
-  /**
-   * Encuentra el próximo evento activo cuya fecha de inicio sea en el futuro.
-   * Usado por varios módulos para determinar el contexto del próximo evento.
-   */
   async findNextUpcomingEvent(): Promise<Event | null> {
     return this.eventsRepository
       .createQueryBuilder('event')
@@ -87,7 +99,7 @@ export class EventsService {
       .getOne();
   }
 
-    async findEventBetweenDates(start: Date, end: Date): Promise<Event | null> {
+  async findEventBetweenDates(start: Date, end: Date): Promise<Event | null> {
     return this.eventsRepository.findOne({
         where: {
             startDate: Between(start, end)

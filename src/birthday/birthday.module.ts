@@ -1,5 +1,4 @@
-// backend/src/birthday/birthday.module.ts
-import { Module, forwardRef } from '@nestjs/common'; // 1. Importar forwardRef
+import { Module, forwardRef } from '@nestjs/common';
 import { BirthdayService } from './birthday.service';
 import { BirthdayController } from './birthday.controller';
 import { UsersModule } from '../users/users.module';
@@ -9,17 +8,18 @@ import { TicketsModule } from '../tickets/tickets.module';
 import { RewardsModule } from '../rewards/rewards.module';
 import { ConfigurationModule } from '../configuration/configuration.module';
 import { PaymentsModule } from '../payments/payments.module';
+import { NotificationsModule } from '../notifications/notifications.module'; // 1. Importar
 
 @Module({
   imports: [
-    // 2. Envolver todos los módulos importados en forwardRef
-    forwardRef(() => UsersModule),
-    forwardRef(() => EventsModule),
-    forwardRef(() => TicketTiersModule),
-    forwardRef(() => TicketsModule),
-    forwardRef(() => RewardsModule),
-    forwardRef(() => ConfigurationModule),
-    forwardRef(() => PaymentsModule),
+    UsersModule,
+    EventsModule,
+    TicketTiersModule,
+    TicketsModule,
+    RewardsModule,
+    ConfigurationModule,
+    PaymentsModule,
+    forwardRef(() => NotificationsModule), // 2. Añadir a los imports
   ],
   controllers: [BirthdayController],
   providers: [BirthdayService],

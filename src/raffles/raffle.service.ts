@@ -13,7 +13,6 @@ import { Ticket } from '../tickets/ticket.entity';
 import { ProductType } from '../ticket-tiers/ticket-tier.entity';
 import { endOfDay, startOfDay, set } from 'date-fns';
 import { toZonedTime } from 'date-fns-tz';
-import { Event } from 'src/events/event.entity';
 
 @Injectable()
 export class RaffleService {
@@ -30,17 +29,12 @@ export class RaffleService {
     private readonly notificationsService: NotificationsService,
   ) {}
 
-  /**
-   * TAREA AUTOMATIZADA (CRON JOB)
-   * Se ejecuta todos los sábados a las 20:00:05, hora de Argentina.
-   */
   @Cron('5 0 20 * * 6', {
     name: 'weeklyRaffle',
     timeZone: 'America/Argentina/Buenos_Aires',
   })
   async handleWeeklyRaffle() {
     this.logger.log('--- INICIANDO SORTEO SEMANAL ---');
-
     const timeZone = 'America/Argentina/Buenos_Aires';
     const now = toZonedTime(new Date(), timeZone);
     const startOfToday = startOfDay(now);
@@ -57,9 +51,6 @@ export class RaffleService {
     await this.performDraw(eventToday.id);
   }
 
-  /**
-   * Realiza el sorteo para un evento específico.
-   */
   async performDraw(eventId: string) {
     this.logger.log(`[performDraw] Iniciando sorteo para el evento ID: ${eventId}`);
     const weightedEntries = await this.getEligibleEntries(eventId);
@@ -76,18 +67,14 @@ export class RaffleService {
 
     const prizeProductId = await this.configurationService.get('raffle_prize_product_id');
     if (!prizeProductId) {
-      this.logger.error('[performDraw] ERROR: No hay un premio configurado para el sorteo. No se puede asignar.');
+      this.logger.error('[performDraw] ERROR: No hay un premio configurado para el sorteo.');
       return;
     }
     
     const prizeProduct = await this.storeService.findOneProduct(prizeProductId);
 
     const prizePurchase = await this.storeService.createFreePurchase(
-      winner,
-      prizeProductId,
-      eventId,
-      1,
-      'RAFFLE_PRIZE'
+      winner, prizeProductId, eventId, 1, 'RAFFLE_PRIZE'
     );
     this.logger.log(`[performDraw] Premio asignado. ID de la compra: ${prizePurchase.id}`);
 
@@ -111,9 +98,6 @@ export class RaffleService {
     this.logger.log('--- SORTEO SEMANAL FINALIZADO ---');
   }
 
-  /**
-   * Obtiene una lista ponderada de IDs de usuario que participan en el sorteo.
-   */
   private async getEligibleEntries(eventId: string): Promise<string[]> {
     const event = await this.eventsService.findOne(eventId);
     if (!event) return [];
@@ -142,18 +126,12 @@ export class RaffleService {
     return weightedEntries;
   }
 
-  /**
-   * Obtiene el historial de ganadores para el panel de admin.
-   */
   async getHistory() {
     return this.raffleWinnerRepository.find({
       order: { drawnAt: 'DESC' },
     });
   }
   
-  /**
-   * Obtiene el estado del sorteo para un evento específico.
-   */
   async getRaffleStatusForEvent(eventId: string) {
     const event = await this.eventsService.findOne(eventId);
     if (!event) {
