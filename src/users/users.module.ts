@@ -12,7 +12,7 @@ import { NotificationsModule } from 'src/notifications/notifications.module';
     TypeOrmModule.forFeature([User]),
     CloudinaryModule,
     ConfigurationModule,
-    // 2. Envolvemos NotificationsModule en forwardRef
+    // 2. Envolvemos NotificationsModule en forwardRef para romper el ciclo
     forwardRef(() => NotificationsModule),
   ],
   providers: [UsersService],

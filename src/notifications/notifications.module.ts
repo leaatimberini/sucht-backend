@@ -1,3 +1,4 @@
+// src/notifications/notifications.module.ts
 import { Module, forwardRef } from '@nestjs/common'; // 1. Importar forwardRef
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { NotificationsService } from './notifications.service';
