@@ -33,12 +33,12 @@ export class UpdateConfigurationDto {
   @IsBoolean()
   isRewardsStoreEnabled?: boolean;
 
-  // --- CAMPO CORREGIDO Y AÑADIDO ---
+  
   @IsOptional()
   @IsUUID('4', { message: 'El ID del premio de cumpleaños debe ser un UUID válido.' })
   birthday_reward_id?: string;
 
-  // --- NUEVO CAMPO PARA EL PREMIO DEL SORTEO ---
+  
   @IsOptional()
   @IsUUID('4', { message: 'El ID del premio del sorteo debe ser un UUID válido.' })
   raffle_prize_product_id?: string;
