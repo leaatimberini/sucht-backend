@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { User } from '../users/user.entity';
 import { CreateInvitationDto } from './dto/create-invitation.dto';
 import { UsersService } from '../users/users.service';
@@ -32,30 +32,34 @@ export class OwnerInvitationService {
   ) {}
 
   async createInvitation(owner: User, dto: CreateInvitationDto) {
-    this.logger.log(`Dueño ${owner.email} creando invitación para ${dto.email}`);
+    this.logger.log(`Dueño ${owner.email} creando invitación/regalo para ${dto.email}`);
     const { email, guestCount, isVipAccess, giftedProducts } = dto;
 
-    const fullOwner = await this.usersService.findOneById(owner.id);
-    if (!fullOwner) {
-      throw new NotFoundException('No se encontraron los datos del Dueño.');
+    // --- LÓGICA CORREGIDA ---
+    const isGiftingEntry = typeof guestCount === 'number';
+
+    if (!isGiftingEntry && giftedProducts.length === 0) {
+      throw new BadRequestException('Debes incluir una entrada o al menos un producto de regalo.');
     }
+
+    const fullOwner = await this.usersService.findOneById(owner.id);
+    if (!fullOwner) { throw new NotFoundException('No se encontraron los datos del Dueño.'); }
 
     const invitedUser = await this.usersService.findOrCreateByEmail(email);
     const upcomingEvent = await this.eventsService.findNextUpcomingEvent();
-    if (!upcomingEvent) {
-      throw new NotFoundException('No hay un evento próximo para crear la invitación.');
-    }
-    const entryTier = await this.ticketTiersService.findDefaultFreeTierForEvent(upcomingEvent.id);
-    if (!entryTier) {
-      throw new NotFoundException('No se encontró un tipo de entrada gratuita para asignar a la invitación.');
-    }
+    if (!upcomingEvent) { throw new NotFoundException('No hay un evento próximo para la invitación.'); }
 
-    const mainTicket = await this.ticketsService.createTicketInternal(
-      invitedUser,
-      { eventId: upcomingEvent.id, ticketTierId: entryTier.id, quantity: guestCount + 1 },
-      fullOwner,
-      0, null, 'OWNER_INVITATION', isVipAccess, 'INGRESO SIN FILA'
-    );
+    let mainTicket: Ticket | null = null;
+    if (isGiftingEntry) {
+      const entryTier = await this.ticketTiersService.findDefaultFreeTierForEvent(upcomingEvent.id);
+      if (!entryTier) { throw new NotFoundException('No se encontró un tipo de entrada gratuita para asignar.'); }
+
+      mainTicket = await this.ticketsService.createTicketInternal(
+        invitedUser,
+        { eventId: upcomingEvent.id, ticketTierId: entryTier.id, quantity: (guestCount ?? 0) + 1 },
+        fullOwner, 0, null, 'OWNER_INVITATION', isVipAccess ?? false, 'INGRESO SIN FILA'
+      );
+    }
 
     const giftedPurchases: ProductPurchase[] = [];
     for (const product of giftedProducts) {
@@ -66,14 +70,13 @@ export class OwnerInvitationService {
         giftedPurchases.push(purchase);
       }
     }
-    this.logger.log(`Se crearon ${giftedPurchases.length} QRs de regalo individuales.`);
     
-    const finalTicket = await this.ticketsService.findOne(mainTicket.id);
+    const finalTicket = mainTicket ? await this.ticketsService.findOne(mainTicket.id) : null;
     const finalVouchers = await Promise.all(giftedPurchases.map(p => this.storeService.findPurchaseById(p.id)));
 
     const frontendUrl = await this.configurationService.get('FRONTEND_URL') || 'https://sucht.com.ar';
     let actionUrl = `${frontendUrl}/mi-cuenta`;
-    let buttonText = 'VER INVITACIÓN EN MI CUENTA';
+    let buttonText = 'VER EN MI CUENTA';
 
     if (invitedUser.invitationToken) {
       actionUrl = `${frontendUrl}/auth/complete-invitation?token=${invitedUser.invitationToken}`;
@@ -83,7 +86,7 @@ export class OwnerInvitationService {
     const qrBoxStyle = "background-color: white; padding: 15px; border-radius: 8px; margin: 10px auto; max-width: 180px;";
     const qrApiUrl = "https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=";
     
-    const mainTicketQrHtml = `
+    const mainTicketQrHtml = finalTicket ? `
       <div style="margin-bottom: 20px; border: 2px solid #ffd700; border-radius: 12px; padding: 20px; background-color: #2a2a2a;">
         <p style="color: #ffd700; margin:0; font-size: 12px; text-transform: uppercase;">Invitado/a Especial de ${fullOwner.name}</p>
         <h3 style="color: #ffffff; margin: 5px 0 15px 0; font-size: 22px;">QR de Ingreso</h3>
@@ -92,7 +95,7 @@ export class OwnerInvitationService {
         ${finalTicket.isVipAccess ? `<p style="color: #ffd700; font-weight: bold; margin-top: 10px;">ACCESO VIP</p>` : ''}
         <p style="color: #ffd700; font-weight: bold; margin-top: 5px;">${finalTicket.specialInstructions}</p>
       </div>
-    `;
+    ` : '';
 
     const giftsQrHtml = finalVouchers.length > 0
       ? `
@@ -133,37 +136,24 @@ export class OwnerInvitationService {
     await this.mailService.sendMail(invitedUser.email, `Una invitación especial de ${fullOwner.name} para SUCHT`, emailHtml);
     
     this.logger.log(`Invitación para ${email} creada y email enviado exitosamente.`);
-    return { message: `Invitación especial enviada a ${email}.` };
+    return { message: `Regalo/Invitación enviado a ${email}.` };
   }
 
-  /**
-   * NUEVO MÉTODO: Obtiene el historial de invitaciones enviadas por un Dueño.
-   */
   async getMySentInvitations(ownerId: string) {
     this.logger.log(`Buscando invitaciones enviadas por el Dueño ID: ${ownerId}`);
-
     const invitationTickets = await this.ticketsRepository.find({
-      where: {
-        promoter: { id: ownerId },
-        origin: 'OWNER_INVITATION',
-      },
+      where: { promoter: { id: ownerId }, origin: 'OWNER_INVITATION', },
       relations: ['user', 'event', 'tier'],
       order: { createdAt: 'DESC' },
     });
 
-    if (invitationTickets.length === 0) {
-      return [];
-    }
+    if (invitationTickets.length === 0) { return []; }
 
     const invitedUserIds = invitationTickets.map(ticket => ticket.user.id);
     const eventIds = invitationTickets.map(ticket => ticket.event.id);
 
     const giftedProducts = await this.productPurchasesRepository.find({
-      where: {
-        userId: In(invitedUserIds),
-        eventId: In(eventIds),
-        origin: 'OWNER_GIFT',
-      },
+      where: { userId: In(invitedUserIds), eventId: In(eventIds), origin: 'OWNER_GIFT', },
       relations: ['product'],
     });
 
@@ -171,24 +161,16 @@ export class OwnerInvitationService {
       const giftsForThisInvitation = giftedProducts.filter(
         gift => gift.userId === ticket.user.id && gift.eventId === ticket.event.id
       );
-
       return {
         invitedUser: ticket.user,
         event: ticket.event,
-        ticket: {
-          id: ticket.id,
-          quantity: ticket.quantity,
-          redeemedCount: ticket.redeemedCount,
-          isVipAccess: ticket.isVipAccess,
-          status: ticket.status,
-        },
+        ticket: { id: ticket.id, quantity: ticket.quantity, redeemedCount: ticket.redeemedCount, isVipAccess: ticket.isVipAccess, status: ticket.status, },
         gifts: giftsForThisInvitation.reduce((acc, current) => {
             acc[current.product.name] = (acc[current.product.name] || 0) + 1;
             return acc;
         }, {} as Record<string, number>)
       };
     });
-
     return consolidatedInvitations;
   }
 }

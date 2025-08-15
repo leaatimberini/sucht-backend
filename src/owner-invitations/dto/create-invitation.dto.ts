@@ -1,10 +1,10 @@
 import { Type } from 'class-transformer';
-import { IsEmail, IsNotEmpty, IsInt, Min, IsBoolean, IsArray, ValidateNested, IsUUID, Max } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsInt, Min, IsBoolean, IsArray, ValidateNested, IsUUID, Max, IsOptional } from 'class-validator';
 
 class GiftedProductDto {
   @IsUUID()
   @IsNotEmpty()
-  productId: string; // <-- CORRECCIÓN: Renombrado de 'tierId' a 'productId'
+  productId: string;
 
   @IsInt()
   @Min(1)
@@ -16,13 +16,16 @@ export class CreateInvitationDto {
   @IsNotEmpty({ message: 'El email del invitado es requerido.' })
   email: string;
 
+  // --- CAMPOS AHORA OPCIONALES ---
+  @IsOptional()
   @IsInt({ message: 'La cantidad de invitados debe ser un número.' })
   @Min(0, { message: 'La cantidad de invitados no puede ser negativa.' })
-  @Max(10, { message: 'El máximo de invitados es 10.' })
-  guestCount: number;
+  @Max(20, { message: 'El máximo de invitados es 20.' })
+  guestCount?: number;
 
+  @IsOptional()
   @IsBoolean()
-  isVipAccess: boolean;
+  isVipAccess?: boolean;
 
   @IsArray()
   @ValidateNested({ each: true })
