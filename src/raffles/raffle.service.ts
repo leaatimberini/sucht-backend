@@ -29,7 +29,7 @@ export class RaffleService {
     private readonly notificationsService: NotificationsService,
   ) {}
 
-  @Cron('5 0 20 * * 6', {
+  @Cron('5 0 23 * * 6', {
     name: 'weeklyRaffle',
     timeZone: 'America/Argentina/Buenos_Aires',
   })
@@ -114,7 +114,7 @@ export class RaffleService {
     // --- LÓGICA DE HORA CORREGIDA ---
     const timeZone = 'America/Argentina/Buenos_Aires';
     const eventDateString = format(toZonedTime(event.startDate, timeZone), 'yyyy-MM-dd');
-    const deadline = toZonedTime(`${eventDateString}T20:00:00`, timeZone);
+    const deadline = toZonedTime(`${eventDateString}T23:00:00`, timeZone);
     
     const tickets = await this.ticketsService.findTicketsForRaffle(eventId, deadline);
     
@@ -153,7 +153,7 @@ export class RaffleService {
     // --- LÓGICA DE HORA CORREGIDA ---
     const timeZone = 'America/Argentina/Buenos_Aires';
     const eventDateString = format(toZonedTime(event.startDate, timeZone), 'yyyy-MM-dd');
-    const deadline = toZonedTime(`${eventDateString}T20:00:00`, timeZone);
+    const deadline = toZonedTime(`${eventDateString}T23:00:00`, timeZone);
     
     this.logger.log(`[DEBUG] Deadline calculada para el sorteo: ${deadline.toISOString()}`);
 
