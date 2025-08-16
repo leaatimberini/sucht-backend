@@ -1,3 +1,4 @@
+// src/raffles/raffle-winner.entity.ts
 import {
   Entity,
   PrimaryGeneratedColumn,
