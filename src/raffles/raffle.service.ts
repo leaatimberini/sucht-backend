@@ -11,7 +11,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { UsersService } from '../users/users.service';
 import { Ticket } from '../tickets/ticket.entity';
 import { ProductType } from '../ticket-tiers/ticket-tier.entity';
-import { endOfDay, startOfDay, set } from 'date-fns';
+import { endOfDay, startOfDay } from 'date-fns';
 import { toZonedTime, format } from 'date-fns-tz';
 
 @Injectable()
@@ -75,11 +75,7 @@ export class RaffleService {
     const prizeProduct = await this.storeService.findOneProduct(prizeProductId);
 
     const prizePurchase = await this.storeService.createFreePurchase(
-      winner,
-      prizeProductId,
-      eventId,
-      1,
-      'RAFFLE_PRIZE'
+      winner, prizeProductId, eventId, 1, 'RAFFLE_PRIZE'
     );
     this.logger.log(`[performDraw] Premio asignado. ID de la compra: ${prizePurchase.id}`);
 
@@ -112,21 +108,17 @@ export class RaffleService {
     if (!event) return [];
 
     const timeZone = 'America/Argentina/Buenos_Aires';
-    const eventDateInTz = toZonedTime(event.startDate, timeZone);
-    const deadline = set(eventDateInTz, { hours: 20, minutes: 0, seconds: 0, milliseconds: 0 });
+    const eventDateString = format(toZonedTime(event.startDate, timeZone), 'yyyy-MM-dd');
+    const deadline = toZonedTime(`${eventDateString}T20:00:00`, timeZone);
     
     const tickets = await this.ticketsService.findTicketsForRaffle(eventId, deadline);
     
     const weightedEntries: string[] = [];
     for (const ticket of tickets) {
       let chances = 0;
-      if (ticket.tier.productType === ProductType.VIP_TABLE) {
-        chances = 3;
-      } else if (!ticket.tier.isFree) {
-        chances = 2;
-      } else {
-        chances = 1;
-      }
+      if (ticket.tier.productType === ProductType.VIP_TABLE) chances = 3;
+      else if (!ticket.tier.isFree) chances = 2;
+      else chances = 1;
       for (let i = 0; i < chances; i++) {
         weightedEntries.push(ticket.user.id);
       }
@@ -148,7 +140,6 @@ export class RaffleService {
 
     const prizeProductId = await this.configurationService.get('raffle_prize_product_id');
     if (!prizeProductId) {
-      // Devolvemos un objeto que indique que no está configurado, en lugar de un error 404
       return { prizeName: null, deadline: null };
     }
 
