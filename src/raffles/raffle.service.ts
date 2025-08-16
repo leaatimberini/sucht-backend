@@ -11,7 +11,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { UsersService } from '../users/users.service';
 import { Ticket } from '../tickets/ticket.entity';
 import { ProductType } from '../ticket-tiers/ticket-tier.entity';
-import { endOfDay, startOfDay } from 'date-fns';
+import { endOfDay, startOfDay, set } from 'date-fns';
 import { toZonedTime, format } from 'date-fns-tz';
 
 @Injectable()
@@ -75,7 +75,11 @@ export class RaffleService {
     const prizeProduct = await this.storeService.findOneProduct(prizeProductId);
 
     const prizePurchase = await this.storeService.createFreePurchase(
-      winner, prizeProductId, eventId, 1, 'RAFFLE_PRIZE'
+      winner,
+      prizeProductId,
+      eventId,
+      1,
+      'RAFFLE_PRIZE'
     );
     this.logger.log(`[performDraw] Premio asignado. ID de la compra: ${prizePurchase.id}`);
 
@@ -107,6 +111,7 @@ export class RaffleService {
     const event = await this.eventsService.findOne(eventId);
     if (!event) return [];
 
+    // --- LÓGICA DE HORA CORREGIDA ---
     const timeZone = 'America/Argentina/Buenos_Aires';
     const eventDateString = format(toZonedTime(event.startDate, timeZone), 'yyyy-MM-dd');
     const deadline = toZonedTime(`${eventDateString}T20:00:00`, timeZone);
@@ -145,6 +150,7 @@ export class RaffleService {
 
     const prizeProduct = await this.storeService.findOneProduct(prizeProductId);
 
+    // --- LÓGICA DE HORA CORREGIDA ---
     const timeZone = 'America/Argentina/Buenos_Aires';
     const eventDateString = format(toZonedTime(event.startDate, timeZone), 'yyyy-MM-dd');
     const deadline = toZonedTime(`${eventDateString}T20:00:00`, timeZone);
