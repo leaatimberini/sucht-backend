@@ -2,7 +2,7 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { RaffleWinner } from './raffle-winner.entity';
 import { Repository, In, Between } from 'typeorm';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { Cron } from '@nestjs/schedule';
 import { EventsService } from '../events/events.service';
 import { TicketsService } from '../tickets/tickets.service';
 import { ConfigurationService } from '../configuration/configuration.service';
@@ -95,11 +95,15 @@ export class RaffleService {
     await this.raffleWinnerRepository.save(raffleWinner);
     this.logger.log(`[performDraw] Registro del ganador guardado en el historial. ID: ${raffleWinner.id}`);
 
-    await this.notificationsService.sendNotificationToUser(winner, {
-        title: '¡Felicitaciones, ganaste el sorteo! 🏆',
-        body: `Ganaste: ${prizeProduct.name}. ¡Reclámalo en la barra con tu QR!`,
-    });
-    this.logger.log(`[performDraw] Notificación enviada al ganador.`);
+    const isNotificationEnabled = await this.configurationService.get('notifications_raffle_enabled');
+    if (isNotificationEnabled === 'true') {
+        await this.notificationsService.sendNotificationToUser(winner, {
+            title: '¡Felicitaciones, ganaste el sorteo! 🏆',
+            body: `Ganaste: ${prizeProduct.name}. ¡Reclámalo en la barra con tu QR!`,
+        });
+        this.logger.log(`[performDraw] Notificación enviada al ganador.`);
+    }
+    
     this.logger.log('--- SORTEO SEMANAL FINALIZADO ---');
   }
 
@@ -110,8 +114,6 @@ export class RaffleService {
     const timeZone = 'America/Argentina/Buenos_Aires';
     const eventDateInTz = toZonedTime(event.startDate, timeZone);
     const deadline = set(eventDateInTz, { hours: 20, minutes: 0, seconds: 0, milliseconds: 0 });
-    
-    this.logger.log(`[DEBUG] Deadline para buscar tickets: ${deadline.toISOString()}`);
     
     const tickets = await this.ticketsService.findTicketsForRaffle(eventId, deadline);
     
@@ -146,7 +148,8 @@ export class RaffleService {
 
     const prizeProductId = await this.configurationService.get('raffle_prize_product_id');
     if (!prizeProductId) {
-      throw new NotFoundException('El premio para el sorteo no está configurado.');
+      // Devolvemos un objeto que indique que no está configurado, en lugar de un error 404
+      return { prizeName: null, deadline: null };
     }
 
     const prizeProduct = await this.storeService.findOneProduct(prizeProductId);
