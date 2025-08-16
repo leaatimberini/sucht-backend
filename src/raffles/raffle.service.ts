@@ -94,25 +94,23 @@ export class RaffleService {
   
   async getRaffleStatusForEvent(eventId: string) {
     const event = await this.eventsService.findOne(eventId);
-    if (!event) {
-      throw new NotFoundException('Evento no encontrado.');
-    }
+    if (!event) throw new NotFoundException('Evento no encontrado.');
 
     const prizeProductId = await this.configurationService.get('raffle_prize_product_id');
-    if (!prizeProductId) {
-      throw new NotFoundException('El premio para el sorteo no está configurado.');
-    }
+    if (!prizeProductId) throw new NotFoundException('El premio para el sorteo no está configurado.');
 
     const prizeProduct = await this.storeService.findOneProduct(prizeProductId);
 
-    // --- CORRECCIÓN CLAVE DE ZONA HORARIA (idéntica a la anterior) ---
     const timeZone = 'America/Argentina/Buenos_Aires';
     const eventDateInTz = toZonedTime(event.startDate, timeZone);
     const deadline = set(eventDateInTz, { hours: 20, minutes: 0, seconds: 0, milliseconds: 0 });
 
+    // --- LÍNEA DE DEPURACIÓN AÑADIDA ---
+    this.logger.log(`[DEBUG] Deadline calculada para el sorteo: ${deadline.toISOString()}`);
+
     return {
       prizeName: prizeProduct.name,
-      deadline: deadline.toISOString(), // Enviamos la fecha completa con la zona horaria correcta
+      deadline: deadline.toISOString(),
     };
   }
 }
