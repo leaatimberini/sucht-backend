@@ -35,10 +35,9 @@ export class OwnerInvitationService {
     this.logger.log(`Dueño ${owner.email} creando invitación/regalo para ${dto.email}`);
     const { email, guestCount, isVipAccess, giftedProducts } = dto;
 
-    // --- LÓGICA CORREGIDA ---
     const isGiftingEntry = typeof guestCount === 'number';
 
-    if (!isGiftingEntry && giftedProducts.length === 0) {
+    if (!isGiftingEntry && (!giftedProducts || giftedProducts.length === 0)) {
       throw new BadRequestException('Debes incluir una entrada o al menos un producto de regalo.');
     }
 
@@ -62,13 +61,16 @@ export class OwnerInvitationService {
     }
 
     const giftedPurchases: ProductPurchase[] = [];
-    for (const product of giftedProducts) {
-      for (let i = 0; i < product.quantity; i++) {
-        const purchase = await this.storeService.createFreePurchase(
-          invitedUser, product.productId, upcomingEvent.id, 1, 'OWNER_GIFT'
-        );
-        giftedPurchases.push(purchase);
-      }
+    if (giftedProducts && giftedProducts.length > 0) {
+        for (const product of giftedProducts) {
+            for (let i = 0; i < product.quantity; i++) {
+                const purchase = await this.storeService.createFreePurchase(
+                invitedUser, product.productId, upcomingEvent.id, 1, 'OWNER_GIFT'
+                );
+                giftedPurchases.push(purchase);
+            }
+        }
+        this.logger.log(`Se crearon ${giftedPurchases.length} QRs de regalo individuales.`);
     }
     
     const finalTicket = mainTicket ? await this.ticketsService.findOne(mainTicket.id) : null;

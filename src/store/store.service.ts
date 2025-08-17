@@ -36,7 +36,7 @@ export class StoreService {
     private configService: ConfigService,
     private pointTransactionsService: PointTransactionsService,
     private dataSource: DataSource,
-    private eventsService: EventsService, // Inyectamos EventsService
+    private eventsService: EventsService,
   ) {}
 
   // --- Gestión de Productos (Admin) ---
@@ -77,12 +77,11 @@ export class StoreService {
   }
   
   async findProductsByUserId(userId: string): Promise<ProductPurchase[]> {
-    const purchases = await this.purchasesRepository.find({
+    return this.purchasesRepository.find({
       where: { userId },
       relations: ['product', 'event'],
       order: { createdAt: 'DESC' },
     });
-    return purchases;
   }
   
   async findPurchaseById(purchaseId: string): Promise<ProductPurchase> {
@@ -142,25 +141,22 @@ export class StoreService {
     }
   }
 
-  // --- NUEVO MÉTODO PARA QUE EL ADMIN REGALE PRODUCTOS ---
   async giftProductByAdmin(dto: GiftProductDto): Promise<ProductPurchase[]> {
     const { email, productId, eventId, quantity } = dto;
     this.logger.log(`Admin regalando ${quantity}x producto ${productId} a ${email} para el evento ${eventId}`);
 
     const user = await this.usersService.findOrCreateByEmail(email);
-    const event = await this.eventsService.findOne(eventId); // Validamos que el evento exista
+    const event = await this.eventsService.findOne(eventId);
     if (!event) {
         throw new NotFoundException(`Evento con ID "${eventId}" no encontrado.`);
     }
 
     const purchases: ProductPurchase[] = [];
-    // Creamos una compra individual por cada unidad para que tengan QR separados
     for (let i = 0; i < quantity; i++) {
         const purchase = await this.createFreePurchase(user, productId, eventId, 1, 'ADMIN_GIFT');
         purchases.push(purchase);
     }
 
-    // Aquí podría ir una lógica de notificación por email si se desea
     return purchases;
   }
 
@@ -241,7 +237,7 @@ export class StoreService {
         quantity: item.quantity,
         amountPaid: amountPaid,
         paymentId,
-        origin: 'PURCHASE', // CORRECCIÓN: Se añade el origen
+        origin: 'PURCHASE',
       });
       purchases.push(await this.purchasesRepository.save(purchase));
     }

@@ -1,3 +1,4 @@
+// src/raffles/raffle.controller.ts
 import { Controller, Get, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
 import { RaffleService } from './raffle.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
