@@ -5,7 +5,7 @@ import { join } from 'path';
 import { NestExpressApplication } from '@nestjs/platform-express';
 
 async function bootstrap() {
-  console.log('--- EXECUTING LATEST CODE VERSION: V3 ---');
+  console.log('--- EXECUTING LATEST CODE VERSION: V5 ---');
 
   process.env.TZ = 'America/Argentina/Buenos_Aires';
   const app = await NestFactory.create<NestExpressApplication>(AppModule);

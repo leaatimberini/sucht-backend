@@ -1,3 +1,4 @@
+// src/configuration/dto/update-configuration.dto.ts
 import { IsOptional, IsString, IsNotEmpty, IsBoolean, IsNumber, IsUUID } from 'class-validator';
 import { Type } from 'class-transformer';
 
