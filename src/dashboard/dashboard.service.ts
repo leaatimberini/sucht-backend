@@ -7,6 +7,7 @@ import { Ticket, TicketStatus } from 'src/tickets/ticket.entity';
 import { User, UserRole } from 'src/users/user.entity';
 import { Between, In, LessThan, Repository } from 'typeorm';
 import { DashboardQueryDto } from './dto/dashboard-query.dto';
+import { TicketsService } from 'src/tickets/tickets.service';
 
 @Injectable()
 export class DashboardService {
@@ -19,8 +20,14 @@ export class DashboardService {
     private readonly eventsRepository: Repository<Event>,
     @InjectRepository(User)
     private readonly usersRepository: Repository<User>,
+    private readonly ticketsService: TicketsService,
   ) {}
-  
+    /**
+   * NUEVO MÉTODO: Obtiene el historial completo de tickets.
+   */
+  async getFullHistory(queryDto: DashboardQueryDto) {
+      return this.ticketsService.getFullHistory(queryDto);
+  }
   async getRRPPPerformance(queryDto: DashboardQueryDto) {
     const { eventId, startDate, endDate } = queryDto;
 
