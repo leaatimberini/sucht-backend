@@ -5,12 +5,9 @@ import { join } from 'path';
 import { NestExpressApplication } from '@nestjs/platform-express';
 
 async function bootstrap() {
-  // --- MARCA DE VERSIÓN AÑADIDA ---
-  console.log('--- EXECUTING LATEST CODE VERSION: V4 ---');
+  console.log('--- EXECUTING LATEST CODE VERSION: V3 ---');
 
-  // --- CORRECCIÓN DE ZONA HORARIA ---
   process.env.TZ = 'America/Argentina/Buenos_Aires';
-  
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   app.useStaticAssets(join(__dirname, '..', 'uploads'), {
@@ -29,8 +26,15 @@ async function bootstrap() {
     credentials: true,
   });
 
+  // --- CORRECCIÓN DEFINITIVA ---
+  // Añadimos 'transform: true' y 'transformOptions' para que el pipe convierta
+  // automáticamente los tipos de datos (ej. string 'true' a booleano true).
   app.useGlobalPipes(new ValidationPipe({
     whitelist: true,
+    transform: true,
+    transformOptions: {
+      enableImplicitConversion: true,
+    },
   }));
 
   const port = process.env.APP_PORT || 5000;
