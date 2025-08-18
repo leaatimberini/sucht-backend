@@ -1,13 +1,8 @@
-import {
-  IsString,
-  IsNotEmpty,
-  IsDateString,
-  IsOptional,
-} from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsDateString } from 'class-validator';
 
 export class CreateEventDto {
   @IsString()
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'El título es requerido.' })
   title: string;
 
   @IsString()
@@ -15,17 +10,22 @@ export class CreateEventDto {
   description?: string;
 
   @IsString()
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'La ubicación es requerida.' })
   location: string;
 
   @IsDateString()
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'La fecha de inicio es requerida.' })
   startDate: string;
 
   @IsDateString()
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'La fecha de fin es requerida.' })
   endDate: string;
-
-  // El campo para la imagen se maneja por separado y no necesita estar en el DTO
-  // cuando se usa FileInterceptor de la manera en que lo hemos configurado.
+  
+  /**
+   * NUEVO CAMPO: La fecha y hora en que el evento debe ser publicado.
+   * Es opcional. Si no se provee, el evento se publica inmediatamente.
+   */
+  @IsOptional()
+  @IsDateString()
+  publishAt?: string;
 }

@@ -1,15 +1,19 @@
 import { Injectable, NotFoundException, forwardRef, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Between, Repository } from 'typeorm';
+import { Between, Repository, LessThan, Not } from 'typeorm';
 import { Event } from './event.entity';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { NotificationsService } from 'src/notifications/notifications.service';
 import { ConfigurationService } from 'src/configuration/configuration.service';
 import { TZDate } from '@date-fns/tz';
+import { Cron, CronExpression } from '@nestjs/schedule'; // 1. Importar Cron
+import { Logger } from '@nestjs/common';
 
 @Injectable()
 export class EventsService {
+  private readonly logger = new Logger(EventsService.name); // Para logs
+
   constructor(
     @InjectRepository(Event)
     private eventsRepository: Repository<Event>,
@@ -18,40 +22,69 @@ export class EventsService {
     private readonly configService: ConfigurationService,
   ) {}
 
+  /**
+   * TAREA AUTOMATIZADA: Revisa y publica eventos programados.
+   * Se ejecuta cada minuto.
+   */
+  @Cron(CronExpression.EVERY_MINUTE)
+  async handleScheduledEvents() {
+    this.logger.log('Revisando eventos programados para publicar...');
+    
+    const now = new TZDate(new Date(), 'America/Argentina/Buenos_Aires');
+
+    const eventsToPublish = await this.eventsRepository.find({
+      where: {
+        isPublished: false,
+        publishAt: LessThan(now),
+      },
+    });
+
+    if (eventsToPublish.length > 0) {
+      this.logger.log(`Publicando ${eventsToPublish.length} evento(s) nuevo(s).`);
+      
+      for (const event of eventsToPublish) {
+        event.isPublished = true;
+        await this.eventsRepository.save(event);
+
+        const isNewEventNotificationEnabled = await this.configService.get('notifications_newEvent_enabled');
+        if (isNewEventNotificationEnabled === 'true') {
+            this.notificationsService.sendNotificationToAll({
+                title: '¡Nuevo Evento! 🎉',
+                body: `¡Ya puedes conseguir tus entradas para ${event.title}!`,
+            });
+        }
+      }
+    }
+  }
+
   async create(createEventDto: CreateEventDto, flyerImageUrl?: string): Promise<Event> {
-    const { startDate, endDate, ...restOfDto } = createEventDto;
+    const { startDate, endDate, publishAt, ...restOfDto } = createEventDto;
     const timeZone = 'America/Argentina/Buenos_Aires';
 
-    // Usamos TZDate para asegurar que las fechas se interpreten en la zona horaria correcta
     const eventData: Partial<Event> = {
       ...restOfDto,
       flyerImageUrl: flyerImageUrl,
       startDate: new TZDate(startDate, timeZone),
       endDate: new TZDate(endDate, timeZone),
+      publishAt: publishAt ? new TZDate(publishAt, timeZone) : new Date(), // Si no hay fecha, se publica ya
+      isPublished: !publishAt, // Si no hay fecha, se publica al instante
     };
     const event = this.eventsRepository.create(eventData);
-    const savedEvent = await this.eventsRepository.save(event);
-
-    const isNewEventNotificationEnabled = await this.configService.get('notifications_newEvent_enabled');
-    if (isNewEventNotificationEnabled === 'true') {
-        this.notificationsService.sendNotificationToAll({
-            title: '¡Nuevo Evento! 🎉',
-            body: `¡Ya puedes conseguir tus entradas para ${savedEvent.title}!`,
-        });
-    }
-
-    return savedEvent;
+    
+    // La notificación se quita de aquí, ahora la maneja el Cron Job
+    return this.eventsRepository.save(event);
   }
 
   async update(id: string, updateEventDto: UpdateEventDto, flyerImageUrl?: string): Promise<Event> {
     const event = await this.findOne(id);
-    const { startDate, endDate, ...restOfDto } = updateEventDto;
+    const { startDate, endDate, publishAt, ...restOfDto } = updateEventDto;
     const timeZone = 'America/Argentina/Buenos_Aires';
     
     const updatePayload: Partial<Event> = { ...restOfDto };
 
     if (startDate) updatePayload.startDate = new TZDate(startDate, timeZone);
     if (endDate) updatePayload.endDate = new TZDate(endDate, timeZone);
+    if (publishAt) updatePayload.publishAt = new TZDate(publishAt, timeZone);
     
     if (flyerImageUrl !== undefined) {
       updatePayload.flyerImageUrl = flyerImageUrl;
@@ -61,8 +94,12 @@ export class EventsService {
     return this.eventsRepository.save(event);
   }
   
-  async findAll(): Promise<Event[]> {
-    return this.eventsRepository.find({ order: { startDate: 'DESC' } });
+  async findAll(onlyPublished: boolean = true): Promise<Event[]> {
+    const whereClause: any = { order: { startDate: 'DESC' } };
+    if(onlyPublished) {
+        whereClause.where = { isPublished: true };
+    }
+    return this.eventsRepository.find(whereClause);
   }
 
   async findOne(id: string): Promise<Event> {
@@ -88,6 +125,7 @@ export class EventsService {
 
   async findAllForSelect(): Promise<{ id: string; title: string }[]> {
     return this.eventsRepository.find({
+      where: { isPublished: true },
       select: ['id', 'title'],
       order: {
         startDate: 'DESC',
@@ -102,6 +140,7 @@ export class EventsService {
     return this.eventsRepository
       .createQueryBuilder('event')
       .where('event.startDate >= :now', { now })
+      .andWhere('event.isPublished = true')
       .orderBy('event.startDate', 'ASC')
       .getOne();
   }
@@ -109,7 +148,8 @@ export class EventsService {
   async findEventBetweenDates(start: Date, end: Date): Promise<Event | null> {
     return this.eventsRepository.findOne({
         where: {
-            startDate: Between(start, end)
+            startDate: Between(start, end),
+            isPublished: true
         }
     });
   }
