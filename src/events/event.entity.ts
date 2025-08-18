@@ -1,4 +1,3 @@
-// src/events/event.entity.ts
 import {
   Entity,
   PrimaryGeneratedColumn,
@@ -24,10 +23,10 @@ export class Event {
   @Column()
   location: string;
 
-  @Column({ type: 'timestamp' })
+  @Column({ type: 'timestamp with time zone' }) // Se recomienda usar 'with time zone'
   startDate: Date;
 
-  @Column({ type: 'timestamp' })
+  @Column({ type: 'timestamp with time zone' })
   endDate: Date;
 
   @Column({ nullable: true })
@@ -36,7 +35,23 @@ export class Event {
   @Column({ type: 'timestamp', nullable: true })
   confirmationSentAt: Date | null;
 
-  // Borrado en cascada para mantener la integridad referencial
+  // --- NUEVOS CAMPOS PARA PUBLICACIÓN PROGRAMADA ---
+
+  /**
+   * Si es 'true', el evento es visible para el público en general.
+   */
+  @Column({ type: 'boolean', default: false })
+  isPublished: boolean;
+
+  /**
+   * La fecha y hora en que el evento se publicará automáticamente.
+   * Si es nulo, se debe publicar manualmente.
+   */
+  @Column({ type: 'timestamp with time zone', nullable: true })
+  publishAt: Date | null;
+
+  // --- FIN DE NUEVOS CAMPOS ---
+
   @OneToMany(() => Ticket, (ticket) => ticket.event, {
     cascade: true,
     onDelete: 'CASCADE',
