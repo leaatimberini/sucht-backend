@@ -25,10 +25,6 @@ export class BirthdayService {
     private readonly notificationsService: NotificationsService,
   ) {}
 
-  /**
-   * TAREA AUTOMATIZADA: Se ejecuta todos los días a las 10 AM (hora Argentina).
-   * Busca a los usuarios que inician su semana de cumpleaños y les envía una notificación.
-   */
   @Cron(CronExpression.EVERY_DAY_AT_10AM, {
     name: 'birthdayNotifications',
     timeZone: 'America/Argentina/Buenos_Aires',
@@ -42,7 +38,7 @@ export class BirthdayService {
       return;
     }
 
-    const allUsers = await this.usersService.findAll();
+    const allUsers = await this.usersService.findAllWithoutPagination();
     const usersInBirthdayWeek = allUsers.filter(user => 
         this.usersService.isBirthdayWeek(user.dateOfBirth)
     );
@@ -50,8 +46,6 @@ export class BirthdayService {
     this.logger.log(`Se encontraron ${usersInBirthdayWeek.length} usuarios en su semana de cumpleaños.`);
 
     for (const user of usersInBirthdayWeek) {
-        // Aquí se podría añadir una lógica para evitar notificar al mismo usuario varias veces en la misma semana.
-        // Por ahora, se enviará una notificación cada día que esté dentro de su semana.
         await this.notificationsService.sendNotificationToUser(user, {
             title: '¡Feliz Semana de Cumpleaños! 🎂',
             body: 'No te olvides de reclamar tu beneficio especial en tu cuenta de SUCHT.',
@@ -60,9 +54,6 @@ export class BirthdayService {
     this.logger.log('Notificaciones de cumpleaños enviadas.');
   }
 
-  /**
-   * Orquesta la creación del beneficio de cumpleaños "Clásico".
-   */
   async claimClassicBenefit(user: User, guestLimit: number) {
     const userProfile = await this.usersService.getProfile(user.id);
     if (!userProfile.isBirthdayWeek) {
@@ -107,9 +98,6 @@ export class BirthdayService {
     };
   }
 
-  /**
-   * Orquesta la creación de una preferencia de pago para la oferta de Mesa VIP de cumpleaños.
-   */
   async claimVipBenefit(user: User) {
     const userProfile = await this.usersService.getProfile(user.id);
     if (!userProfile.isBirthdayWeek) {
@@ -142,9 +130,6 @@ export class BirthdayService {
     });
   }
     
-  /**
-   * Verifica qué ofertas de cumpleaños están disponibles para el usuario.
-   */
   async checkAvailableOffers(user: User) {
     const response = {
       isBirthdayWeek: false,

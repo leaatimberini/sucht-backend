@@ -1,4 +1,3 @@
-// src/notifications/notifications.service.ts
 import { Injectable, Logger, BadRequestException, NotFoundException, Inject, forwardRef } from '@nestjs/common';
 import * as webPush from 'web-push';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -70,7 +69,7 @@ export class NotificationsService {
   }
 
   async sendNotificationToAll(payload: { title: string; body: string; icon?: string }) {
-    const allUsers = await this.usersService.findAll();
+    const allUsers = await this.usersService.findAllWithoutPagination();
     this.logger.log(`Creando notificaciones para ${allUsers.length} usuarios.`);
 
     for (const user of allUsers) {
@@ -162,15 +161,12 @@ export class NotificationsService {
     return this.notificationRepository.save(notification);
   }
 
-  /**
-   * NUEVO MÉTODO: Obtiene el historial completo de notificaciones enviadas.
-   */
   async getHistory(): Promise<Notification[]> {
     return this.notificationRepository.find({
       order: {
         createdAt: 'DESC'
       },
-      take: 100 // Limitamos a las últimas 100 para no sobrecargar el panel
+      take: 100
     });
   }
 }

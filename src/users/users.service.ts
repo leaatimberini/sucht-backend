@@ -6,7 +6,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, ArrayContains } from 'typeorm'; 
+import { Repository, ArrayContains } from 'typeorm';
 import { User, UserRole } from './user.entity';
 import { RegisterAuthDto } from 'src/auth/dto/register-auth.dto';
 import { randomBytes } from 'crypto';
@@ -19,7 +19,6 @@ import { CompleteInvitationDto } from './dto/complete-invitation.dto';
 import * as bcrypt from 'bcrypt';
 import { PaginationQueryDto } from 'src/common/dto/pagination-query.dto';
 
-// Interfaz para la respuesta paginada
 export interface PaginatedUsers {
   data: User[];
   total: number;
@@ -131,6 +130,7 @@ export class UsersService {
       .createQueryBuilder('user')
       .where('user.email = :email', { email: email.toLowerCase() })
       .addSelect('user.password')
+      .addSelect('user.invitationToken') // Asegurarse de seleccionar el token
       .getOne();
   }
 
@@ -259,6 +259,17 @@ export class UsersService {
     }
   }
 
+  /**
+   * Devuelve TODOS los usuarios sin paginación.
+   * Usado por servicios internos como Notificaciones y Cumpleaños.
+   */
+  async findAllWithoutPagination(): Promise<User[]> {
+    return this.usersRepository.find({ order: { createdAt: 'DESC' } });
+  }
+
+  /**
+   * Devuelve todos los usuarios de forma paginada para el panel de admin.
+   */
   async findAll(paginationQuery: PaginationQueryDto): Promise<PaginatedUsers> {
     const { page, limit } = paginationQuery;
     const skip = (page - 1) * limit;
@@ -276,7 +287,6 @@ export class UsersService {
     const { page, limit } = paginationQuery;
     const skip = (page - 1) * limit;
 
-    // Esta consulta es más compleja y usa QueryBuilder, por lo que no se ve afectada por el error.
     const queryBuilder = this.usersRepository.createQueryBuilder("user")
       .where(`user.roles::text NOT LIKE :role`, { role: `%${UserRole.CLIENT}%` })
       .orWhere(`array_length(user.roles, 1) > 1`);
@@ -291,7 +301,6 @@ export class UsersService {
     const { page, limit } = paginationQuery;
     const skip = (page - 1) * limit;
 
-    // 2. Usamos el operador ArrayContains para buscar en el array de roles.
     const [data, total] = await this.usersRepository.findAndCount({
       where: { roles: ArrayContains([UserRole.CLIENT]) },
       order: { createdAt: 'DESC' },
