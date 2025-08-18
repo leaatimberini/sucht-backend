@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common'; // 1. Importar Logger
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Configuration } from './configuration.entity';
@@ -6,7 +6,6 @@ import { UpdateConfigurationDto } from './dto/update-configuration.dto';
 
 @Injectable()
 export class ConfigurationService {
-  // 2. Crear una instancia del Logger
   private readonly logger = new Logger(ConfigurationService.name);
 
   constructor(
@@ -14,34 +13,32 @@ export class ConfigurationService {
     private configRepository: Repository<Configuration>,
   ) {}
 
+  /**
+   * MÉTODO CORREGIDO: Procesa las actualizaciones de forma secuencial para garantizar el guardado.
+   */
   async updateConfiguration(updateConfigurationDto: UpdateConfigurationDto): Promise<void> {
-    // 3. Log para ver qué datos llegan al servicio
     this.logger.log(`[updateConfiguration] Recibido DTO para actualizar: ${JSON.stringify(updateConfigurationDto)}`);
 
-    const updatePromises = Object.entries(updateConfigurationDto).map(
-      ([key, value]) => {
-        if (value !== null && value !== undefined) {
-          // 4. Log para ver exactamente qué se va a guardar
-          this.logger.log(`[updateConfiguration] Intentando guardar -> key: '${key}', value: '${String(value)}'`);
-          
-          return this.configRepository.upsert(
-            { key, value: String(value) },
-            ['key'],
-          );
-        }
-        return Promise.resolve();
-      },
-    );
-    await Promise.all(updatePromises);
-    this.logger.log(`[updateConfiguration] Promesas de guardado finalizadas.`);
+    // Usamos un bucle for...of para procesar cada clave una por una
+    for (const [key, value] of Object.entries(updateConfigurationDto)) {
+      if (value !== null && value !== undefined) {
+        this.logger.log(`[updateConfiguration] Guardando -> key: '${key}', value: '${String(value)}'`);
+        
+        // El 'await' dentro del bucle asegura que cada 'upsert' se complete
+        // antes de iniciar el siguiente.
+        await this.configRepository.upsert(
+          { key, value: String(value) },
+          ['key'],
+        );
+      }
+    }
+    this.logger.log(`[updateConfiguration] Todas las configuraciones han sido guardadas.`);
   }
 
   async get(key: string): Promise<string | null> {
-    // 5. Log para ver qué clave se está pidiendo
     this.logger.log(`[get] Buscando configuración para la clave: '${key}'`);
     const config = await this.configRepository.findOne({ where: { key } });
     
-    // 6. Log para ver qué se encontró en la base de datos
     this.logger.log(`[get] Valor encontrado para '${key}': ${config ? `'${config.value}'` : 'null'}`);
     return config ? config.value : null;
   }
