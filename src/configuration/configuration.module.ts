@@ -1,3 +1,4 @@
+// src/configuration/configuration.module.ts
 import { Module, Global } from '@nestjs/common'; // 1. Importar Global
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Configuration } from './configuration.entity';
