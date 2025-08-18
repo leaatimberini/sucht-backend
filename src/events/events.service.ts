@@ -1,53 +1,43 @@
-import { Injectable, NotFoundException, forwardRef, Inject } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Between, Repository } from 'typeorm';
 import { Event } from './event.entity';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
-import { NotificationsService } from 'src/notifications/notifications.service';
-import { ConfigurationService } from 'src/configuration/configuration.service';
+import { TZDate } from '@date-fns/tz'; // 1. Importar TZDate
 
 @Injectable()
 export class EventsService {
   constructor(
     @InjectRepository(Event)
     private eventsRepository: Repository<Event>,
-    // Inyectamos los servicios necesarios
-    private readonly notificationsService: NotificationsService,
-    private readonly configService: ConfigurationService,
   ) {}
 
   async create(createEventDto: CreateEventDto, flyerImageUrl?: string): Promise<Event> {
     const { startDate, endDate, ...restOfDto } = createEventDto;
+    const timeZone = 'America/Argentina/Buenos_Aires';
+
+    // 2. Usamos TZDate para asegurar que las fechas se interpreten en la zona horaria correcta
     const eventData: Partial<Event> = {
       ...restOfDto,
       flyerImageUrl: flyerImageUrl,
-      startDate: new Date(startDate),
-      endDate: new Date(endDate),
+      startDate: new TZDate(startDate, timeZone),
+      endDate: new TZDate(endDate, timeZone),
     };
     const event = this.eventsRepository.create(eventData);
-    const savedEvent = await this.eventsRepository.save(event);
-
-    // --- LÓGICA DEL DISPARADOR DE NOTIFICACIÓN ---
-    const isNewEventNotificationEnabled = await this.configService.get('notifications_newEvent_enabled');
-    if (isNewEventNotificationEnabled === 'true') {
-        this.notificationsService.sendNotificationToAll({
-            title: '¡Nuevo Evento! 🎉',
-            body: `¡Ya puedes conseguir tus entradas para ${savedEvent.title}!`,
-        });
-    }
-
-    return savedEvent;
+    return this.eventsRepository.save(event);
   }
 
   async update(id: string, updateEventDto: UpdateEventDto, flyerImageUrl?: string): Promise<Event> {
     const event = await this.findOne(id);
     const { startDate, endDate, ...restOfDto } = updateEventDto;
+    const timeZone = 'America/Argentina/Buenos_Aires';
     
     const updatePayload: Partial<Event> = { ...restOfDto };
 
-    if (startDate) updatePayload.startDate = new Date(startDate);
-    if (endDate) updatePayload.endDate = new Date(endDate);
+    // 3. Aplicamos la misma lógica de TZDate para la actualización
+    if (startDate) updatePayload.startDate = new TZDate(startDate, timeZone);
+    if (endDate) updatePayload.endDate = new TZDate(endDate, timeZone);
     
     if (flyerImageUrl !== undefined) {
       updatePayload.flyerImageUrl = flyerImageUrl;
@@ -92,9 +82,13 @@ export class EventsService {
   }
 
   async findNextUpcomingEvent(): Promise<Event | null> {
+    // 4. Usamos TZDate para que "ahora" sea la hora de Argentina
+    const timeZone = 'America/Argentina/Buenos_Aires';
+    const now = new TZDate(new Date(), timeZone);
+
     return this.eventsRepository
       .createQueryBuilder('event')
-      .where('event.startDate >= :now', { now: new Date() })
+      .where('event.startDate >= :now', { now })
       .orderBy('event.startDate', 'ASC')
       .getOne();
   }

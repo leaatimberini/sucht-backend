@@ -11,8 +11,8 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { UsersService } from '../users/users.service';
 import { Ticket } from '../tickets/ticket.entity';
 import { ProductType } from '../ticket-tiers/ticket-tier.entity';
-import { endOfDay, startOfDay, set } from 'date-fns';
-import { toZonedTime, format } from 'date-fns-tz';
+import { endOfDay, startOfDay } from 'date-fns';
+import { TZDate } from '@date-fns/tz'; // <-- Importamos TZDate
 
 @Injectable()
 export class RaffleService {
@@ -35,14 +35,12 @@ export class RaffleService {
   })
   async handleWeeklyRaffle() {
     this.logger.log('--- INICIANDO SORTEO SEMANAL ---');
-
     const timeZone = 'America/Argentina/Buenos_Aires';
-    const now = toZonedTime(new Date(), timeZone);
+    const now = new TZDate(new Date(), timeZone);
     const startOfToday = startOfDay(now);
     const endOfToday = endOfDay(now);
 
     const eventToday = await this.eventsService.findEventBetweenDates(startOfToday, endOfToday);
-
     if (!eventToday) {
       this.logger.log('No hay evento programado para hoy. Sorteo omitido.');
       return;
@@ -75,22 +73,14 @@ export class RaffleService {
     const prizeProduct = await this.storeService.findOneProduct(prizeProductId);
 
     const prizePurchase = await this.storeService.createFreePurchase(
-      winner,
-      prizeProductId,
-      eventId,
-      1,
-      'RAFFLE_PRIZE'
+      winner, prizeProductId, eventId, 1, 'RAFFLE_PRIZE'
     );
     this.logger.log(`[performDraw] Premio asignado. ID de la compra: ${prizePurchase.id}`);
 
     const event = await this.eventsService.findOne(eventId);
     const raffleWinner = this.raffleWinnerRepository.create({
-      winner,
-      winnerUserId: winner.id,
-      event,
-      eventId,
-      prize: prizePurchase,
-      prizePurchaseId: prizePurchase.id,
+      winner, winnerUserId: winner.id, event, eventId,
+      prize: prizePurchase, prizePurchaseId: prizePurchase.id,
     });
     await this.raffleWinnerRepository.save(raffleWinner);
     this.logger.log(`[performDraw] Registro del ganador guardado en el historial. ID: ${raffleWinner.id}`);
@@ -112,8 +102,9 @@ export class RaffleService {
     if (!event) return [];
 
     const timeZone = 'America/Argentina/Buenos_Aires';
-    const eventDateString = format(toZonedTime(event.startDate, timeZone), 'yyyy-MM-dd');
-    const deadline = toZonedTime(`${eventDateString}T20:00:00`, timeZone);
+    const eventDate = new TZDate(event.startDate, timeZone);
+    const deadlineString = `${eventDate.getFullYear()}-${String(eventDate.getMonth() + 1).padStart(2, '0')}-${String(eventDate.getDate()).padStart(2, '0')}T20:00:00`;
+    const deadline = new TZDate(deadlineString, timeZone);
     
     const tickets = await this.ticketsService.findTicketsForRaffle(eventId, deadline);
     
@@ -131,10 +122,9 @@ export class RaffleService {
   }
 
   async getHistory() {
-    // CORRECCIÓN: Se añaden explícitamente las relaciones para asegurar que siempre se carguen.
     return this.raffleWinnerRepository.find({
-      relations: ['winner', 'event', 'prize', 'prize.product'],
       order: { drawnAt: 'DESC' },
+      relations: ['winner', 'event', 'prize', 'prize.product'],
     });
   }
   
@@ -152,8 +142,9 @@ export class RaffleService {
     const prizeProduct = await this.storeService.findOneProduct(prizeProductId);
 
     const timeZone = 'America/Argentina/Buenos_Aires';
-    const eventDateString = format(toZonedTime(event.startDate, timeZone), 'yyyy-MM-dd');
-    const deadline = toZonedTime(`${eventDateString}T20:00:00`, timeZone);
+    const eventDate = new TZDate(event.startDate, timeZone);
+    const deadlineString = `${eventDate.getFullYear()}-${String(eventDate.getMonth() + 1).padStart(2, '0')}-${String(eventDate.getDate()).padStart(2, '0')}T20:00:00`;
+    const deadline = new TZDate(deadlineString, timeZone);
     
     this.logger.log(`[DEBUG] Deadline calculada para el sorteo: ${deadline.toISOString()}`);
 

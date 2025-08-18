@@ -6,9 +6,11 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 
 async function bootstrap() {
   // --- MARCA DE VERSIÓN AÑADIDA ---
-  console.log('--- EXECUTING LATEST CODE VERSION: V3 ---');
+  console.log('--- EXECUTING LATEST CODE VERSION: V4 ---');
 
-  process.env.TZ = 'America/Argentina/Buenos_aires';
+  // --- CORRECCIÓN DE ZONA HORARIA ---
+  process.env.TZ = 'America/Argentina/Buenos_Aires';
+  
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   app.useStaticAssets(join(__dirname, '..', 'uploads'), {
