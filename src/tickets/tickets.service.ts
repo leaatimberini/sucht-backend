@@ -47,22 +47,30 @@ export class TicketsService {
     if (!event) throw new NotFoundException('Evento no encontrado.');
     const tier = await this.ticketTiersRepository.findOneBy({ id: ticketTierId });
     if (!tier) throw new NotFoundException('Tipo de entrada no encontrado.');
+
+    // --- CORRECCIÓN CLAVE ---
+    // Nos aseguramos de que la cantidad siempre sea un número válido.
+    const numericQuantity = Number(quantity);
+    if (isNaN(numericQuantity) || numericQuantity <= 0) {
+        throw new BadRequestException('La cantidad de entradas no es válida.');
+    }
     
-    if (origin !== 'OWNER_INVITATION' && tier.quantity < quantity) {
+    if (origin !== 'OWNER_INVITATION' && tier.quantity < numericQuantity) {
       throw new BadRequestException(`No quedan suficientes. Disponibles: ${tier.quantity}.`);
     }
 
     let status = TicketStatus.VALID;
-    if (amountPaid > 0 && amountPaid < (tier.price * quantity)) {
+    if (amountPaid > 0 && amountPaid < (Number(tier.price) * numericQuantity)) {
       status = TicketStatus.PARTIALLY_PAID;
     }
 
     const newTicket = this.ticketsRepository.create({ 
-      user, event, tier, quantity, promoter, amountPaid, status, paymentId, origin, isVipAccess, specialInstructions,
+      user, event, tier, quantity: numericQuantity, promoter, amountPaid, status, paymentId, origin, isVipAccess, specialInstructions,
     });
     
     if (origin !== 'OWNER_INVITATION') {
-      tier.quantity -= quantity;
+      // Nos aseguramos de que la resta se haga entre números.
+      tier.quantity = Number(tier.quantity) - numericQuantity;
       await this.ticketTiersRepository.save(tier);
     }
 
@@ -72,7 +80,7 @@ export class TicketsService {
   }
   
   public async createTicketAndSendEmail(
-    user: User, // <--- ESTE es el objeto 'user' que tiene el token
+    user: User, 
     data: { eventId: string, ticketTierId: string, quantity: number },
     promoter: User | null,
     amountPaid: number,
@@ -92,9 +100,6 @@ export class TicketsService {
     let actionUrl = `${frontendUrl}/mi-cuenta`;
     let buttonText = 'VER EN MI CUENTA';
 
-    // --- CORRECCIÓN DEFINITIVA ---
-    // Usamos el objeto 'user' original que fue pasado a la función,
-    // que es el único que garantiza tener el invitationToken.
     if (user.invitationToken) {
       actionUrl = `${frontendUrl}/auth/complete-invitation?token=${user.invitationToken}`;
       buttonText = 'ACTIVAR CUENTA Y VER INVITACIÓN';
@@ -219,29 +224,29 @@ export class TicketsService {
     await this.ticketsRepository.save(ticket);
 
     if (shouldAwardPoints) {
-      try {
-        const pointsValue = await this.configurationService.get('points_attendance');
-        const pointsForAttendance = pointsValue ? parseInt(pointsValue, 10) : 100;
-        if (pointsForAttendance > 0 && ticket.user) {
-          await this.pointTransactionsService.createTransaction(
-            ticket.user, pointsForAttendance, PointTransactionReason.EVENT_ATTENDANCE,
-            `Asistencia al evento: ${ticket.event.title}`, ticket.id,
-          );
-        }
+        try {
+            const pointsValue = await this.configurationService.get('points_attendance');
+            const pointsForAttendance = pointsValue ? parseInt(pointsValue, 10) : 100;
+            if (pointsForAttendance > 0 && ticket.user) {
+                await this.pointTransactionsService.createTransaction(
+                ticket.user, pointsForAttendance, PointTransactionReason.EVENT_ATTENDANCE,
+                `Asistencia al evento: ${ticket.event.title}`, ticket.id,
+                );
+            }
 
-        if (ticket.promoter) {
-          const referralPointsValue = await this.configurationService.get('points_successful_referral');
-          const pointsForReferral = referralPointsValue ? parseInt(referralPointsValue, 10) : 50;
-          if (pointsForReferral > 0) {
-            await this.pointTransactionsService.createTransaction(
-              ticket.promoter, pointsForReferral, PointTransactionReason.SOCIAL_SHARE,
-              `Referido exitoso: ${ticket.user.name} asistió al evento.`, ticket.id,
-            );
-          }
+            if (ticket.promoter) {
+                const referralPointsValue = await this.configurationService.get('points_successful_referral');
+                const pointsForReferral = referralPointsValue ? parseInt(referralPointsValue, 10) : 50;
+                if (pointsForReferral > 0) {
+                    await this.pointTransactionsService.createTransaction(
+                    ticket.promoter, pointsForReferral, PointTransactionReason.SOCIAL_SHARE,
+                    `Referido exitoso: ${ticket.user.name} asistió al evento.`, ticket.id,
+                    );
+                }
+            }
+        } catch (error) {
+            this.logger.error(`[redeemTicket] Falló la creación de la transacción de puntos para el ticket ${ticket.id}`, error);
         }
-      } catch (error) {
-        this.logger.error(`[redeemTicket] Falló la creación de la transacción de puntos para el ticket ${ticket.id}`, error);
-      }
     }
 
     return {
@@ -296,17 +301,13 @@ export class TicketsService {
     });
   }
 
-    /**
-   * NUEVO MÉTODO DE APOYO: Busca todos los tickets para un evento antes de una fecha límite.
-   * Usado por el RaffleService para encontrar a los participantes elegibles.
-   */
   async findTicketsForRaffle(eventId: string, deadline: Date): Promise<Ticket[]> {
     return this.ticketsRepository.find({
       where: {
         event: { id: eventId },
-        createdAt: LessThan(deadline), // Creados antes de la fecha límite
+        createdAt: LessThan(deadline),
       },
-      relations: ['user', 'tier'], // Cargamos las relaciones que necesitamos
+      relations: ['user', 'tier'],
     });
   }
 }
