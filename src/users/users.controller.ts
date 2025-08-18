@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Body, UseGuards, Post, NotFoundException, Patch, UseInterceptors, UploadedFile, Request, HttpCode, HttpStatus, ConflictException } from '@nestjs/common';
+import { Controller, Get, Param, Body, UseGuards, Post, NotFoundException, Patch, UseInterceptors, UploadedFile, Request, HttpCode, HttpStatus, ConflictException, Query } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
@@ -12,6 +12,7 @@ import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
 import { unlink } from 'fs/promises';
 import { Public } from 'src/auth/decorators/public.decorator';
 import { CompleteInvitationDto } from './dto/complete-invitation.dto';
+import { PaginationQueryDto } from 'src/common/dto/pagination-query.dto';
 
 @Controller('users')
 export class UsersController {
@@ -20,14 +21,10 @@ export class UsersController {
     private readonly cloudinaryService: CloudinaryService,
   ) {}
 
-  /**
-   * NUEVO ENDPOINT PÚBLICO: Permite a un nuevo usuario finalizar su registro.
-   */
   @Public()
   @Post('complete-invitation')
   async completeInvitation(@Body() completeInvitationDto: CompleteInvitationDto) {
     const user = await this.usersService.completeInvitation(completeInvitationDto);
-    // No devolvemos la contraseña
     const { password, ...result } = user;
     return result;
   }
@@ -85,23 +82,25 @@ export class UsersController {
   @Get('staff')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
-  async findStaff() {
-    const users = await this.usersService.findStaff();
-    return users.map(user => {
+  async findStaff(@Query() paginationQuery: PaginationQueryDto) {
+    const { data, ...pagination } = await this.usersService.findStaff(paginationQuery);
+    const results = data.map(user => {
       const { password, ...result } = user;
       return result;
     });
+    return { results, ...pagination };
   }
 
   @Get('clients')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
-  async findClients() {
-    const users = await this.usersService.findClients();
-    return users.map(user => {
+  async findClients(@Query() paginationQuery: PaginationQueryDto) {
+    const { data, ...pagination } = await this.usersService.findClients(paginationQuery);
+    const results = data.map(user => {
       const { password, ...result } = user;
       return result;
     });
+    return { results, ...pagination };
   }
 
   @Patch(':id/roles')
@@ -127,6 +126,7 @@ export class UsersController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.RRPP)
   async findUpcomingBirthdays() {
+    // Nota: Este endpoint podría necesitar paginación en el futuro si la lista es muy grande
     const users = await this.usersService.findUpcomingBirthdays(15);
     return users.map(user => {
       const { password, ...result } = user;
@@ -137,11 +137,12 @@ export class UsersController {
   @Get()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
-  async findAll() {
-    const users = await this.usersService.findAll();
-    return users.map(user => {
+  async findAll(@Query() paginationQuery: PaginationQueryDto) {
+    const { data, ...pagination } = await this.usersService.findAll(paginationQuery);
+    const results = data.map(user => {
       const { password, ...result } = user;
       return result;
     });
+    return { results, ...pagination };
   }
 }

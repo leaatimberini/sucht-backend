@@ -6,7 +6,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, ArrayContains } from 'typeorm'; 
 import { User, UserRole } from './user.entity';
 import { RegisterAuthDto } from 'src/auth/dto/register-auth.dto';
 import { randomBytes } from 'crypto';
@@ -17,6 +17,15 @@ import { NotificationsService } from 'src/notifications/notifications.service';
 import { startOfWeek, endOfWeek, isWithinInterval } from 'date-fns';
 import { CompleteInvitationDto } from './dto/complete-invitation.dto';
 import * as bcrypt from 'bcrypt';
+import { PaginationQueryDto } from 'src/common/dto/pagination-query.dto';
+
+// Interfaz para la respuesta paginada
+export interface PaginatedUsers {
+  data: User[];
+  total: number;
+  page: number;
+  limit: number;
+}
 
 @Injectable()
 export class UsersService {
@@ -158,7 +167,6 @@ export class UsersService {
   ): Promise<User> {
     const userToUpdate = await this.findOneById(userId);
 
-    // Evita que cambien fecha de nacimiento si ya está establecida
     if (
       userToUpdate.dateOfBirth &&
       updateProfileDto.dateOfBirth &&
@@ -251,24 +259,47 @@ export class UsersService {
     }
   }
 
-  async findAll(): Promise<User[]> {
-    return this.usersRepository.find({ order: { createdAt: 'DESC' } });
+  async findAll(paginationQuery: PaginationQueryDto): Promise<PaginatedUsers> {
+    const { page, limit } = paginationQuery;
+    const skip = (page - 1) * limit;
+
+    const [data, total] = await this.usersRepository.findAndCount({
+      order: { createdAt: 'DESC' },
+      skip,
+      take: limit,
+    });
+
+    return { data, total, page, limit };
   }
 
-  async findStaff(): Promise<User[]> {
-    const allUsers = await this.findAll();
-    return allUsers.filter(
-      (user) =>
-        !(user.roles.length === 1 && user.roles[0] === UserRole.CLIENT),
-    );
+  async findStaff(paginationQuery: PaginationQueryDto): Promise<PaginatedUsers> {
+    const { page, limit } = paginationQuery;
+    const skip = (page - 1) * limit;
+
+    // Esta consulta es más compleja y usa QueryBuilder, por lo que no se ve afectada por el error.
+    const queryBuilder = this.usersRepository.createQueryBuilder("user")
+      .where(`user.roles::text NOT LIKE :role`, { role: `%${UserRole.CLIENT}%` })
+      .orWhere(`array_length(user.roles, 1) > 1`);
+
+    const total = await queryBuilder.getCount();
+    const data = await queryBuilder.orderBy('user.createdAt', 'DESC').skip(skip).take(limit).getMany();
+
+    return { data, total, page, limit };
   }
 
-  async findClients(): Promise<User[]> {
-    const allUsers = await this.findAll();
-    return allUsers.filter(
-      (user) =>
-        user.roles.length === 1 && user.roles[0] === UserRole.CLIENT,
-    );
+  async findClients(paginationQuery: PaginationQueryDto): Promise<PaginatedUsers> {
+    const { page, limit } = paginationQuery;
+    const skip = (page - 1) * limit;
+
+    // 2. Usamos el operador ArrayContains para buscar en el array de roles.
+    const [data, total] = await this.usersRepository.findAndCount({
+      where: { roles: ArrayContains([UserRole.CLIENT]) },
+      order: { createdAt: 'DESC' },
+      skip,
+      take: limit,
+    });
+
+    return { data, total, page, limit };
   }
 
   async updateUserRoles(id: string, roles: UserRole[]): Promise<User> {
