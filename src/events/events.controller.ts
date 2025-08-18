@@ -43,17 +43,17 @@ export class EventsController {
     @Body() updateEventDto: UpdateEventDto,
     @UploadedFile() flyerImage?: Express.Multer.File,
   ) {
-    let finalUpdateDto = { ...updateEventDto };
+    let flyerImageUrl: string | undefined;
     if (flyerImage) {
       const uploadResult = await this.cloudinaryService.uploadImage(flyerImage, 'sucht/events');
-      finalUpdateDto.flyerImageUrl = uploadResult.secure_url;
+      flyerImageUrl = uploadResult.secure_url;
       try {
         await unlink(flyerImage.path);
       } catch (err) {
         console.error('Error removing temporary file:', err);
       }
     }
-    return this.eventsService.update(id, finalUpdateDto);
+    return this.eventsService.update(id, updateEventDto, flyerImageUrl);
   }
 
   @Post(':id/request-confirmation')
@@ -63,20 +63,22 @@ export class EventsController {
     return this.eventsService.requestConfirmation(id);
   }
 
-  // --- NUEVO ENDPOINT ---
-  /**
-   * Devuelve el próximo evento. Usado por el dashboard del Dueño.
-   */
-  @Get('next')
-  @UseGuards(JwtAuthGuard)
-  findNextUpcomingEvent() {
-    return this.eventsService.findNextUpcomingEvent();
+  @Public()
+  @Get()
+  findAll() { 
+    return this.eventsService.findAll(); 
   }
   
-  @Public() // Las rutas públicas deben ir antes de las que tienen parámetros para evitar conflictos
-  @Get()
-  findAll() { return this.eventsService.findAll(); }
-  
+  /**
+   * NUEVO ENDPOINT: Devuelve todos los eventos (publicados o no) para el panel de admin.
+   */
+  @Get('all-for-admin')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.OWNER)
+  findAllForAdmin() {
+      return this.eventsService.findAllForAdmin();
+  }
+
   @Public()
   @Get('list/for-select')
   findAllForSelect() {
@@ -85,10 +87,14 @@ export class EventsController {
 
   @Public()
   @Get(':id')
-  findOne(@Param('id') id: string) { return this.eventsService.findOne(id); }
+  findOne(@Param('id') id: string) { 
+    return this.eventsService.findOne(id); 
+  }
 
   @Delete(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
-  remove(@Param('id') id: string) { return this.eventsService.remove(id); }
+  remove(@Param('id') id: string) { 
+    return this.eventsService.remove(id); 
+  }
 }

@@ -1,18 +1,18 @@
 import { Injectable, NotFoundException, forwardRef, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Between, Repository, LessThan, Not } from 'typeorm';
+import { Between, Repository, LessThan } from 'typeorm';
 import { Event } from './event.entity';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { NotificationsService } from 'src/notifications/notifications.service';
 import { ConfigurationService } from 'src/configuration/configuration.service';
 import { TZDate } from '@date-fns/tz';
-import { Cron, CronExpression } from '@nestjs/schedule'; // 1. Importar Cron
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { Logger } from '@nestjs/common';
 
 @Injectable()
 export class EventsService {
-  private readonly logger = new Logger(EventsService.name); // Para logs
+  private readonly logger = new Logger(EventsService.name);
 
   constructor(
     @InjectRepository(Event)
@@ -22,10 +22,6 @@ export class EventsService {
     private readonly configService: ConfigurationService,
   ) {}
 
-  /**
-   * TAREA AUTOMATIZADA: Revisa y publica eventos programados.
-   * Se ejecuta cada minuto.
-   */
   @Cron(CronExpression.EVERY_MINUTE)
   async handleScheduledEvents() {
     this.logger.log('Revisando eventos programados para publicar...');
@@ -66,12 +62,11 @@ export class EventsService {
       flyerImageUrl: flyerImageUrl,
       startDate: new TZDate(startDate, timeZone),
       endDate: new TZDate(endDate, timeZone),
-      publishAt: publishAt ? new TZDate(publishAt, timeZone) : new Date(), // Si no hay fecha, se publica ya
-      isPublished: !publishAt, // Si no hay fecha, se publica al instante
+      publishAt: publishAt ? new TZDate(publishAt, timeZone) : new Date(),
+      isPublished: !publishAt,
     };
     const event = this.eventsRepository.create(eventData);
     
-    // La notificación se quita de aquí, ahora la maneja el Cron Job
     return this.eventsRepository.save(event);
   }
 
@@ -94,12 +89,21 @@ export class EventsService {
     return this.eventsRepository.save(event);
   }
   
-  async findAll(onlyPublished: boolean = true): Promise<Event[]> {
-    const whereClause: any = { order: { startDate: 'DESC' } };
-    if(onlyPublished) {
-        whereClause.where = { isPublished: true };
-    }
-    return this.eventsRepository.find(whereClause);
+  /**
+   * Devuelve solo los eventos publicados para la vista del cliente.
+   */
+  async findAll(): Promise<Event[]> {
+    return this.eventsRepository.find({ 
+        where: { isPublished: true },
+        order: { startDate: 'DESC' } 
+    });
+  }
+
+  /**
+   * NUEVO MÉTODO: Devuelve TODOS los eventos (publicados o no) para el panel de admin.
+   */
+  async findAllForAdmin(): Promise<Event[]> {
+    return this.eventsRepository.find({ order: { startDate: 'DESC' } });
   }
 
   async findOne(id: string): Promise<Event> {
