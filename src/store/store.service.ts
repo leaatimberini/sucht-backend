@@ -77,11 +77,12 @@ export class StoreService {
   }
   
   async findProductsByUserId(userId: string): Promise<ProductPurchase[]> {
-    return this.purchasesRepository.find({
+    const purchases = await this.purchasesRepository.find({
       where: { userId },
       relations: ['product', 'event'],
       order: { createdAt: 'DESC' },
     });
+    return purchases;
   }
   
   async findPurchaseById(purchaseId: string): Promise<ProductPurchase> {
@@ -93,6 +94,13 @@ export class StoreService {
         throw new NotFoundException(`Compra de producto con ID "${purchaseId}" no encontrada.`)
     }
     return purchase;
+  }
+
+  /**
+   * NUEVO MÉTODO DE APOYO: Busca una compra por el ID de pago.
+   */
+  async findPurchaseByPaymentId(paymentId: string): Promise<ProductPurchase | null> {
+    return this.purchasesRepository.findOne({ where: { paymentId } });
   }
 
   // --- Lógica de Regalos ---
