@@ -1,3 +1,4 @@
+// src/events/events.service.ts
 import { Injectable, NotFoundException, forwardRef, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Between, Repository, LessThan } from 'typeorm';

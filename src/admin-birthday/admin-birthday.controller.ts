@@ -1,3 +1,4 @@
+// admin-birthday/admin-birthday.controller.ts
 import { Controller, Get, UseGuards, Query, ParseUUIDPipe, Patch, Param, Body } from '@nestjs/common';
 import { AdminBirthdayService } from './admin-birthday.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';

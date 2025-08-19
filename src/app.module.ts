@@ -19,7 +19,8 @@ import { StoreModule } from './store/store.module';
 import { AdminBirthdayModule } from './admin-birthday/admin-birthday.module';
 import { BirthdayModule } from './birthday/birthday.module';
 import { OwnerInvitationModule } from './owner-invitations/owner-invitations.module';
-import { RaffleModule } from './raffles/raffle.module'; // <-- 1. Importar el nuevo módulo
+import { RaffleModule } from './raffles/raffle.module';
+import { OrganizerModule } from './organizer/organizer.module'; // Importamos el módulo del Organizador
 
 @Module({
   imports: [
@@ -57,7 +58,8 @@ import { RaffleModule } from './raffles/raffle.module'; // <-- 1. Importar el nu
     AdminBirthdayModule,
     BirthdayModule,
     OwnerInvitationModule,
-    RaffleModule, // <-- 2. Añadir a la lista de imports
+    RaffleModule,
+    OrganizerModule, // Añadimos el módulo del Organizador
   ],
   controllers: [],
   providers: [],

@@ -1,0 +1,16 @@
+import { IsEmail, IsNotEmpty, IsInt, Min, Max, IsBoolean, IsOptional } from 'class-validator';
+
+export class CreateOrganizerInvitationDto {
+  @IsEmail({}, { message: 'Debe ser un correo electrónico válido.' })
+  @IsNotEmpty({ message: 'El email del invitado es requerido.' })
+  email: string;
+
+  @IsInt({ message: 'La cantidad de invitados debe ser un número.' })
+  @Min(0, { message: 'La cantidad de invitados no puede ser negativa.' })
+  @Max(20, { message: 'El máximo de invitados es 20.' })
+  guestCount: number;
+
+  @IsBoolean()
+  @IsOptional()
+  isVipAccess?: boolean;
+}
