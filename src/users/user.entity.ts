@@ -32,7 +32,7 @@ export class User {
   name: string;
 
   // El campo de la contraseña no se seleccionará por defecto en las consultas
-  @Column({ select: false })
+  @Column({ select: false, nullable: true })
   password?: string;
   
   @Column({ type: 'simple-array', default: UserRole.CLIENT })
