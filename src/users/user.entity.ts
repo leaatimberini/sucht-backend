@@ -62,7 +62,7 @@ export class User {
   invitationToken?: string;
   
   // Comisión por venta para RRPP
-  @Column({ type: 'decimal', precision: 5, scale: 2, default: 0.0 })
+  @Column({ type: 'decimal', precision: 5, scale: 2, default: 0.0, nullable: true })
   rrppCommissionRate: number;
   
   // Puntos de lealtad
