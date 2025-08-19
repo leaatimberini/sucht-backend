@@ -1,3 +1,4 @@
+// owner-invitations.controller.ts
 import { Controller, Post, Body, UseGuards, Req, Get } from '@nestjs/common';
 import { OwnerInvitationService } from './owner-invitations.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';

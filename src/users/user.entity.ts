@@ -1,101 +1,106 @@
-// backend/src/users/user.entity.ts
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, BeforeInsert, OneToMany } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, BeforeInsert, BeforeUpdate, OneToMany } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { Ticket } from 'src/tickets/ticket.entity';
 import { PushSubscription } from 'src/notifications/entities/subscription.entity';
 import { Notification } from 'src/notifications/entities/notification.entity';
-import { PointTransaction } from 'src/point-transactions/point-transaction.entity';
 import { UserReward } from 'src/rewards/user-reward.entity';
+import { ProductPurchase } from 'src/store/product-purchase.entity';
 
+// Se añade el nuevo rol 'ORGANIZER'
 export enum UserRole {
-  OWNER = 'owner',
-  ADMIN = 'admin',
-  RRPP = 'rrpp',
-  VERIFIER = 'verifier',
-  BARRA = 'barra',
-  CLIENT = 'client',
+  OWNER = 'owner',
+  ADMIN = 'admin',
+  ORGANIZER = 'organizer', // <-- NUEVO ROL
+  RRPP = 'rrpp',
+  VERIFIER = 'verifier',
+  BARRA = 'barra',
+  CLIENT = 'client',
 }
 
 @Entity('users')
 export class User {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
 
-  @Column({ type: 'varchar', unique: true, nullable: true })
-  username: string | null;
+  @Column({ unique: true, nullable: true })
+  username: string;
 
-  @Column({ type: 'varchar', unique: true })
-  email: string;
+  @Column({ unique: true })
+  email: string;
 
-  @Column({ type: 'varchar', nullable: true, select: false })
-  password?: string;
+  @Column({ nullable: true })
+  name: string;
 
-  @Column({ type: 'varchar' })
-  name: string;
+  // El campo de la contraseña no se seleccionará por defecto en las consultas
+  @Column({ select: false })
+  password?: string;
+  
+  @Column({ type: 'simple-array', default: UserRole.CLIENT })
+  roles: UserRole[];
 
-  @Column({
-    type: 'simple-array',
-    default: [UserRole.CLIENT],
-  })
-  roles: UserRole[];
+  @Column({ nullable: true })
+  profileImageUrl: string;
+  
+  @Column({ nullable: true })
+  instagramHandle: string;
 
-  @Column({ type: 'varchar', nullable: true, select: false })
-  invitationToken: string | null;
+  @Column({ nullable: true })
+  whatsappNumber: string;
 
-  @Column({ type: 'varchar', nullable: true })
-  profileImageUrl: string | null;
+  @Column({ type: 'date', nullable: true })
+  dateOfBirth: Date;
 
-  @Column({ type: 'varchar', nullable: true })
-  instagramHandle: string | null;
+  // Credenciales de Mercado Pago (pueden ser nulas)
+  @Column({ nullable: true, select: false })
+  mpAccessToken?: string;
 
-  @Column({ type: 'varchar', nullable: true })
-  whatsappNumber: string | null;
+  @Column({ nullable: true })
+  mpUserId?: number;
+  
+  // Token para usuarios invitados que aún no han establecido su contraseña
+  @Column({ nullable: true, select: false })
+  invitationToken?: string;
+  
+  // Comisión por venta para RRPP
+  @Column({ type: 'decimal', precision: 5, scale: 2, default: 0.0 })
+  rrppCommissionRate: number;
+  
+  // Puntos de lealtad
+  @Column({ type: 'int', default: 0 })
+  points: number;
+  
+  @CreateDateColumn({ type: 'timestamp' })
+  createdAt: Date;
+  
+  @UpdateDateColumn({ type: 'timestamp' })
+  updatedAt: Date;
 
-  @Column({ type: 'date', nullable: true })
-  dateOfBirth: Date | null;
+  // Relaciones
+  @OneToMany(() => Ticket, ticket => ticket.user)
+  tickets: Ticket[];
 
-  @Column({ type: 'varchar', nullable: true, select: false })
-  mpAccessToken: string | null;
+  @OneToMany(() => Ticket, ticket => ticket.promoter)
+  promotedTickets: Ticket[];
 
-  @Column({ type: 'bigint', nullable: true })
-  mpUserId: number | null;
+  @OneToMany(() => PushSubscription, subscription => subscription.user)
+  pushSubscriptions: PushSubscription[];
 
-  @Column({ type: 'decimal', precision: 5, scale: 2, nullable: true })
-  rrppCommissionRate: number | null;
+  @OneToMany(() => Notification, notification => notification.user)
+  notifications: Notification[];
 
-  @Column({ type: 'int', default: 0 })
-  points: number;
+  @OneToMany(() => UserReward, userReward => userReward.user)
+  rewards: UserReward[];
 
-  @OneToMany(() => Ticket, (ticket) => ticket.user)
-  tickets: Ticket[];
+  @OneToMany(() => ProductPurchase, purchase => purchase.user)
+  purchases: ProductPurchase[];
 
-  @OneToMany(() => Ticket, (ticket) => ticket.promoter)
-  promotedTickets: Ticket[];
 
-  // ===== RELACIONES INVERSAS AÑADIDAS PARA CONSISTENCIA =====
-  @OneToMany(() => PointTransaction, (transaction) => transaction.user)
-  pointTransactions: PointTransaction[];
-
-  @OneToMany(() => UserReward, (userReward) => userReward.user)
-  userRewards: UserReward[];
-
-  @CreateDateColumn({ type: 'timestamp' })
-  createdAt: Date;
-
-  @UpdateDateColumn({ type: 'timestamp' })
-  updatedAt: Date;
-  birthdayBenefits: any;
-
-  @BeforeInsert()
-  async hashPassword() {
-    if (this.password) {
-      this.password = await bcrypt.hash(this.password, 10);
-    }
-  }
-
-  @OneToMany(() => Notification, notification => notification.user)
-  notifications: Notification[];
-
-  @OneToMany(() => PushSubscription, (subscription) => subscription.user)
-  pushSubscriptions: PushSubscription[];
+  // Hooks para hashear la contraseña antes de guardarla
+  @BeforeInsert()
+  @BeforeUpdate()
+  async hashPassword() {
+    if (this.password) {
+      this.password = await bcrypt.hash(this.password, 10);
+    }
+  }
 }
