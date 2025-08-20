@@ -1,3 +1,4 @@
+// backend/src/users/dto/complete-invitation.dto.ts
 import { IsNotEmpty, IsString, MinLength, IsDateString } from 'class-validator';
 
 export class CompleteInvitationDto {
