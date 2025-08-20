@@ -1,3 +1,4 @@
+// owner-invitations.module.ts
 import { Module } from '@nestjs/common';
 import { OwnerInvitationService } from './owner-invitations.service';
 import { OwnerInvitationController } from './owner-invitations.controller';

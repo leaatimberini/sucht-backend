@@ -40,9 +40,6 @@ export class StoreController {
         return this.storeService.removeProduct(id);
     }
 
-    /**
-     * NUEVO ENDPOINT: Permite a un Admin regalar un producto a un cliente.
-     */
     @Post('products/gift')
     @UseGuards(JwtAuthGuard, RolesGuard)
     @Roles(UserRole.ADMIN)
@@ -86,10 +83,6 @@ export class StoreController {
         return this.storeService.findProductsByUserId(req.user.id);
     }
     
-    /**
-     * NUEVO ENDPOINT: Obtiene el historial completo de compras de productos.
-     * Solo accesible para el rol ADMIN.
-     */
     @Get('purchase/history')
     @UseGuards(JwtAuthGuard, RolesGuard)
     @Roles(UserRole.ADMIN)
@@ -97,6 +90,13 @@ export class StoreController {
       return this.storeService.getFullPurchaseHistory();
     }
 
+    @Get('purchase/redeemed-history')
+    @UseGuards(JwtAuthGuard, RolesGuard)
+    @Roles(UserRole.ADMIN, UserRole.BARRA, UserRole.VERIFIER)
+    getRedeemedPurchaseHistory() {
+      return this.storeService.getRedeemedPurchaseHistory();
+    }
+    
     @Post('purchase/validate/:id')
     @UseGuards(JwtAuthGuard, RolesGuard)
     @Roles(UserRole.VERIFIER, UserRole.ADMIN, UserRole.OWNER, UserRole.BARRA)

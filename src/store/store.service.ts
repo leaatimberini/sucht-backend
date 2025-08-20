@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException, InternalServerErrorException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository, DataSource } from 'typeorm';
+import { In, Repository, DataSource, Not, IsNull } from 'typeorm';
 import { Product } from './product.entity';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
@@ -232,7 +232,6 @@ export class StoreService {
     const { buyerId, eventId, items, amountPaid, paymentId } = data;
     this.logger.log(`[finalizePurchase] Finalizando compra de ${items.length} productos para usuario ${buyerId}`);
     
-    // --- LÓGICA DE DESCUENTO DE STOCK ---
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -265,7 +264,6 @@ export class StoreService {
         
         await queryRunner.commitTransaction();
 
-        // Otorgar puntos después de que la transacción fue exitosa
         try {
             const buyer = await this.usersService.findOneById(buyerId);
             const pointsConfig = await this.configService.get('points_store_purchase');
@@ -315,6 +313,17 @@ export class StoreService {
     return this.purchasesRepository.find({
       relations: ['user', 'product', 'event'],
       order: { createdAt: 'DESC' },
+    });
+  }
+
+  async getRedeemedPurchaseHistory(): Promise<ProductPurchase[]> {
+    this.logger.log(`[getRedeemedPurchaseHistory] Obteniendo historial de productos canjeados.`);
+    return this.purchasesRepository.find({
+        where: {
+            redeemedAt: Not(IsNull())
+        },
+        relations: ['user', 'product', 'event'],
+        order: { redeemedAt: 'DESC' },
     });
   }
 }

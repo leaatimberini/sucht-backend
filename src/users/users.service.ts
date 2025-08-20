@@ -1,4 +1,3 @@
-// src/users/users.service.ts
 import {
   ConflictException,
   Injectable,
@@ -284,18 +283,13 @@ export class UsersService {
     const { page, limit } = paginationQuery;
     const skip = (page - 1) * limit;
 
-    const [data, total] = await this.usersRepository.findAndCount({
-      where: [
-        { roles: ArrayContains([UserRole.RRPP]) },
-        { roles: ArrayContains([UserRole.ADMIN]) },
-        { roles: ArrayContains([UserRole.OWNER]) },
-        { roles: ArrayContains([UserRole.VERIFIER]) },
-        { roles: ArrayContains([UserRole.BARRA]) },
-      ],
-      order: { createdAt: 'DESC' },
-      skip,
-      take: limit,
-    });
+    const staffRoles = [UserRole.ADMIN, UserRole.OWNER, UserRole.ORGANIZER, UserRole.RRPP, UserRole.VERIFIER, UserRole.BARRA];
+    
+    const queryBuilder = this.usersRepository.createQueryBuilder("user")
+      .where("user.roles && :roles", { roles: staffRoles });
+
+    const total = await queryBuilder.getCount();
+    const data = await queryBuilder.orderBy('user.createdAt', 'DESC').skip(skip).take(limit).getMany();
 
     return { data, total, page, limit };
   }

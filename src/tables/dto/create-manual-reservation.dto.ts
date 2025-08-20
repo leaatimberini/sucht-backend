@@ -1,3 +1,4 @@
+// src/tables/dto/create-manual-reservation.dto.ts
 import { IsString, IsNotEmpty, IsUUID, IsEnum, IsNumber, Min, IsEmail, IsOptional } from 'class-validator';
 import { PaymentType } from '../table-reservation.entity';
 

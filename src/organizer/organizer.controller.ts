@@ -1,3 +1,4 @@
+// src/organizer/organizer.controller.ts
 import { Controller, Post, Body, UseGuards, Req, Get } from '@nestjs/common';
 import { OrganizerService } from './organizer.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';

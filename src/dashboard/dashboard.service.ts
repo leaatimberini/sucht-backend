@@ -1,11 +1,9 @@
-// src/dashboard/dashboard.service.ts
-
 import { Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Event } from 'src/events/event.entity';
 import { Ticket, TicketStatus } from 'src/tickets/ticket.entity';
 import { User, UserRole } from 'src/users/user.entity';
-import { Between, In, LessThan, Repository } from 'typeorm';
+import { Between, In, LessThan, Repository, ArrayContains } from 'typeorm'; // 1. Importar ArrayContains
 import { DashboardQueryDto } from './dto/dashboard-query.dto';
 import { TicketsService } from 'src/tickets/tickets.service';
 
@@ -23,9 +21,6 @@ export class DashboardService {
         private readonly ticketsService: TicketsService,
     ) {}
     
-    /**
-     * NUEVO MÉTODO: Obtiene el historial completo de tickets.
-     */
     async getFullHistory(queryDto: DashboardQueryDto) {
         return this.ticketsService.getFullHistory(queryDto);
     }
@@ -34,39 +29,57 @@ export class DashboardService {
         const { eventId, startDate, endDate } = queryDto;
 
         try {
-            const query = this.ticketsRepository.createQueryBuilder('ticket')
-                .innerJoin('ticket.promoter', 'promoter')
+            // 2. Simplificamos la consulta para que sea más clara y eficiente
+            const query = this.usersRepository.createQueryBuilder('user')
                 .select([
-                    'promoter.id as id',
-                    'promoter.name as name',
+                    'user.id as "rrppId"',
+                    'user.name as "rrppName"',
+                    'user.username as "rrppUsername"'
                 ])
-                .addSelect('COUNT(ticket.id)', 'totalTicketsGenerated')
-                .addSelect('SUM(ticket.redeemedCount)', 'totalRedemptions')
-                // ✅ CORRECCIÓN: Se usa el nuevo campo `is_paid` de la tabla `tickets` si existe. De lo contrario, se usa `amountPaid`.
-                .addSelect(`SUM(CASE WHEN ticket.amountPaid > 0 THEN ticket.amountPaid ELSE 0 END)`, 'totalSales');
-                
-            // ✅ CORRECCIÓN: Se utiliza el casting `::users_roles_enum[]` para que el operador `@>` funcione correctamente.
-            query.where(`promoter.roles @> ARRAY[:rrppRole]::users_roles_enum[]`, { rrppRole: UserRole.RRPP });
-            
-            if (eventId) {
-                query.andWhere('ticket.eventId = :eventId', { eventId });
-            }
-            if (startDate && endDate) {
-                query.andWhere('ticket.createdAt BETWEEN :startDate AND :endDate', { startDate, endDate });
-            }
-            
-            query.groupBy('promoter.id, promoter.name');
-            query.orderBy('promoter.name', 'ASC');
+                // Usamos ArrayContains, la forma correcta de buscar en arrays
+                .where({ roles: ArrayContains([UserRole.RRPP]) });
 
+            query.addSelect(
+                (subQuery) => {
+                    subQuery
+                        .select('COALESCE(SUM(ticket.quantity), 0)', 'ticketsGenerated')
+                        .from(Ticket, 'ticket')
+                        .where('ticket.promoterId = user.id');
+                    
+                    if (eventId) subQuery.andWhere('ticket.eventId = :eventId', { eventId });
+                    if (startDate && endDate) subQuery.andWhere('ticket.createdAt BETWEEN :startDate AND :endDate', { startDate, endDate });
+                    
+                    return subQuery;
+                },
+                'ticketsGenerated',
+            );
+            
+            query.addSelect(
+                (subQuery) => {
+                    subQuery
+                        .select('COALESCE(SUM(ticket.redeemedCount), 0)', 'peopleAdmitted')
+                        .from(Ticket, 'ticket')
+                        .where('ticket.promoterId = user.id');
+                        
+                    if (eventId) subQuery.andWhere('ticket.eventId = :eventId', { eventId });
+                    if (startDate && endDate) subQuery.andWhere('ticket.createdAt BETWEEN :startDate AND :endDate', { startDate, endDate });
+                        
+                    return subQuery;
+                },
+                'peopleAdmitted',
+            );
+
+            query.groupBy('user.id, user.name, user.username');
+            query.orderBy('user.name', 'ASC');
+            
             const results = await query.getRawMany();
 
             return results.map(r => ({
                 ...r,
-                totalTicketsGenerated: parseInt(r.totalTicketsGenerated, 10) || 0,
-                totalRedemptions: parseInt(r.totalRedemptions, 10) || 0,
-                totalSales: parseFloat(r.totalSales) || 0,
+                ticketsGenerated: parseInt(r.ticketsGenerated, 10),
+                peopleAdmitted: parseInt(r.peopleAdmitted, 10),
             }));
-            
+
         } catch (err) {
             this.logger.error(`[getRRPPPerformance] Error: ${err.message}`, err.stack);
             throw new InternalServerErrorException('Error al calcular performance de RRPP');
@@ -186,7 +199,7 @@ export class DashboardService {
                 ? `ticket.validatedAt BETWEEN '${startDate}' AND '${endDate}' AND ticket.redeemedCount > 0`
                 : 'ticket.redeemedCount > 0'
             )
-            .where(`user.roles @> ARRAY[:clientRole]::users_roles_enum[]`, { clientRole: UserRole.CLIENT })
+            .where({ roles: ArrayContains([UserRole.CLIENT]) })
             .groupBy("user.id, user.name, user.email")
             .orderBy('"totalAttendance"', 'DESC')
             .limit(limit);
@@ -211,7 +224,7 @@ export class DashboardService {
             .select('ticket.userId', 'userId')
             .addSelect('COUNT(DISTINCT ticket.eventId)', 'attendanceCount')
             .where('ticket.status IN (:...statuses)', { 
-                statuses: [TicketStatus.REDEEMED, TicketStatus.USED, TicketStatus.PARTIALLY_USED] 
+                statuses: [TicketStatus.REDEEMED, TicketStatus.PARTIALLY_USED] 
             })
             .andWhere('ticket.validatedAt BETWEEN :startDate AND :endDate', dateRange)
             .groupBy('ticket.userId')

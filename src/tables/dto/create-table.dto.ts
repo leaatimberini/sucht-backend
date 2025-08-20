@@ -1,3 +1,4 @@
+// src/tables/dto/create-table.dto.ts
 import { IsString, IsNotEmpty, IsUUID } from 'class-validator';
 
 export class CreateTableDto {
