@@ -42,8 +42,9 @@ export class DashboardService {
                 ])
                 .addSelect('COUNT(ticket.id)', 'totalTicketsGenerated')
                 .addSelect('SUM(ticket.redeemedCount)', 'totalRedemptions')
-                // ✅ CORRECCIÓN: Se usa la columna snake_case "is_free" y "is_paid"
-                .addSelect('SUM(CASE WHEN ticket.is_free = FALSE AND ticket.is_paid = TRUE THEN ticket.price ELSE 0 END)', 'totalSales');
+                // ✅ CORRECCIÓN: Se usa la sintaxis correcta para referenciar la columna en la consulta raw
+                // Usar "ticket"."isFree" para referenciar la propiedad del modelo TypeORM.
+                .addSelect(`SUM(CASE WHEN ticket."isFree" = FALSE AND ticket."isPaid" = TRUE THEN ticket.price ELSE 0 END)`, 'totalSales');
                 
             query.where('promoter.roles @> ARRAY[:rrppRole]', { rrppRole: UserRole.RRPP });
             
