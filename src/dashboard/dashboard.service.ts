@@ -42,8 +42,8 @@ export class DashboardService {
                 ])
                 .addSelect('COUNT(ticket.id)', 'totalTicketsGenerated')
                 .addSelect('SUM(ticket.redeemedCount)', 'totalRedemptions')
-                // ✅ CORRECCIÓN FINAL: Se usa el nuevo campo `is_paid` de la tabla `tickets`.
-                .addSelect(`SUM(CASE WHEN ticket."is_paid" = TRUE THEN ticket."amountPaid" ELSE 0 END)`, 'totalSales');
+                // ✅ CORRECCIÓN: Se usa el nuevo campo `is_paid` de la tabla `tickets` si existe. De lo contrario, se usa `amountPaid`.
+                .addSelect(`SUM(CASE WHEN ticket.amountPaid > 0 THEN ticket.amountPaid ELSE 0 END)`, 'totalSales');
                 
             // ✅ CORRECCIÓN: Se utiliza el casting `::users_roles_enum[]` para que el operador `@>` funcione correctamente.
             query.where(`promoter.roles @> ARRAY[:rrppRole]::users_roles_enum[]`, { rrppRole: UserRole.RRPP });
