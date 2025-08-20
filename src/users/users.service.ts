@@ -285,15 +285,13 @@ export class UsersService {
     const { page, limit } = paginationQuery;
     const skip = (page - 1) * limit;
 
-    // Se cambió la consulta para evitar el error de sintaxis y obtener staff
-    // La lógica busca usuarios que NO son solo clientes (es decir, tienen más de un rol o su rol principal no es CLIENT)
     const [data, total] = await this.usersRepository.findAndCount({
-        where: {
-            roles: Not(ArrayContains([UserRole.CLIENT])),
-        },
-        order: { createdAt: 'DESC' },
-        skip,
-        take: limit,
+      where: {
+        roles: Not(ArrayContains([UserRole.CLIENT])), // ❌ ERROR: Esta línea es la que causa el error de tipo.
+      },
+      order: { createdAt: 'DESC' },
+      skip,
+      take: limit,
     });
 
     return { data, total, page, limit };
