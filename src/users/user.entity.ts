@@ -6,11 +6,10 @@ import { Notification } from 'src/notifications/entities/notification.entity';
 import { UserReward } from 'src/rewards/user-reward.entity';
 import { ProductPurchase } from 'src/store/product-purchase.entity';
 
-// Se añade el nuevo rol 'ORGANIZER'
 export enum UserRole {
   OWNER = 'owner',
   ADMIN = 'admin',
-  ORGANIZER = 'organizer', // <-- NUEVO ROL
+  ORGANIZER = 'organizer',
   RRPP = 'rrpp',
   VERIFIER = 'verifier',
   BARRA = 'barra',
@@ -23,15 +22,14 @@ export class User {
   id: string;
 
   @Column({ unique: true, nullable: true })
-  username: string;
+  username: string | null;
 
   @Column({ unique: true })
   email: string;
 
   @Column({ nullable: true })
-  name: string;
+  name: string | null;
 
-  // El campo de la contraseña no se seleccionará por defecto en las consultas
   @Column({ select: false, nullable: true })
   password?: string;
   
@@ -39,33 +37,32 @@ export class User {
   roles: UserRole[];
 
   @Column({ nullable: true })
-  profileImageUrl: string;
+  profileImageUrl: string | null;
   
   @Column({ nullable: true })
-  instagramHandle: string;
+  instagramHandle: string | null;
 
   @Column({ nullable: true })
-  whatsappNumber: string;
+  whatsappNumber: string | null;
 
   @Column({ type: 'date', nullable: true })
-  dateOfBirth: Date;
+  dateOfBirth: Date | null;
 
   // Credenciales de Mercado Pago (pueden ser nulas)
   @Column({ nullable: true, select: false })
-  mpAccessToken?: string;
+  mpAccessToken?: string | null;
 
-  @Column({ nullable: true })
-  mpUserId?: number;
+  @Column({ type: 'integer', nullable: true })
+  mpUserId?: number | null;
   
-  // Token para usuarios invitados que aún no han establecido su contraseña
+  // Token para usuarios invitados
   @Column({ nullable: true, select: false })
-  invitationToken?: string;
+  invitationToken?: string | null;
   
-  // Comisión por venta para RRPP
+  // Comisión para RRPP
   @Column({ type: 'decimal', precision: 5, scale: 2, default: 0.0, nullable: true })
-  rrppCommissionRate: number;
+  rrppCommissionRate: number | null;
   
-  // Puntos de lealtad
   @Column({ type: 'int', default: 0 })
   points: number;
   
@@ -94,8 +91,6 @@ export class User {
   @OneToMany(() => ProductPurchase, purchase => purchase.user)
   purchases: ProductPurchase[];
 
-
-  // Hooks para hashear la contraseña antes de guardarla
   @BeforeInsert()
   @BeforeUpdate()
   async hashPassword() {
