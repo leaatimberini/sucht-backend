@@ -42,9 +42,11 @@ export class DashboardService {
                 ])
                 .addSelect('COUNT(ticket.id)', 'totalTicketsGenerated')
                 .addSelect('SUM(ticket.redeemedCount)', 'totalRedemptions')
-                .addSelect(`SUM(CASE WHEN ticket.amountPaid > 0 THEN ticket.amountPaid ELSE 0 END)`, 'totalSales');
+                // ✅ CORRECCIÓN FINAL: Se usa el nuevo campo `is_paid` de la tabla `tickets`.
+                .addSelect(`SUM(CASE WHEN ticket."is_paid" = TRUE THEN ticket."amountPaid" ELSE 0 END)`, 'totalSales');
                 
-            query.where('promoter.roles @> ARRAY[:rrppRole]', { rrppRole: UserRole.RRPP });
+            // ✅ CORRECCIÓN: Se utiliza el casting `::users_roles_enum[]` para que el operador `@>` funcione correctamente.
+            query.where(`promoter.roles @> ARRAY[:rrppRole]::users_roles_enum[]`, { rrppRole: UserRole.RRPP });
             
             if (eventId) {
                 query.andWhere('ticket.eventId = :eventId', { eventId });
@@ -184,7 +186,7 @@ export class DashboardService {
                 ? `ticket.validatedAt BETWEEN '${startDate}' AND '${endDate}' AND ticket.redeemedCount > 0`
                 : 'ticket.redeemedCount > 0'
             )
-            .where(`user.roles @> ARRAY[:clientRole]`, { clientRole: UserRole.CLIENT })
+            .where(`user.roles @> ARRAY[:clientRole]::users_roles_enum[]`, { clientRole: UserRole.CLIENT })
             .groupBy("user.id, user.name, user.email")
             .orderBy('"totalAttendance"', 'DESC')
             .limit(limit);
