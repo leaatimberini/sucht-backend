@@ -1,3 +1,4 @@
+// backend/src/users/user.entity.ts
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, BeforeInsert, BeforeUpdate, OneToMany } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { Ticket } from 'src/tickets/ticket.entity';
@@ -21,57 +22,56 @@ export class User {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ unique: true, nullable: true })
-  username: string;
+  // 👇 IMPORTANTE: especificar type cuando puede ser null
+  @Column({ type: 'varchar', unique: true, nullable: true })
+  username: string | null;
 
-
-
-  @Column({ unique: true })
+  @Column({ type: 'varchar', unique: true })
   email: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   name: string | null;
 
   @Column({ select: false, nullable: true })
   password?: string;
-  
-  @Column({ type: 'simple-array', default: UserRole.CLIENT })
+
+  // Mejor opción en Postgres: enum[]; si querés mantener simple-array, dejalo.
+  @Column({ type: 'enum', enum: UserRole, array: true, default: [UserRole.CLIENT] })
   roles: UserRole[];
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   profileImageUrl: string | null;
-  
-  @Column({ nullable: true })
+
+  @Column({ type: 'varchar', nullable: true })
   instagramHandle: string | null;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   whatsappNumber: string | null;
 
   @Column({ type: 'date', nullable: true })
   dateOfBirth: Date | null;
 
-  @Column({ nullable: true, select: false })
+  @Column({ type: 'varchar', nullable: true, select: false })
   mpAccessToken?: string | null;
 
   @Column({ type: 'integer', nullable: true })
   mpUserId?: number | null;
-  
-  @Column({ nullable: true, select: false })
+
+  @Column({ type: 'varchar', nullable: true, select: false })
   invitationToken?: string | null;
-  
+
   @Column({ type: 'decimal', precision: 5, scale: 2, default: 0.0, nullable: true })
   rrppCommissionRate: number | null;
-  
+
   @Column({ type: 'int', default: 0 })
   points: number;
-  
+
   @CreateDateColumn({ type: 'timestamp' })
   createdAt: Date;
-  
+
   @UpdateDateColumn({ type: 'timestamp' })
   updatedAt: Date;
 
-  // Relaciones
   @OneToMany(() => Ticket, ticket => ticket.user)
   tickets: Ticket[];
 
