@@ -48,18 +48,15 @@ export class User {
   @Column({ type: 'date', nullable: true })
   dateOfBirth: Date | null;
 
-  // Credenciales de Mercado Pago (pueden ser nulas)
   @Column({ nullable: true, select: false })
   mpAccessToken?: string | null;
 
-  @Column({ type: 'integer', nullable: true })
+  @Column({ nullable: true })
   mpUserId?: number | null;
   
-  // Token para usuarios invitados
   @Column({ nullable: true, select: false })
   invitationToken?: string | null;
   
-  // Comisión para RRPP
   @Column({ type: 'decimal', precision: 5, scale: 2, default: 0.0, nullable: true })
   rrppCommissionRate: number | null;
   
