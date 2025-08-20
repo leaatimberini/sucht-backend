@@ -1,4 +1,5 @@
 // src/dashboard/dashboard.service.ts
+
 import { Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Event } from 'src/events/event.entity';
@@ -41,7 +42,8 @@ export class DashboardService {
                 ])
                 .addSelect('COUNT(ticket.id)', 'totalTicketsGenerated')
                 .addSelect('SUM(ticket.redeemedCount)', 'totalRedemptions')
-                .addSelect('SUM(CASE WHEN ticket.isFree = FALSE AND ticket.isPaid = TRUE THEN ticket.price ELSE 0 END)', 'totalSales');
+                // ✅ CORRECCIÓN: Se usa la columna snake_case "is_free" y "is_paid"
+                .addSelect('SUM(CASE WHEN ticket.is_free = FALSE AND ticket.is_paid = TRUE THEN ticket.price ELSE 0 END)', 'totalSales');
                 
             query.where('promoter.roles @> ARRAY[:rrppRole]', { rrppRole: UserRole.RRPP });
             
@@ -183,7 +185,7 @@ export class DashboardService {
                 ? `ticket.validatedAt BETWEEN '${startDate}' AND '${endDate}' AND ticket.redeemedCount > 0`
                 : 'ticket.redeemedCount > 0'
             )
-            .where(`user.roles @> ARRAY[:clientRole]`, { clientRole: UserRole.CLIENT }) // ✅ CORRECCIÓN
+            .where(`user.roles @> ARRAY[:clientRole]`, { clientRole: UserRole.CLIENT })
             .groupBy("user.id, user.name, user.email")
             .orderBy('"totalAttendance"', 'DESC')
             .limit(limit);
