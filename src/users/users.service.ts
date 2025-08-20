@@ -34,6 +34,7 @@ export class UsersService {
     @InjectRepository(User)
     private usersRepository: Repository<User>,
     private readonly configService: ConfigurationService,
+    // 2. Aplicar la inyección con forwardRef para romper el ciclo
     @Inject(forwardRef(() => NotificationsService))
     private readonly notificationsService: NotificationsService,
   ) {}
