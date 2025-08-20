@@ -1,3 +1,4 @@
+// backend/src/notifications/entities/notification.entity.ts
 import { User } from 'src/users/user.entity';
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne } from 'typeorm';
 

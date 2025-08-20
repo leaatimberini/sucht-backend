@@ -1,3 +1,4 @@
+// backend/src/point-transactions/point-transaction.entity.ts
 import {
   Entity,
   PrimaryGeneratedColumn,

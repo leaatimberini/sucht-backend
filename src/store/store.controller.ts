@@ -16,7 +16,7 @@ import { GiftProductDto } from './dto/gift-product.dto';
 export class StoreController {
     constructor(private readonly storeService: StoreService) {}
 
-    // --- Endpoints de Gestión para Admin ---
+    // --- Endpoints de Gestión para Admin y Dueño ---
 
     @Post('products')
     @UseGuards(JwtAuthGuard, RolesGuard)

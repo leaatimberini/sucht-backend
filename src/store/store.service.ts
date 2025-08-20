@@ -77,12 +77,11 @@ export class StoreService {
   }
   
   async findProductsByUserId(userId: string): Promise<ProductPurchase[]> {
-    const purchases = await this.purchasesRepository.find({
+    return this.purchasesRepository.find({
       where: { userId },
       relations: ['product', 'event'],
       order: { createdAt: 'DESC' },
     });
-    return purchases;
   }
   
   async findPurchaseById(purchaseId: string): Promise<ProductPurchase> {
@@ -96,9 +95,6 @@ export class StoreService {
     return purchase;
   }
 
-  /**
-   * NUEVO MÉTODO DE APOYO: Busca una compra por el ID de pago.
-   */
   async findPurchaseByPaymentId(paymentId: string): Promise<ProductPurchase | null> {
     return this.purchasesRepository.findOne({ where: { paymentId } });
   }
@@ -235,37 +231,65 @@ export class StoreService {
   async finalizePurchase(data: any): Promise<ProductPurchase[]> {
     const { buyerId, eventId, items, amountPaid, paymentId } = data;
     this.logger.log(`[finalizePurchase] Finalizando compra de ${items.length} productos para usuario ${buyerId}`);
-
-    const purchases: ProductPurchase[] = [];
-    for (const item of items) {
-      const purchase = this.purchasesRepository.create({
-        userId: buyerId,
-        productId: item.productId,
-        eventId,
-        quantity: item.quantity,
-        amountPaid: amountPaid,
-        paymentId,
-        origin: 'PURCHASE',
-      });
-      purchases.push(await this.purchasesRepository.save(purchase));
-    }
     
+    // --- LÓGICA DE DESCUENTO DE STOCK ---
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
     try {
-      const buyer = await this.usersService.findOneById(buyerId);
-      const pointsConfig = await this.configService.get('points_store_purchase');
-      const pointsToAward = pointsConfig ? parseInt(pointsConfig, 10) : 50;
+        const purchases: ProductPurchase[] = [];
+        for (const item of items) {
+            const product = await queryRunner.manager.findOneBy(Product, { id: item.productId });
+            if (!product) throw new NotFoundException(`Producto con ID "${item.productId}" no encontrado.`);
+            if (product.stock !== null && product.stock < item.quantity) {
+                throw new BadRequestException(`No hay stock para ${product.name}.`);
+            }
 
-      if (buyer && pointsToAward > 0) {
-        await this.pointTransactionsService.createTransaction(
-          buyer, pointsToAward, PointTransactionReason.STORE_PURCHASE,
-          `Compra en la tienda por un total de $${amountPaid}`, paymentId
-        );
-      }
+            if (product.stock !== null) {
+                product.stock -= item.quantity;
+                await queryRunner.manager.save(product);
+            }
+            
+            const purchase = queryRunner.manager.create(ProductPurchase, {
+                userId: buyerId,
+                productId: item.productId,
+                eventId,
+                quantity: item.quantity,
+                amountPaid: amountPaid,
+                paymentId,
+                origin: 'PURCHASE',
+            });
+            purchases.push(await queryRunner.manager.save(purchase));
+        }
+        
+        await queryRunner.commitTransaction();
+
+        // Otorgar puntos después de que la transacción fue exitosa
+        try {
+            const buyer = await this.usersService.findOneById(buyerId);
+            const pointsConfig = await this.configService.get('points_store_purchase');
+            const pointsToAward = pointsConfig ? parseInt(pointsConfig, 10) : 50;
+
+            if (buyer && pointsToAward > 0) {
+                await this.pointTransactionsService.createTransaction(
+                buyer, pointsToAward, PointTransactionReason.STORE_PURCHASE,
+                `Compra en la tienda por un total de $${amountPaid}`, paymentId
+                );
+            }
+        } catch (error) {
+            this.logger.error(`[finalizePurchase] No se pudieron otorgar puntos por la compra con paymentId ${paymentId}`, error);
+        }
+
+        return purchases;
+
     } catch (error) {
-      this.logger.error(`[finalizePurchase] No se pudieron otorgar puntos por la compra con paymentId ${paymentId}`, error);
+        await queryRunner.rollbackTransaction();
+        this.logger.error(`[finalizePurchase] Falló la finalización de la compra para paymentId ${paymentId}`, error);
+        throw error;
+    } finally {
+        await queryRunner.release();
     }
-
-    return purchases;
   }
     
   async validatePurchase(purchaseId: string): Promise<ProductPurchase> {

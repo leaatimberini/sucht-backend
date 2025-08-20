@@ -1,3 +1,4 @@
+// backend/src/events/event.entity.ts
 import {
   Entity,
   PrimaryGeneratedColumn,

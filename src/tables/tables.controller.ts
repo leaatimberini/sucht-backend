@@ -4,16 +4,8 @@ import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import { UserRole } from 'src/users/user.entity';
-
-// DTOs para validación
-class CreateCategoryDto {
-    name: string;
-}
-class CreateTableDto {
-    tableNumber: string;
-    categoryId: string;
-    eventId: string;
-}
+import { CreateCategoryDto } from './dto/create-category.dto'; // 1. Importar el nuevo DTO
+import { CreateTableDto } from './dto/create-table.dto';     // Asumimos que este DTO también lo crearemos
 
 @Controller('tables')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -22,7 +14,7 @@ export class TablesController {
 
   @Post('categories')
   @Roles(UserRole.ADMIN)
-  createCategory(@Body() createCategoryDto: CreateCategoryDto) {
+  createCategory(@Body() createCategoryDto: CreateCategoryDto) { // 2. Usar el nuevo DTO
     return this.tablesService.createCategory(createCategoryDto.name);
   }
 
