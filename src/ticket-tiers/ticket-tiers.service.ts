@@ -1,6 +1,7 @@
+// src/ticket-tiers/ticket-tiers.service.ts
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource, Not } from 'typeorm'; 
+import { Repository, DataSource, Not } from 'typeorm';
 import { TicketTier, ProductType } from './ticket-tier.entity';
 import { EventsService } from 'src/events/events.service';
 import { CreateTicketTierDto } from './dto/create-ticket-tier.dto';
@@ -45,7 +46,7 @@ export class TicketTiersService {
         ...createTicketTierDto,
         event: event,
       });
-      
+
       const savedTier = await queryRunner.manager.save(ticketTier);
       await queryRunner.commitTransaction();
       return savedTier;
@@ -74,14 +75,14 @@ export class TicketTiersService {
 
   async update(tierId: string, updateTicketTierDto: UpdateTicketTierDto): Promise<TicketTier> {
     const tierToUpdate = await this.findOne(tierId);
-    
+
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
     try {
       const eventId = tierToUpdate.event.id;
-      
+
       if (updateTicketTierDto.isBirthdayDefault) {
         await queryRunner.manager.update(
             TicketTier,
@@ -89,7 +90,7 @@ export class TicketTiersService {
             { isBirthdayDefault: false }
         );
       }
-      
+
       if (updateTicketTierDto.isBirthdayVipOffer) {
         await queryRunner.manager.update(
             TicketTier,
@@ -143,6 +144,16 @@ export class TicketTiersService {
         isBirthdayVipOffer: true,
       },
     });
+  }
+
+  // **NUEVO MÉTODO:** Encuentra un ticket tier de tipo MESA VIP para un evento.
+  async findVipTierForEvent(eventId: string): Promise<TicketTier | null> {
+      return this.ticketTiersRepository.findOne({
+          where: {
+              event: { id: eventId },
+              productType: ProductType.VIP_TABLE,
+          },
+      });
   }
 
   async findGiftableProducts(): Promise<TicketTier[]> {

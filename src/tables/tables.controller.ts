@@ -1,11 +1,11 @@
-import { Controller, Get, Post, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, UseGuards, ParseUUIDPipe } from '@nestjs/common';
 import { TablesService } from './tables.service';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import { UserRole } from 'src/users/user.entity';
-import { CreateCategoryDto } from './dto/create-category.dto'; // 1. Importar el nuevo DTO
-import { CreateTableDto } from './dto/create-table.dto';     // Asumimos que este DTO también lo crearemos
+import { CreateCategoryDto } from './dto/create-category.dto';
+import { CreateTableDto } from './dto/create-table.dto';
 
 @Controller('tables')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -14,7 +14,7 @@ export class TablesController {
 
   @Post('categories')
   @Roles(UserRole.ADMIN)
-  createCategory(@Body() createCategoryDto: CreateCategoryDto) { // 2. Usar el nuevo DTO
+  createCategory(@Body() createCategoryDto: CreateCategoryDto) {
     return this.tablesService.createCategory(createCategoryDto.name);
   }
 
@@ -36,7 +36,7 @@ export class TablesController {
 
   @Get('event/:eventId')
   @Roles(UserRole.ADMIN, UserRole.OWNER, UserRole.ORGANIZER)
-  findTablesForEvent(@Param('eventId') eventId: string) {
+  findTablesForEvent(@Param('eventId', ParseUUIDPipe) eventId: string) {
     return this.tablesService.findTablesForEvent(eventId);
   }
 }

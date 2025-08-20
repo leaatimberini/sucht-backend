@@ -8,7 +8,7 @@ import {
   forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, ArrayContains } from 'typeorm';
+import { Repository, ArrayContains, Not } from 'typeorm';
 import { User, UserRole } from './user.entity';
 import { RegisterAuthDto } from 'src/auth/dto/register-auth.dto';
 import { randomBytes } from 'crypto';
@@ -284,12 +284,16 @@ export class UsersService {
     const { page, limit } = paginationQuery;
     const skip = (page - 1) * limit;
 
-    const queryBuilder = this.usersRepository.createQueryBuilder("user")
-      .where(`user.roles::text NOT LIKE :role`, { role: `%${UserRole.CLIENT}%` })
-      .orWhere(`array_length(user.roles, 1) > 1`);
-
-    const total = await queryBuilder.getCount();
-    const data = await queryBuilder.orderBy('user.createdAt', 'DESC').skip(skip).take(limit).getMany();
+    // Se cambió la consulta para evitar el error de sintaxis y obtener staff
+    // La lógica busca usuarios que NO son solo clientes (es decir, tienen más de un rol o su rol principal no es CLIENT)
+    const [data, total] = await this.usersRepository.findAndCount({
+        where: {
+            roles: Not(ArrayContains([UserRole.CLIENT])),
+        },
+        order: { createdAt: 'DESC' },
+        skip,
+        take: limit,
+    });
 
     return { data, total, page, limit };
   }
