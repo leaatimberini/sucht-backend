@@ -1,11 +1,10 @@
-// backend/src/users/users.service.ts
 import {
   ConflictException,
   Injectable,
   InternalServerErrorException,
   NotFoundException,
   BadRequestException,
-  Inject, // 1. Importar Inject y forwardRef
+  Inject,
   forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -35,7 +34,6 @@ export class UsersService {
     @InjectRepository(User)
     private usersRepository: Repository<User>,
     private readonly configService: ConfigurationService,
-    // 2. Aplicar la inyección con forwardRef para romper el ciclo
     @Inject(forwardRef(() => NotificationsService))
     private readonly notificationsService: NotificationsService,
   ) {}
@@ -135,7 +133,7 @@ export class UsersService {
       .createQueryBuilder('user')
       .where('user.email = :email', { email: email.toLowerCase() })
       .addSelect('user.password')
-      .addSelect('user.invitationToken') // Asegurarse de seleccionar el token
+      .addSelect('user.invitationToken')
       .getOne();
   }
 
@@ -264,17 +262,10 @@ export class UsersService {
     }
   }
 
-  /**
-   * Devuelve TODOS los usuarios sin paginación.
-   * Usado por servicios internos como Notificaciones y Cumpleaños.
-   */
   async findAllWithoutPagination(): Promise<User[]> {
     return this.usersRepository.find({ order: { createdAt: 'DESC' } });
   }
 
-  /**
-   * Devuelve todos los usuarios de forma paginada para el panel de admin.
-   */
   async findAll(paginationQuery: PaginationQueryDto): Promise<PaginatedUsers> {
     const { page, limit } = paginationQuery;
     const skip = (page - 1) * limit;
