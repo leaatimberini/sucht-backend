@@ -5,9 +5,13 @@ import { TablesController } from './tables.controller';
 import { Table } from './table.entity';
 import { TableCategory } from './table-category.entity';
 import { EventsModule } from 'src/events/events.module';
+import { TableReservation } from './table-reservation.entity';
 import { TicketsModule } from 'src/tickets/tickets.module';
 import { TicketTiersModule } from 'src/ticket-tiers/ticket-tiers.module';
-import { TableReservation } from './table-reservation.entity';
+// MailModule y ConfigurationModule ya son globales, así que no es estrictamente necesario
+// importarlos aquí, pero es una buena práctica para la claridad del código.
+import { MailModule } from 'src/mail/mail.module';
+import { ConfigurationModule } from 'src/configuration/configuration.module';
 
 @Module({
   imports: [
@@ -15,6 +19,8 @@ import { TableReservation } from './table-reservation.entity';
     EventsModule,
     TicketsModule,
     TicketTiersModule,
+    MailModule, // <-- Añadido
+    ConfigurationModule, // <-- Añadido
   ],
   controllers: [TablesController],
   providers: [TablesService],

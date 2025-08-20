@@ -1,11 +1,14 @@
-import { Controller, Get, Post, Body, Param, UseGuards, ParseUUIDPipe } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, UseGuards, ParseUUIDPipe, Patch, Req } from '@nestjs/common';
 import { TablesService } from './tables.service';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { Roles } from 'src/auth/decorators/roles.decorator';
-import { UserRole } from 'src/users/user.entity';
+import { User, UserRole } from 'src/users/user.entity';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { CreateTableDto } from './dto/create-table.dto';
+import { UpdateTablePositionDto } from './dto/update-table-position.dto';
+import { UpdateTableStatusDto } from './dto/update-table-status.dto';
+import { CreateManualReservationDto } from './dto/create-manual-reservation.dto';
 
 @Controller('tables')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -38,5 +41,32 @@ export class TablesController {
   @Roles(UserRole.ADMIN, UserRole.OWNER, UserRole.ORGANIZER)
   findTablesForEvent(@Param('eventId', ParseUUIDPipe) eventId: string) {
     return this.tablesService.findTablesForEvent(eventId);
+  }
+  
+  @Patch(':id/position')
+  @Roles(UserRole.ADMIN)
+  updateTablePosition(
+      @Param('id', ParseUUIDPipe) id: string,
+      @Body() updatePositionDto: UpdateTablePositionDto
+  ) {
+      return this.tablesService.updateTablePosition(id, updatePositionDto.positionX, updatePositionDto.positionY);
+  }
+
+  @Patch(':id/status')
+  @Roles(UserRole.ADMIN, UserRole.OWNER, UserRole.ORGANIZER)
+  updateTableStatus(
+      @Param('id', ParseUUIDPipe) id: string,
+      @Body() updateStatusDto: UpdateTableStatusDto
+  ) {
+      return this.tablesService.updateTableStatus(id, updateStatusDto.status);
+  }
+
+  @Post('reservations/manual')
+  @Roles(UserRole.ADMIN, UserRole.OWNER, UserRole.ORGANIZER)
+  reserveTableManually(
+      @Req() req: { user: User },
+      @Body() createManualReservationDto: CreateManualReservationDto
+  ) {
+      return this.tablesService.reserveTableManually(req.user, createManualReservationDto);
   }
 }
