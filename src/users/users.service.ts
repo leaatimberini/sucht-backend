@@ -285,10 +285,26 @@ export class UsersService {
     const { page, limit } = paginationQuery;
     const skip = (page - 1) * limit;
 
+    const queryBuilder = this.usersRepository.createQueryBuilder("user");
+    queryBuilder.where("user.roles @> ARRAY[:rrppRole, :adminRole, :ownerRole, :verifierRole, :barraRole]", {
+      rrppRole: UserRole.RRPP,
+      adminRole: UserRole.ADMIN,
+      ownerRole: UserRole.OWNER,
+      verifierRole: UserRole.VERIFIER,
+      barraRole: UserRole.BARRA
+    });
+
+    // Se cambió la consulta para evitar errores de sintaxis y lógica.
+    // Se busca a todos los usuarios que tienen un rol de staff
+    // (cualquiera que no sea exclusivamente "client").
     const [data, total] = await this.usersRepository.findAndCount({
-      where: {
-        roles: Not(ArrayContains([UserRole.CLIENT])), // ❌ ERROR: Esta línea es la que causa el error de tipo.
-      },
+      where: [
+        { roles: ArrayContains([UserRole.RRPP]) },
+        { roles: ArrayContains([UserRole.ADMIN]) },
+        { roles: ArrayContains([UserRole.OWNER]) },
+        { roles: ArrayContains([UserRole.VERIFIER]) },
+        { roles: ArrayContains([UserRole.BARRA]) },
+      ],
       order: { createdAt: 'DESC' },
       skip,
       take: limit,
