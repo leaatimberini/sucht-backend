@@ -51,7 +51,7 @@ export class User {
   @Column({ nullable: true, select: false })
   mpAccessToken?: string | null;
 
-  @Column({ nullable: true })
+  @Column({ type: 'integer', nullable: true })
   mpUserId?: number | null;
   
   @Column({ nullable: true, select: false })
