@@ -1,4 +1,5 @@
 // src/dashboard/dashboard.service.ts
+
 import { Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Event } from 'src/events/event.entity';
@@ -22,6 +23,9 @@ export class DashboardService {
         private readonly ticketsService: TicketsService,
     ) {}
     
+    /**
+     * NUEVO MÉTODO: Obtiene el historial completo de tickets.
+     */
     async getFullHistory(queryDto: DashboardQueryDto) {
         return this.ticketsService.getFullHistory(queryDto);
     }
@@ -38,8 +42,7 @@ export class DashboardService {
                 ])
                 .addSelect('COUNT(ticket.id)', 'totalTicketsGenerated')
                 .addSelect('SUM(ticket.redeemedCount)', 'totalRedemptions')
-                // ✅ CORRECCIÓN FINAL: Se usa el nuevo campo `is_paid` de la tabla `tickets`.
-                .addSelect(`SUM(CASE WHEN ticket."is_paid" = TRUE THEN ticket.amountPaid ELSE 0 END)`, 'totalSales');
+                .addSelect(`SUM(CASE WHEN ticket.amountPaid > 0 THEN ticket.amountPaid ELSE 0 END)`, 'totalSales');
                 
             query.where('promoter.roles @> ARRAY[:rrppRole]', { rrppRole: UserRole.RRPP });
             
@@ -68,7 +71,6 @@ export class DashboardService {
         }
     }
 
-    // ... (El resto de los métodos se mantienen iguales) ...
     async getMyRRPPStats(promoterId: string) {
         const stats = await this.ticketsRepository.createQueryBuilder("ticket")
             .select("SUM(ticket.quantity)", "ticketsGenerated")
