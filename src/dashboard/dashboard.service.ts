@@ -1,5 +1,4 @@
-// backend/src/dashboard/dashboard.service.ts
-
+// src/dashboard/dashboard.service.ts
 import { Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Event } from 'src/events/event.entity';
@@ -11,246 +10,222 @@ import { TicketsService } from 'src/tickets/tickets.service';
 
 @Injectable()
 export class DashboardService {
-  private readonly logger = new Logger('DashboardService');
+    private readonly logger = new Logger('DashboardService');
 
-  constructor(
-    @InjectRepository(Ticket)
-    private readonly ticketsRepository: Repository<Ticket>,
-    @InjectRepository(Event)
-    private readonly eventsRepository: Repository<Event>,
-    @InjectRepository(User)
-    private readonly usersRepository: Repository<User>,
-    private readonly ticketsService: TicketsService,
-  ) {}
-    /**
-   * NUEVO MÉTODO: Obtiene el historial completo de tickets.
-   */
-  async getFullHistory(queryDto: DashboardQueryDto) {
-      return this.ticketsService.getFullHistory(queryDto);
-  }
-  async getRRPPPerformance(queryDto: DashboardQueryDto) {
-    const { eventId, startDate, endDate } = queryDto;
+    constructor(
+        @InjectRepository(Ticket)
+        private readonly ticketsRepository: Repository<Ticket>,
+        @InjectRepository(Event)
+        private readonly eventsRepository: Repository<Event>,
+        @InjectRepository(User)
+        private readonly usersRepository: Repository<User>,
+        private readonly ticketsService: TicketsService,
+    ) {}
+    
+    /**
+     * NUEVO MÉTODO: Obtiene el historial completo de tickets.
+     */
+    async getFullHistory(queryDto: DashboardQueryDto) {
+        return this.ticketsService.getFullHistory(queryDto);
+    }
+    
+    async getRRPPPerformance(queryDto: DashboardQueryDto) {
+        const { eventId, startDate, endDate } = queryDto;
 
-    try {
-      const query = this.usersRepository
-        .createQueryBuilder('user')
-        .select([
-          'user.id as "rrppId"',
-          'user.name as "rrppName"',
-        ])
-        .where(`:role = ANY(string_to_array(user.roles, ','))`, { role: UserRole.RRPP });
+        try {
+            const query = this.ticketsRepository.createQueryBuilder('ticket')
+                .innerJoin('ticket.promoter', 'promoter')
+                .select([
+                    'promoter.id as id',
+                    'promoter.name as name',
+                ])
+                .addSelect('COUNT(ticket.id)', 'totalTicketsGenerated')
+                .addSelect('SUM(ticket.redeemedCount)', 'totalRedemptions')
+                .addSelect('SUM(CASE WHEN ticket.isFree = FALSE AND ticket.isPaid = TRUE THEN ticket.price ELSE 0 END)', 'totalSales');
+                
+            query.where('promoter.roles @> ARRAY[:rrppRole]', { rrppRole: UserRole.RRPP });
+            
+            if (eventId) {
+                query.andWhere('ticket.eventId = :eventId', { eventId });
+            }
+            if (startDate && endDate) {
+                query.andWhere('ticket.createdAt BETWEEN :startDate AND :endDate', { startDate, endDate });
+            }
+            
+            query.groupBy('promoter.id, promoter.name');
+            query.orderBy('promoter.name', 'ASC');
 
-      query.addSelect(
-        (subQuery) => {
-          subQuery
-            .select('COALESCE(SUM(ticket.quantity), 0)', 'ticketsGenerated')
-            .from(Ticket, 'ticket')
-            .where('ticket.promoterId = user.id');
-          
-          if (eventId) {
-            subQuery.andWhere('ticket.eventId = :eventId', { eventId });
-          }
-          if (startDate && endDate) {
-            subQuery.andWhere('ticket.createdAt BETWEEN :startDate AND :endDate', { startDate, endDate });
-          }
-          
-          return subQuery;
-        },
-        'ticketsGenerated',
-      );
-      
-      query.addSelect(
-        (subQuery) => {
-          subQuery
-            .select('COALESCE(SUM(ticket.redeemedCount), 0)', 'peopleAdmitted')
-            .from(Ticket, 'ticket')
-            .where('ticket.promoterId = user.id');
-            
-          if (eventId) {
-            subQuery.andWhere('ticket.eventId = :eventId', { eventId });
-          }
-          if (startDate && endDate) {
-            subQuery.andWhere('ticket.createdAt BETWEEN :startDate AND :endDate', { startDate, endDate });
-          }
-            
-          return subQuery;
-        },
-        'peopleAdmitted',
-      );
+            const results = await query.getRawMany();
 
-      query.groupBy('user.id, user.name');
-      query.orderBy('user.name', 'ASC');
-      
-      const results = await query.getRawMany();
+            return results.map(r => ({
+                ...r,
+                totalTicketsGenerated: parseInt(r.totalTicketsGenerated, 10) || 0,
+                totalRedemptions: parseInt(r.totalRedemptions, 10) || 0,
+                totalSales: parseFloat(r.totalSales) || 0,
+            }));
+            
+        } catch (err) {
+            this.logger.error(`[getRRPPPerformance] Error: ${err.message}`, err.stack);
+            throw new InternalServerErrorException('Error al calcular performance de RRPP');
+        }
+    }
 
-      return results.map(r => ({
-        ...r,
-        ticketsGenerated: parseInt(r.ticketsGenerated, 10),
-        peopleAdmitted: parseInt(r.peopleAdmitted, 10),
-      }));
+    async getMyRRPPStats(promoterId: string) {
+        const stats = await this.ticketsRepository.createQueryBuilder("ticket")
+            .select("SUM(ticket.quantity)", "ticketsGenerated")
+            .addSelect("SUM(ticket.redeemedCount)", "peopleAdmitted")
+            .where("ticket.promoterId = :promoterId", { promoterId })
+            .getRawOne();
 
-    } catch (err) {
-      this.logger.error(`[getRRPPPerformance] Error: ${err.message}`, err.stack);
-      throw new InternalServerErrorException('Error al calcular performance de RRPP');
-    }
-  }
+        const guestList = await this.ticketsRepository.find({
+            where: { promoter: { id: promoterId } },
+            relations: ['user', 'event', 'tier'],
+            select: { 
+                id: true,
+                status: true,
+                redeemedCount: true,
+                user: { name: true, email: true },
+                event: { title: true },
+                tier: { name: true },
+            }
+        });
 
-  async getMyRRPPStats(promoterId: string) {
-    const stats = await this.ticketsRepository.createQueryBuilder("ticket")
-      .select("SUM(ticket.quantity)", "ticketsGenerated")
-      .addSelect("SUM(ticket.redeemedCount)", "peopleAdmitted")
-      .where("ticket.promoterId = :promoterId", { promoterId })
-      .getRawOne();
+        return {
+            ticketsGenerated: parseInt(stats.ticketsGenerated, 10) || 0,
+            peopleAdmitted: parseInt(stats.peopleAdmitted, 10) || 0,
+            guestList,
+        };
+    }
 
-    const guestList = await this.ticketsRepository.find({
-      where: { promoter: { id: promoterId } },
-      relations: ['user', 'event', 'tier'],
-      select: { 
-        id: true,
-        status: true,
-        redeemedCount: true,
-        user: { name: true, email: true },
-        event: { title: true },
-        tier: { name: true },
-       }
-    });
+    async getSummaryMetrics(queryDto: DashboardQueryDto) {
+        const { eventId, startDate, endDate } = queryDto;
 
-    return {
-      ticketsGenerated: parseInt(stats.ticketsGenerated, 10) || 0,
-      peopleAdmitted: parseInt(stats.peopleAdmitted, 10) || 0,
-      guestList,
-    };
-  }
+        const query = this.ticketsRepository.createQueryBuilder('ticket')
+            .select('COALESCE(SUM(ticket.quantity), 0)', 'totalTicketsGenerated')
+            .addSelect('COALESCE(SUM(ticket.redeemedCount), 0)', 'totalPeopleAdmitted');
 
-  async getSummaryMetrics(queryDto: DashboardQueryDto) {
-    const { eventId, startDate, endDate } = queryDto;
+        if (eventId) {
+            query.andWhere("ticket.eventId = :eventId", { eventId });
+        }
+        if (startDate && endDate) {
+            query.andWhere("ticket.createdAt BETWEEN :startDate AND :endDate", { startDate, endDate });
+        }
 
-    const query = this.ticketsRepository.createQueryBuilder('ticket')
-      .select('COALESCE(SUM(ticket.quantity), 0)', 'totalTicketsGenerated')
-      .addSelect('COALESCE(SUM(ticket.redeemedCount), 0)', 'totalPeopleAdmitted');
+        const stats = await query.getRawOne();
+        
+        const eventFilterOptions = (startDate && endDate) 
+            ? { where: { startDate: Between(new Date(startDate), new Date(endDate)) } } 
+            : {};
+        const totalEvents = await this.eventsRepository.count(eventFilterOptions);
 
-    if (eventId) {
-      query.andWhere("ticket.eventId = :eventId", { eventId });
-    }
-    if (startDate && endDate) {
-      query.andWhere("ticket.createdAt BETWEEN :startDate AND :endDate", { startDate, endDate });
-    }
+        return {
+            totalTicketsGenerated: parseInt(stats.totalTicketsGenerated, 10),
+            totalPeopleAdmitted: parseInt(stats.totalPeopleAdmitted, 10),
+            totalEvents,
+        };
+    }
 
-    const stats = await query.getRawOne();
-    
-    const eventFilterOptions = (startDate && endDate) 
-      ? { where: { startDate: Between(new Date(startDate), new Date(endDate)) } } 
-      : {};
-    const totalEvents = await this.eventsRepository.count(eventFilterOptions);
+    async getEventPerformance(queryDto: DashboardQueryDto) {
+        const { eventId, startDate, endDate } = queryDto;
 
-    return {
-      totalTicketsGenerated: parseInt(stats.totalTicketsGenerated, 10),
-      totalPeopleAdmitted: parseInt(stats.totalPeopleAdmitted, 10),
-      totalEvents,
-    };
-  }
+        const query = this.eventsRepository.createQueryBuilder('event')
+            .leftJoin('event.tickets', 'ticket')
+            .select('event.id', 'id')
+            .addSelect('event.title', 'title')
+            .addSelect('event.startDate', 'startDate')
+            .addSelect('COALESCE(SUM(ticket.quantity), 0)', 'ticketsGenerated')
+            .addSelect('COALESCE(SUM(ticket.redeemedCount), 0)', 'peopleAdmitted');
 
-  async getEventPerformance(queryDto: DashboardQueryDto) {
-    const { eventId, startDate, endDate } = queryDto;
+        if (eventId) {
+            query.andWhere("event.id = :eventId", { eventId });
+        }
+        if (startDate && endDate) {
+            query.andWhere("event.startDate BETWEEN :startDate AND :endDate", { startDate, endDate });
+        }
 
-    const query = this.eventsRepository.createQueryBuilder('event')
-      .leftJoin('event.tickets', 'ticket')
-      .select('event.id', 'id')
-      .addSelect('event.title', 'title')
-      .addSelect('event.startDate', 'startDate')
-      .addSelect('COALESCE(SUM(ticket.quantity), 0)', 'ticketsGenerated')
-      .addSelect('COALESCE(SUM(ticket.redeemedCount), 0)', 'peopleAdmitted');
+        query.groupBy('event.id, event.title, event.startDate');
+        query.orderBy('event.startDate', 'DESC');
 
-    if (eventId) {
-      query.andWhere("event.id = :eventId", { eventId });
-    }
-    if (startDate && endDate) {
-      query.andWhere("event.startDate BETWEEN :startDate AND :endDate", { startDate, endDate });
-    }
+        const results = await query.getRawMany();
 
-    query.groupBy('event.id, event.title, event.startDate');
-    query.orderBy('event.startDate', 'DESC');
+        return results.map(r => ({
+            ...r,
+            ticketsGenerated: parseInt(r.ticketsGenerated, 10),
+            peopleAdmitted: parseInt(r.peopleAdmitted, 10),
+        }));
+    }
 
-    const results = await query.getRawMany();
+    async getNoShows(): Promise<Ticket[]> {
+        const now = new Date();
+        return this.ticketsRepository.find({
+            where: {
+                redeemedCount: 0,
+                event: { endDate: LessThan(now) },
+            },
+            relations: { user: true, event: true, tier: true },
+            select: {
+                id: true, createdAt: true,
+                user: { id: true, name: true, email: true },
+                event: { id: true, title: true, endDate: true },
+                tier: { name: true }
+            },
+            order: { event: { endDate: "DESC" } }
+        });
+    }
 
-    return results.map(r => ({
-      ...r,
-      ticketsGenerated: parseInt(r.ticketsGenerated, 10),
-      peopleAdmitted: parseInt(r.peopleAdmitted, 10),
-    }));
-  }
+    async getAttendanceRanking(queryDto: DashboardQueryDto, limit: number = 25) {
+        const { startDate, endDate } = queryDto;
+        const query = this.usersRepository.createQueryBuilder("user")
+            .select(["user.id as userId", "user.name as userName", "user.email as userEmail"])
+            .addSelect("COALESCE(SUM(ticket.redeemedCount), 0)", "totalAttendance")
+            .leftJoin("user.tickets", "ticket", 
+                startDate && endDate 
+                ? `ticket.validatedAt BETWEEN '${startDate}' AND '${endDate}' AND ticket.redeemedCount > 0`
+                : 'ticket.redeemedCount > 0'
+            )
+            .where(`user.roles @> ARRAY[:clientRole]`, { clientRole: UserRole.CLIENT }) // ✅ CORRECCIÓN
+            .groupBy("user.id, user.name, user.email")
+            .orderBy('"totalAttendance"', 'DESC')
+            .limit(limit);
 
-  async getNoShows(): Promise<Ticket[]> {
-    const now = new Date();
-    return this.ticketsRepository.find({
-        where: {
-            redeemedCount: 0,
-            event: { endDate: LessThan(now) },
-        },
-        relations: { user: true, event: true, tier: true },
-        select: {
-          id: true, createdAt: true,
-          user: { id: true, name: true, email: true },
-          event: { id: true, title: true, endDate: true },
-          tier: { name: true }
-        },
-        order: { event: { endDate: "DESC" } }
-    });
-  }
+        const results = await query.getRawMany();
+        return results.map(r => ({ ...r, totalAttendance: parseInt(r.totalAttendance, 10) }));
+    }
 
-  async getAttendanceRanking(queryDto: DashboardQueryDto, limit: number = 25) {
-    const { startDate, endDate } = queryDto;
-    const query = this.usersRepository.createQueryBuilder("user")
-        .select(["user.id as userId", "user.name as userName", "user.email as userEmail"])
-        .addSelect("COALESCE(SUM(ticket.redeemedCount), 0)", "totalAttendance")
-        .leftJoin("user.tickets", "ticket", 
-            startDate && endDate 
-            ? `ticket.validatedAt BETWEEN '${startDate}' AND '${endDate}' AND ticket.redeemedCount > 0`
-            : 'ticket.redeemedCount > 0'
-        )
-        .where(`:role = ANY(string_to_array(user.roles, ','))`, { role: UserRole.CLIENT })
-        .groupBy("user.id, user.name, user.email")
-        .orderBy('"totalAttendance"', 'DESC')
-        .limit(limit);
+    async getPerfectAttendance(startDate: string, endDate: string): Promise<User[]> {
+        this.logger.log(`[getPerfectAttendance] Calculando asistencia perfecta entre ${startDate} y ${endDate}`);
+        const dateRange = { startDate: new Date(startDate), endDate: new Date(endDate) };
 
-    const results = await query.getRawMany();
-    return results.map(r => ({ ...r, totalAttendance: parseInt(r.totalAttendance, 10) }));
-  }
+        const totalEvents = await this.eventsRepository.count({
+            where: { startDate: Between(dateRange.startDate, dateRange.endDate) },
+        });
 
-  async getPerfectAttendance(startDate: string, endDate: string): Promise<User[]> {
-    this.logger.log(`[getPerfectAttendance] Calculando asistencia perfecta entre ${startDate} y ${endDate}`);
-    const dateRange = { startDate: new Date(startDate), endDate: new Date(endDate) };
+        this.logger.debug(`[getPerfectAttendance] Total de eventos en el período: ${totalEvents}`);
+        if (totalEvents === 0) { return []; }
 
-    const totalEvents = await this.eventsRepository.count({
-      where: { startDate: Between(dateRange.startDate, dateRange.endDate) },
-    });
+        const attendanceCounts = await this.ticketsRepository
+            .createQueryBuilder('ticket')
+            .select('ticket.userId', 'userId')
+            .addSelect('COUNT(DISTINCT ticket.eventId)', 'attendanceCount')
+            .where('ticket.status IN (:...statuses)', { 
+                statuses: [TicketStatus.REDEEMED, TicketStatus.USED, TicketStatus.PARTIALLY_USED] 
+            })
+            .andWhere('ticket.validatedAt BETWEEN :startDate AND :endDate', dateRange)
+            .groupBy('ticket.userId')
+            .getRawMany();
 
-    this.logger.debug(`[getPerfectAttendance] Total de eventos en el período: ${totalEvents}`);
-    if (totalEvents === 0) { return []; }
+        const perfectAttendanceUserIds = attendanceCounts
+            .filter(record => parseInt(record.attendanceCount, 10) >= totalEvents)
+            .map(record => record.userId);
 
-    const attendanceCounts = await this.ticketsRepository
-      .createQueryBuilder('ticket')
-      .select('ticket.userId', 'userId')
-      .addSelect('COUNT(DISTINCT ticket.eventId)', 'attendanceCount')
-      .where('ticket.status IN (:...statuses)', { 
-        statuses: [TicketStatus.REDEEMED, TicketStatus.USED, TicketStatus.PARTIALLY_USED] 
-      })
-      .andWhere('ticket.validatedAt BETWEEN :startDate AND :endDate', dateRange)
-      .groupBy('ticket.userId')
-      .getRawMany();
+        this.logger.debug(`[getPerfectAttendance] IDs de usuarios con asistencia perfecta: ${perfectAttendanceUserIds}`);
+        if (perfectAttendanceUserIds.length === 0) { return []; }
 
-    const perfectAttendanceUserIds = attendanceCounts
-      .filter(record => parseInt(record.attendanceCount, 10) >= totalEvents)
-      .map(record => record.userId);
+        const users = await this.usersRepository.find({
+            where: { id: In(perfectAttendanceUserIds) },
+            select: ['id', 'name', 'email'],
+        });
 
-    this.logger.debug(`[getPerfectAttendance] IDs de usuarios con asistencia perfecta: ${perfectAttendanceUserIds}`);
-    if (perfectAttendanceUserIds.length === 0) { return []; }
-
-    const users = await this.usersRepository.find({
-      where: { id: In(perfectAttendanceUserIds) },
-      select: ['id', 'name', 'email'],
-    });
-
-    return users;
-  }
+        return users;
+    }
 }
