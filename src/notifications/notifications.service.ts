@@ -16,7 +16,6 @@ export class NotificationsService {
     private readonly subscriptionRepository: Repository<PushSubscription>,
     @InjectRepository(Notification)
     private readonly notificationRepository: Repository<Notification>,
-    // Esta inyección ya estaba correcta, la mantenemos
     @Inject(forwardRef(() => UsersService))
     private readonly usersService: UsersService,
   ) {
