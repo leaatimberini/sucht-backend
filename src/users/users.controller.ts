@@ -82,26 +82,18 @@ export class UsersController {
 
   @Get('staff')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN) // ✅ Corregido: Solo el ADMIN puede ver la lista de staff.
+  @Roles(UserRole.ADMIN)
   async findStaff(@Query() paginationQuery: PaginationQueryDto) {
-    const { data, ...pagination } = await this.usersService.findStaff(paginationQuery);
-    const results = data.map(user => {
-      const { password, ...result } = user;
-      return result;
-    });
-    return { results, ...pagination };
+  // ✅ CORRECCIÓN: Devolver directamente el objeto paginado
+  return this.usersService.findStaff(paginationQuery);
   }
 
   @Get('clients')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN) // ✅ Corregido: Solo el ADMIN puede ver la lista de clientes.
+  @Roles(UserRole.ADMIN)
   async findClients(@Query() paginationQuery: PaginationQueryDto) {
-    const { data, ...pagination } = await this.usersService.findClients(paginationQuery);
-    const results = data.map(user => {
-      const { password, ...result } = user;
-      return result;
-    });
-    return { results, ...pagination };
+  // ✅ CORRECCIÓN: Devolver directamente el objeto paginado
+  return this.usersService.findClients(paginationQuery);
   }
 
   @Patch(':id/roles')
