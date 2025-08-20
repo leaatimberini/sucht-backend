@@ -46,7 +46,7 @@ export class Ticket {
     default: TicketStatus.VALID,
   })
   status: TicketStatus;
-  
+
   @Column({ type: 'varchar', nullable: true })
   origin: string | null;
 
@@ -55,26 +55,24 @@ export class Ticket {
 
   @Column({ type: 'int', default: 0 })
   redeemedCount: number;
-  
+
   @Column({ type: 'decimal', precision: 10, scale: 2, default: 0.00 })
   amountPaid: number;
-  
+
   @Column({ type: 'varchar', nullable: true, unique: true })
   paymentId: string | null;
 
-  // --- NUEVOS CAMPOS PARA INVITACIONES ESPECIALES ---
+  // ✅ CORRECCIÓN: Se añaden las nuevas columnas
+  @Column({ default: false })
+  isFree: boolean;
 
-  /**
-   * Si es 'true', este ticket otorga acceso al sector VIP.
-   * El verificador verá una alerta especial.
-   */
+  @Column({ default: false })
+  isPaid: boolean;
+
+  // --- NUEVOS CAMPOS PARA INVITACIONES ESPECIALES ---
   @Column({ type: 'boolean', default: false })
   isVipAccess: boolean;
 
-  /**
-   * Instrucciones especiales para el personal de puerta.
-   * Ej: "INGRESO SIN FILA".
-   */
   @Column({ type: 'varchar', nullable: true })
   specialInstructions: string | null;
 

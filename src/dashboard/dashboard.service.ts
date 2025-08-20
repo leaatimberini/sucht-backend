@@ -22,9 +22,6 @@ export class DashboardService {
         private readonly ticketsService: TicketsService,
     ) {}
     
-    /**
-     * NUEVO MÉTODO: Obtiene el historial completo de tickets.
-     */
     async getFullHistory(queryDto: DashboardQueryDto) {
         return this.ticketsService.getFullHistory(queryDto);
     }
@@ -41,8 +38,8 @@ export class DashboardService {
                 ])
                 .addSelect('COUNT(ticket.id)', 'totalTicketsGenerated')
                 .addSelect('SUM(ticket.redeemedCount)', 'totalRedemptions')
-                // ✅ CORRECCIÓN: Se utiliza el nombre de la columna real en la base de datos "is_free" y "is_paid".
-                .addSelect(`SUM(CASE WHEN ticket."is_free" = FALSE AND ticket."is_paid" = TRUE THEN ticket.price ELSE 0 END)`, 'totalSales');
+                // ✅ CORRECCIÓN FINAL: Se usa el nuevo campo `is_paid` de la tabla `tickets`.
+                .addSelect(`SUM(CASE WHEN ticket."is_paid" = TRUE THEN ticket.amountPaid ELSE 0 END)`, 'totalSales');
                 
             query.where('promoter.roles @> ARRAY[:rrppRole]', { rrppRole: UserRole.RRPP });
             
@@ -71,6 +68,7 @@ export class DashboardService {
         }
     }
 
+    // ... (El resto de los métodos se mantienen iguales) ...
     async getMyRRPPStats(promoterId: string) {
         const stats = await this.ticketsRepository.createQueryBuilder("ticket")
             .select("SUM(ticket.quantity)", "ticketsGenerated")
