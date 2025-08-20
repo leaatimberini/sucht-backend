@@ -1,6 +1,6 @@
 // backend/src/tickets/tickets.controller.ts
 
-import { Controller, Post, Body, Param, UseGuards, Get, Request, Query, Delete, HttpCode, HttpStatus, NotFoundException } from '@nestjs/common';
+import { Controller, Post, Body, Param, UseGuards, Get, Request, Query, Delete, HttpCode, HttpStatus, NotFoundException, ParseUUIDPipe } from '@nestjs/common';
 import { TicketsService } from './tickets.service';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
@@ -57,7 +57,13 @@ export class TicketsController {
   createByRRPP(@Request() req: { user: User }, @Body() createTicketDto: CreateTicketDto) {
     return this.ticketsService.createByRRPP(createTicketDto, req.user);
   }
-
+  @Post(':id/confirm-attendance')
+  confirmAttendance(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Request() req,
+  ) {
+    return this.ticketsService.confirmAttendance(id, req.user.id);
+  }
   // --- Endpoint para que el cliente adquiera un ticket gratuito ---
   @Post('acquire')
   @UseGuards(RolesGuard)

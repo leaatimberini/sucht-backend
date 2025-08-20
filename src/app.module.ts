@@ -20,7 +20,8 @@ import { AdminBirthdayModule } from './admin-birthday/admin-birthday.module';
 import { BirthdayModule } from './birthday/birthday.module';
 import { OwnerInvitationModule } from './owner-invitations/owner-invitations.module';
 import { RaffleModule } from './raffles/raffle.module';
-import { OrganizerModule } from './organizer/organizer.module'; // Importamos el módulo del Organizador
+import { OrganizerModule } from './organizer/organizer.module';
+import { TablesModule } from './tables/tables.module'; // 1. Importar
 
 @Module({
   imports: [
@@ -59,7 +60,8 @@ import { OrganizerModule } from './organizer/organizer.module'; // Importamos el
     BirthdayModule,
     OwnerInvitationModule,
     RaffleModule,
-    OrganizerModule, // Añadimos el módulo del Organizador
+    OrganizerModule,
+    TablesModule, // 2. Añadir a la lista
   ],
   controllers: [],
   providers: [],
