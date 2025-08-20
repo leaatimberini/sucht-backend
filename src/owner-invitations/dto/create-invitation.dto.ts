@@ -1,3 +1,4 @@
+// backend/src/owner-invitations/dto/create-invitation.dto.ts
 import { Type } from 'class-transformer';
 import { IsEmail, IsNotEmpty, IsInt, Min, IsBoolean, IsArray, ValidateNested, IsUUID, Max, IsOptional } from 'class-validator';
 

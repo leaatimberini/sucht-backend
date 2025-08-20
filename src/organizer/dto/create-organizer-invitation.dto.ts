@@ -1,3 +1,4 @@
+// backend/src/organizer/dto/create-organizer-invitation.dto.ts
 import { IsEmail, IsNotEmpty, IsInt, Min, Max, IsBoolean, IsOptional } from 'class-validator';
 
 export class CreateOrganizerInvitationDto {

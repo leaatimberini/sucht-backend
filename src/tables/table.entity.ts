@@ -1,3 +1,4 @@
+// backend/src/tables/table.entity.ts
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, OneToOne } from 'typeorm';
 import { Event } from '../events/event.entity';
 import { TableCategory } from './table-category.entity';

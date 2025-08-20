@@ -69,6 +69,7 @@ export class User {
   @UpdateDateColumn({ type: 'timestamp' })
   updatedAt: Date;
 
+  // Relaciones
   @OneToMany(() => Ticket, ticket => ticket.user)
   tickets: Ticket[];
 

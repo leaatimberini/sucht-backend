@@ -1,3 +1,4 @@
+// backend/src/organizer/organizer.service.ts
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { User } from '../users/user.entity';
 import { UsersService } from '../users/users.service';

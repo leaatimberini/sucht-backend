@@ -1,3 +1,4 @@
+// backend/src/owner-invitations/owner-invitations.service.ts
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { User } from '../users/user.entity';
 import { CreateInvitationDto } from './dto/create-invitation.dto';
