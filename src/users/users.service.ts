@@ -9,7 +9,7 @@ import {
   forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, ArrayContains, Not } from 'typeorm';
+import { Repository, ArrayContains } from 'typeorm';
 import { User, UserRole } from './user.entity';
 import { RegisterAuthDto } from 'src/auth/dto/register-auth.dto';
 import { randomBytes } from 'crypto';
@@ -35,7 +35,6 @@ export class UsersService {
     @InjectRepository(User)
     private usersRepository: Repository<User>,
     private readonly configService: ConfigurationService,
-    // 2. Aplicar la inyección con forwardRef para romper el ciclo
     @Inject(forwardRef(() => NotificationsService))
     private readonly notificationsService: NotificationsService,
   ) {}
@@ -285,18 +284,6 @@ export class UsersService {
     const { page, limit } = paginationQuery;
     const skip = (page - 1) * limit;
 
-    const queryBuilder = this.usersRepository.createQueryBuilder("user");
-    queryBuilder.where("user.roles @> ARRAY[:rrppRole, :adminRole, :ownerRole, :verifierRole, :barraRole]", {
-      rrppRole: UserRole.RRPP,
-      adminRole: UserRole.ADMIN,
-      ownerRole: UserRole.OWNER,
-      verifierRole: UserRole.VERIFIER,
-      barraRole: UserRole.BARRA
-    });
-
-    // Se cambió la consulta para evitar errores de sintaxis y lógica.
-    // Se busca a todos los usuarios que tienen un rol de staff
-    // (cualquiera que no sea exclusivamente "client").
     const [data, total] = await this.usersRepository.findAndCount({
       where: [
         { roles: ArrayContains([UserRole.RRPP]) },
@@ -353,7 +340,7 @@ export class UsersService {
     return this.usersRepository
       .createQueryBuilder('user')
       .addSelect('user.mpAccessToken')
-      .where(`:role = ANY(string_to_array(user.roles, ','))`, { role })
+      .where(':role = ANY(user.roles)', { role })
       .getOne();
   }
 
@@ -393,10 +380,9 @@ export class UsersService {
       );
     }
 
-    queryBuilder = queryBuilder.andWhere(
-      `:role = ANY(string_to_array(user.roles, ','))`,
-      { role: UserRole.CLIENT },
-    );
+    queryBuilder = queryBuilder.andWhere(':role = ANY(user.roles)', {
+      role: UserRole.CLIENT,
+    });
 
     return queryBuilder
       .orderBy(`to_char("dateOfBirth", 'MM-DD')`)

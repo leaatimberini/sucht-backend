@@ -1,5 +1,17 @@
-// backend/src/users/users.controller.ts
-import { Controller, Get, Param, Body, UseGuards, Post, NotFoundException, Patch, UseInterceptors, UploadedFile, Request, HttpCode, HttpStatus, ConflictException, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Param,
+  Body,
+  UseGuards,
+  Post,
+  NotFoundException,
+  Patch,
+  UseInterceptors,
+  UploadedFile,
+  Request,
+  Query,
+} from '@nestjs/common';
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
@@ -46,7 +58,10 @@ export class UsersController {
   ) {
     const userId = req.user.id;
     if (profileImage) {
-      const uploadResult = await this.cloudinaryService.uploadImage(profileImage, 'sucht/profiles');
+      const uploadResult = await this.cloudinaryService.uploadImage(
+        profileImage,
+        'sucht/profiles',
+      );
       updateProfileDto.profileImageUrl = uploadResult.secure_url;
       try {
         await unlink(profileImage.path);
@@ -58,19 +73,19 @@ export class UsersController {
     const { password, invitationToken, ...result } = updatedUser;
     return result;
   }
-  
+
   @Post('invite-staff')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN) // ✅ Corregido: Solo el ADMIN puede invitar staff.
+  @Roles(UserRole.ADMIN) // Solo el ADMIN puede invitar staff
   async inviteStaff(@Body() inviteStaffDto: InviteStaffDto) {
     const user = await this.usersService.inviteOrUpdateStaff(inviteStaffDto);
     const { password, ...result } = user;
     return result;
   }
-  
+
   @Get('by-email/:email')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN) // ✅ Corregido: Solo el ADMIN puede buscar usuarios por email.
+  @Roles(UserRole.ADMIN) // Solo el ADMIN puede buscar usuarios por email
   async findByEmail(@Param('email') email: string) {
     const user = await this.usersService.findOneByEmail(email);
     if (!user) {
@@ -84,29 +99,30 @@ export class UsersController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   async findStaff(@Query() paginationQuery: PaginationQueryDto) {
-  // ✅ CORRECCIÓN: Devolver directamente el objeto paginado
-  return this.usersService.findStaff(paginationQuery);
+    return this.usersService.findStaff(paginationQuery);
   }
 
   @Get('clients')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   async findClients(@Query() paginationQuery: PaginationQueryDto) {
-  // ✅ CORRECCIÓN: Devolver directamente el objeto paginado
-  return this.usersService.findClients(paginationQuery);
+    return this.usersService.findClients(paginationQuery);
   }
 
   @Patch(':id/roles')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN) // ✅ Corregido: Solo el ADMIN puede actualizar roles para mantener el control total.
-  async updateUserRoles(@Param('id') id: string, @Body() updateUserRoleDto: UpdateUserRoleDto,) {
+  @Roles(UserRole.ADMIN) // Solo el ADMIN puede actualizar roles
+  async updateUserRoles(
+    @Param('id') id: string,
+    @Body() updateUserRoleDto: UpdateUserRoleDto,
+  ) {
     const user = await this.usersService.updateUserRoles(id, updateUserRoleDto.roles);
     const { password, ...result } = user;
     return result;
   }
 
   @Get('by-username/:username')
-  @UseGuards(JwtAuthGuard, RolesGuard) 
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.RRPP, UserRole.CLIENT)
   async findByUsername(@Param('username') username: string) {
     const user = await this.usersService.findOneByUsername(username);
@@ -122,7 +138,7 @@ export class UsersController {
   @Roles(UserRole.ADMIN, UserRole.RRPP)
   async findUpcomingBirthdays() {
     const users = await this.usersService.findUpcomingBirthdays(15);
-    return users.map(user => {
+    return users.map((user) => {
       const { password, ...result } = user;
       return result;
     });
@@ -130,10 +146,10 @@ export class UsersController {
 
   @Get()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN) // ✅ Corregido: Solo el ADMIN puede ver todos los usuarios.
+  @Roles(UserRole.ADMIN) // Solo el ADMIN puede ver todos los usuarios
   async findAll(@Query() paginationQuery: PaginationQueryDto) {
     const { data, ...pagination } = await this.usersService.findAll(paginationQuery);
-    const results = data.map(user => {
+    const results = data.map((user) => {
       const { password, ...result } = user;
       return result;
     });
