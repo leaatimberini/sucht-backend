@@ -1,3 +1,4 @@
+// src/store/store.service.ts
 import { Injectable, NotFoundException, BadRequestException, InternalServerErrorException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository, DataSource, Not, IsNull } from 'typeorm';
