@@ -21,7 +21,8 @@ import { BirthdayModule } from './birthday/birthday.module';
 import { OwnerInvitationModule } from './owner-invitations/owner-invitations.module';
 import { RaffleModule } from './raffles/raffle.module';
 import { OrganizerModule } from './organizer/organizer.module';
-import { TablesModule } from './tables/tables.module'; // 1. Importar
+import { TablesModule } from './tables/tables.module';
+import { VerifierModule } from './verifier/verifier.module'; // 1. Importar
 
 @Module({
   imports: [
@@ -61,7 +62,8 @@ import { TablesModule } from './tables/tables.module'; // 1. Importar
     OwnerInvitationModule,
     RaffleModule,
     OrganizerModule,
-    TablesModule, // 2. Añadir a la lista
+    TablesModule,
+    VerifierModule, // 2. Añadir a la lista
   ],
   controllers: [],
   providers: [],
