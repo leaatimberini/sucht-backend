@@ -42,6 +42,12 @@ export class TablesController {
   findTablesForEvent(@Param('eventId', ParseUUIDPipe) eventId: string) {
     return this.tablesService.findTablesForEvent(eventId);
   }
+
+  @Get('reservations/event/:eventId')
+  @Roles(UserRole.ADMIN, UserRole.OWNER, UserRole.ORGANIZER)
+  getReservationsForEvent(@Param('eventId', ParseUUIDPipe) eventId: string) {
+    return this.tablesService.getReservationsForEvent(eventId);
+  }
   
   @Patch(':id/position')
   @Roles(UserRole.ADMIN)
