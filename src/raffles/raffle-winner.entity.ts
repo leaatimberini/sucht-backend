@@ -1,52 +1,34 @@
-// src/raffles/raffle-winner.entity.ts
-import {
-  Entity,
-  PrimaryGeneratedColumn,
-  CreateDateColumn,
-  ManyToOne,
-  JoinColumn,
-  Column,
-} from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, ManyToOne, JoinColumn, CreateDateColumn, Column } from 'typeorm';
+import { Raffle } from './raffle.entity';
 import { User } from '../users/user.entity';
-import { Event } from '../events/event.entity';
-import { ProductPurchase } from '../store/product-purchase.entity';
+import { RafflePrize } from './raffle-prize.entity';
 
 @Entity('raffle_winners')
 export class RaffleWinner {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
+    @PrimaryGeneratedColumn('uuid')
+    id: string;
 
-  /**
-   * El usuario que ganó el sorteo.
-   */
-  @ManyToOne(() => User, { eager: true })
-  @JoinColumn({ name: 'winnerUserId' })
-  winner: User;
+    @ManyToOne(() => Raffle, raffle => raffle.winners, { onDelete: 'CASCADE' })
+    @JoinColumn({ name: 'raffleId' })
+    raffle: Raffle;
 
-  @Column()
-  winnerUserId: string;
+    @Column()
+    raffleId: string;
 
-  /**
-   * El evento para el cual se realizó este sorteo.
-   */
-  @ManyToOne(() => Event, { eager: true })
-  @JoinColumn({ name: 'eventId' })
-  event: Event;
+    @ManyToOne(() => User, { eager: true })
+    @JoinColumn({ name: 'userId' })
+    user: User;
 
-  @Column()
-  eventId: string;
+    @Column()
+    userId: string;
 
-  /**
-   * El registro de la "compra gratuita" del producto que se ganó.
-   * A través de esta relación, sabemos qué premio fue y si ya fue canjeado (`redeemedAt`).
-   */
-  @ManyToOne(() => ProductPurchase, { eager: true })
-  @JoinColumn({ name: 'prizePurchaseId' })
-  prize: ProductPurchase;
+    @ManyToOne(() => RafflePrize, { eager: true })
+    @JoinColumn({ name: 'prizeId' })
+    prize: RafflePrize;
 
-  @Column()
-  prizePurchaseId: string;
+    @Column()
+    prizeId: string;
 
-  @CreateDateColumn({ type: 'timestamp with time zone' })
-  drawnAt: Date; // Fecha y hora en que se realizó el sorteo
+    @CreateDateColumn({ type: 'timestamp' })
+    createdAt: Date;
 }

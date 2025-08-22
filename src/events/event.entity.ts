@@ -1,4 +1,3 @@
-// backend/src/events/event.entity.ts
 import {
   Entity,
   PrimaryGeneratedColumn,
@@ -6,9 +5,11 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   OneToMany,
+  OneToOne,
 } from 'typeorm';
 import { Ticket } from 'src/tickets/ticket.entity';
 import { TicketTier } from 'src/ticket-tiers/ticket-tier.entity';
+import { Raffle } from 'src/raffles/raffle.entity';
 
 @Entity('events')
 export class Event {
@@ -19,12 +20,11 @@ export class Event {
   title: string;
 
   @Column({ type: 'text', nullable: true })
-  description: string;
+  description: string | null;
 
   @Column()
   location: string;
 
-  // Se mantiene el tipo original para no romper la compatibilidad
   @Column({ type: 'timestamp' })
   startDate: Date;
 
@@ -32,12 +32,11 @@ export class Event {
   endDate: Date;
 
   @Column({ nullable: true })
-  flyerImageUrl: string;
+  flyerImageUrl: string | null;
 
   @Column({ type: 'timestamp', nullable: true })
   confirmationSentAt: Date | null;
 
-  // --- NUEVOS CAMPOS ---
   @Column({ type: 'boolean', default: false })
   isPublished: boolean;
 
@@ -55,6 +54,14 @@ export class Event {
     onDelete: 'CASCADE',
   })
   ticketTiers: TicketTier[];
+
+  // --- NUEVA RELACIÓN AÑADIDA ---
+  @OneToOne(() => Raffle, (raffle) => raffle.event, {
+    cascade: true,
+    onDelete: 'SET NULL', // Si se borra el evento, el sorteo queda sin evento pero no se borra.
+    nullable: true,
+  })
+  raffle: Raffle;
 
   @CreateDateColumn({ type: 'timestamp' })
   createdAt: Date;
