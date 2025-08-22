@@ -16,13 +16,13 @@ export class Event {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column()
+  @Column({ type: 'varchar' })
   title: string;
 
   @Column({ type: 'text', nullable: true })
-  description: string | null; // <-- CORRECCIÓN
+  description: string | null;
 
-  @Column()
+  @Column({ type: 'varchar' })
   location: string;
 
   @Column({ type: 'timestamp' })
@@ -31,8 +31,8 @@ export class Event {
   @Column({ type: 'timestamp' })
   endDate: Date;
 
-  @Column({ nullable: true })
-  flyerImageUrl: string | null; // <-- CORRECCIÓN
+  @Column({ type: 'varchar', nullable: true }) // <-- CORRECCIÓN
+  flyerImageUrl: string | null;
 
   @Column({ type: 'timestamp', nullable: true })
   confirmationSentAt: Date | null;
@@ -43,23 +43,13 @@ export class Event {
   @Column({ type: 'timestamp with time zone', nullable: true })
   publishAt: Date | null;
 
-  @OneToMany(() => Ticket, (ticket) => ticket.event, {
-    cascade: true,
-    onDelete: 'CASCADE',
-  })
+  @OneToMany(() => Ticket, (ticket) => ticket.event, { cascade: true, onDelete: 'CASCADE' })
   tickets: Ticket[];
 
-  @OneToMany(() => TicketTier, (ticketTier) => ticketTier.event, {
-    cascade: true,
-    onDelete: 'CASCADE',
-  })
+  @OneToMany(() => TicketTier, (ticketTier) => ticketTier.event, { cascade: true, onDelete: 'CASCADE' })
   ticketTiers: TicketTier[];
-  
-  @OneToOne(() => Raffle, (raffle) => raffle.event, {
-    cascade: true,
-    onDelete: 'SET NULL',
-    nullable: true,
-  })
+
+  @OneToOne(() => Raffle, (raffle) => raffle.event, { cascade: true, onDelete: 'SET NULL', nullable: true })
   raffle: Raffle;
 
   @CreateDateColumn({ type: 'timestamp' })

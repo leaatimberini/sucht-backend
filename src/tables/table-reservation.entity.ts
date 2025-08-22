@@ -1,4 +1,3 @@
-// src/tables/table-reservation.entity.ts
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, OneToOne } from 'typeorm';
 import { Event } from '../events/event.entity';
 import { Table } from './table.entity';
@@ -28,14 +27,12 @@ export class TableReservation {
   @Column()
   tableId: string;
 
-  // Datos del cliente que reserva
-  @Column()
+  @Column({ type: 'varchar' }) // <-- CORRECCIÓN
   clientName: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true }) // <-- CORRECCIÓN
   clientEmail?: string;
 
-  // Staff que gestionó la reserva (para ventas manuales)
   @ManyToOne(() => User)
   @JoinColumn({ name: 'reservedByUserId' })
   reservedByUser: User;
@@ -54,7 +51,6 @@ export class TableReservation {
   @Column()
   guestCount: number;
 
-  // Ticket asociado que contiene el QR para el ingreso
   @OneToOne(() => Ticket)
   @JoinColumn({ name: 'ticketId' })
   ticket: Ticket;
