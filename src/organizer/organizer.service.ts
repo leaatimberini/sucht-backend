@@ -1,4 +1,3 @@
-// backend/src/organizer/organizer.service.ts
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { User } from '../users/user.entity';
 import { UsersService } from '../users/users.service';
@@ -7,13 +6,18 @@ import { TicketTiersService } from '../ticket-tiers/ticket-tiers.service';
 import { TicketsService } from '../tickets/tickets.service';
 import { MailService } from '../mail/mail.service';
 import { ConfigurationService } from '../configuration/configuration.service';
-import { CreateOrganizerInvitationDto } from './dto/create-organizer-invitation.dto'; // Reutilizamos el DTO
+import { CreateOrganizerInvitationDto } from './dto/create-organizer-invitation.dto';
+import { Ticket } from '../tickets/ticket.entity';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 
 @Injectable()
 export class OrganizerService {
   private readonly logger = new Logger(OrganizerService.name);
 
   constructor(
+    @InjectRepository(Ticket)
+    private readonly ticketsRepository: Repository<Ticket>,
     private readonly usersService: UsersService,
     private readonly eventsService: EventsService,
     private readonly ticketTiersService: TicketTiersService,
@@ -24,7 +28,6 @@ export class OrganizerService {
 
   async createInvitation(organizer: User, dto: CreateOrganizerInvitationDto) {
     this.logger.log(`Organizador ${organizer.email} creando invitación para ${dto.email}`);
-    // Omitimos la lógica de 'giftedProducts'
     const { email, guestCount, isVipAccess } = dto;
 
     if (typeof guestCount !== 'number') {
@@ -58,14 +61,13 @@ export class OrganizerService {
     }
     
     const qrBoxStyle = "background-color: white; padding: 15px; border-radius: 8px; margin: 10px auto; max-width: 180px;";
-    const qrApiUrl = "https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=";
+    const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${finalTicket.id}`;
     
-    // --- NUEVA PLANTILLA DE EMAIL CON ESTILO AZUL/ROJO ---
     const mainTicketQrHtml = `
       <div style="margin-bottom: 20px; border: 2px solid; border-image: linear-gradient(90deg, #3b82f6, #ef4444) 1; padding: 20px; background-color: #2a2a2a;">
         <p style="color: #60a5fa; margin:0; font-size: 12px; text-transform: uppercase;">Invitación de ${fullOrganizer.name}</p>
         <h3 style="color: #ffffff; margin: 5px 0 15px 0; font-size: 22px;">QR de Ingreso</h3>
-        <div style="${qrBoxStyle}"><img src="${qrApiUrl}${finalTicket.id}" alt="QR de Ingreso" /></div>
+        <div style="${qrBoxStyle}"><img src="${qrApiUrl}" alt="QR de Ingreso" /></div>
         <p style="color: #bbbbbb; margin-top: 15px; font-size: 16px;">Válido para ${finalTicket.quantity} personas</p>
         ${finalTicket.isVipAccess ? `<p style="color: #3b82f6; font-weight: bold; margin-top: 10px;">ACCESO VIP</p>` : ''}
         <p style="color: #60a5fa; font-weight: bold; margin-top: 5px;">${finalTicket.specialInstructions}</p>
@@ -95,5 +97,35 @@ export class OrganizerService {
     
     this.logger.log(`Invitación de organizador para ${email} creada y enviada.`);
     return { message: `Invitación enviada a ${email}.` };
+  }
+
+  async getMySentInvitations(organizerId: string) {
+    this.logger.log(`Buscando invitaciones enviadas por el Organizador ID: ${organizerId}`);
+    
+    const invitationTickets = await this.ticketsRepository.find({
+      where: {
+        promoter: { id: organizerId },
+        origin: 'ORGANIZER_INVITATION',
+      },
+      relations: ['user', 'event'],
+      order: { createdAt: 'DESC' },
+    });
+
+    return invitationTickets.map(ticket => ({
+      invitedUser: {
+        name: ticket.user.name,
+        email: ticket.user.email
+      },
+      event: {
+        title: ticket.event.title
+      },
+      ticket: {
+        quantity: ticket.quantity,
+        redeemedCount: ticket.redeemedCount,
+        isVipAccess: ticket.isVipAccess,
+        status: ticket.status,
+      },
+      gifts: {}
+    }));
   }
 }
