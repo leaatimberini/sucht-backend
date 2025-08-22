@@ -17,7 +17,7 @@ export class OrganizerService {
 
   constructor(
     @InjectRepository(Ticket)
-    private readonly ticketsRepository: Repository<Ticket>,
+    private readonly ticketsRepository: Repository<Ticket>, // 1. Inyectar el repositorio de Tickets
     private readonly usersService: UsersService,
     private readonly eventsService: EventsService,
     private readonly ticketTiersService: TicketTiersService,
@@ -99,6 +99,9 @@ export class OrganizerService {
     return { message: `Invitación enviada a ${email}.` };
   }
 
+  /**
+   * NUEVO MÉTODO: Obtiene el historial de invitaciones enviadas por un organizador.
+   */
   async getMySentInvitations(organizerId: string) {
     this.logger.log(`Buscando invitaciones enviadas por el Organizador ID: ${organizerId}`);
     
@@ -111,6 +114,7 @@ export class OrganizerService {
       order: { createdAt: 'DESC' },
     });
 
+    // Mapeamos los datos a un formato simple para el frontend
     return invitationTickets.map(ticket => ({
       invitedUser: {
         name: ticket.user.name,
@@ -125,7 +129,7 @@ export class OrganizerService {
         isVipAccess: ticket.isVipAccess,
         status: ticket.status,
       },
-      gifts: {}
+      gifts: {} // Los organizadores no envían regalos
     }));
   }
 }

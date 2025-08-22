@@ -12,9 +12,6 @@ import { CreateOrganizerInvitationDto } from './dto/create-organizer-invitation.
 export class OrganizerController {
   constructor(private readonly organizerService: OrganizerService) {}
 
-  /**
-   * Endpoint para que un Organizador cree y envíe una invitación.
-   */
   @Post('invitations')
   create(
     @Req() req: { user: User },
@@ -25,7 +22,7 @@ export class OrganizerController {
   }
 
   /**
-   * Endpoint para obtener el historial de invitaciones enviadas por el Organizador.
+   * NUEVO ENDPOINT: Obtiene el historial de invitaciones del organizador.
    */
   @Get('invitations/my-history')
   getMySentInvitations(@Req() req: { user: User }) {
