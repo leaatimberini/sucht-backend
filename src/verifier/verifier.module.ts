@@ -1,3 +1,4 @@
+// src/verifier/verifier.module.ts
 import { Module } from '@nestjs/common';
 import { VerifierService } from './verifier.service';
 import { VerifierController } from './verifier.controller';

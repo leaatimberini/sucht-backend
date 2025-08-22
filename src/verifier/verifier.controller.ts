@@ -1,3 +1,4 @@
+// src/verifier/verifier.controller.ts
 import { Controller, Post, Body, UseGuards, Req } from '@nestjs/common';
 import { VerifierService } from './verifier.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
