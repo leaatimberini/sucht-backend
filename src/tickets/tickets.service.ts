@@ -49,8 +49,6 @@ export class TicketsService {
     const tier = await this.ticketTiersRepository.findOneBy({ id: ticketTierId });
     if (!tier) throw new NotFoundException('Tipo de entrada no encontrado.');
 
-    // --- CORRECCIÓN CLAVE ---
-    // Nos aseguramos de que la cantidad siempre sea un número válido.
     const numericQuantity = Number(quantity);
     if (isNaN(numericQuantity) || numericQuantity <= 0) {
         throw new BadRequestException('La cantidad de entradas no es válida.');
@@ -70,7 +68,6 @@ export class TicketsService {
     });
     
     if (origin !== 'OWNER_INVITATION') {
-      // Nos aseguramos de que la resta se haga entre números.
       tier.quantity = Number(tier.quantity) - numericQuantity;
       await this.ticketTiersRepository.save(tier);
     }
@@ -183,7 +180,7 @@ export class TicketsService {
   }
 
   async findOne(ticketId: string): Promise<Ticket> {
-    const ticket = await this.ticketsRepository.findOne({  where: { id: ticketId }, relations: ['user', 'event', 'tier', 'promoter'], });
+    const ticket = await this.ticketsRepository.findOne({ where: { id: ticketId }, relations: ['user', 'event', 'tier', 'promoter'], });
     if (!ticket) throw new NotFoundException('Entrada no válida o no encontrada.');
     return ticket;
   }
@@ -214,11 +211,13 @@ export class TicketsService {
   async redeemTicket(id: string, quantityToRedeem: number): Promise<any> {
     const ticket = await this.ticketsRepository.findOne({ where: { id }, relations: ['user', 'event', 'tier', 'promoter'] });
     if (!ticket) { throw new NotFoundException('Ticket not found.'); }
+    
     const shouldAwardPoints = ticket.redeemedCount === 0;
     if (new Date() > new Date(ticket.event.endDate)) { throw new BadRequestException('Event has already finished.'); }
     const remaining = ticket.quantity - (ticket.redeemedCount || 0);
     if (remaining === 0) { throw new BadRequestException('Ticket has been fully redeemed.'); }
     if (quantityToRedeem > remaining) { throw new BadRequestException(`Only ${remaining} entries remaining on this ticket.`); }
+    
     ticket.redeemedCount += quantityToRedeem;
     ticket.status = ticket.redeemedCount >= ticket.quantity ? TicketStatus.REDEEMED : TicketStatus.PARTIALLY_USED;
     ticket.validatedAt = new Date();
@@ -265,7 +264,7 @@ export class TicketsService {
   @Cron(CronExpression.EVERY_MINUTE)
   async handleUnconfirmedTickets() {
     this.logger.log('[CronJob] Ejecutando handleUnconfirmedTickets...');
-    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    const oneHourAgo = new Date(Date.now() - 3600 * 1000);
     const unconfirmedTickets = await this.ticketsRepository.find({
       where: {
         confirmedAt: IsNull(),
