@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { TablesService } from './tables.service';
 import { TablesController } from './tables.controller';
@@ -8,10 +8,9 @@ import { EventsModule } from 'src/events/events.module';
 import { TableReservation } from './table-reservation.entity';
 import { TicketsModule } from 'src/tickets/tickets.module';
 import { TicketTiersModule } from 'src/ticket-tiers/ticket-tiers.module';
-// MailModule y ConfigurationModule ya son globales, así que no es estrictamente necesario
-// importarlos aquí, pero es una buena práctica para la claridad del código.
 import { MailModule } from 'src/mail/mail.module';
 import { ConfigurationModule } from 'src/configuration/configuration.module';
+import { UsersModule } from 'src/users/users.module';
 
 @Module({
   imports: [
@@ -19,10 +18,12 @@ import { ConfigurationModule } from 'src/configuration/configuration.module';
     EventsModule,
     TicketsModule,
     TicketTiersModule,
-    MailModule, // <-- Añadido
-    ConfigurationModule, // <-- Añadido
+    MailModule,
+    ConfigurationModule,
+    forwardRef(() => UsersModule), // 🔑 IMPORTANTE
   ],
   controllers: [TablesController],
   providers: [TablesService],
+  exports: [TablesService], // opcional si otro módulo lo necesita
 })
 export class TablesModule {}
