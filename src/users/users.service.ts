@@ -10,7 +10,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, ArrayContains } from 'typeorm';
+import { Repository, ArrayContains, MoreThan } from 'typeorm';
 import { User, UserRole } from './user.entity';
 import { RegisterAuthDto } from 'src/auth/dto/register-auth.dto';
 import { randomBytes } from 'crypto';
@@ -422,7 +422,19 @@ export class UsersService {
       .orderBy(`to_char("dateOfBirth", 'MM-DD')`)
       .getMany();
   }
+  async save(user: User): Promise<User> {
+    return this.usersRepository.save(user);
+  }
 
+
+  async findUserByPasswordResetToken(token: string): Promise<User | null> {
+    return this.usersRepository.findOne({
+      where: {
+        passwordResetToken: token,
+        passwordResetExpires: MoreThan(new Date()), // El token no debe haber expirado
+      },
+    });
+  }
   async updateMercadoPagoCredentials(
     userId: string,
     accessToken: string | null,
