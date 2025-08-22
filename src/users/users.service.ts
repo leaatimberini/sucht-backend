@@ -344,7 +344,11 @@ export class UsersService {
     if (!adminEmail) {
       throw new InternalServerErrorException('El email del admin para comisiones no está configurado.');
     }
-    return this.usersRepository.findOne({ where: { email: adminEmail } });
+    return this.usersRepository
+      .createQueryBuilder('user')
+      .addSelect('user.mpAccessToken') // <-- ESTA LÍNEA SOLUCIONA EL PROBLEMA
+      .where('user.email = :email', { email: adminEmail })
+      .getOne();
   }
 
   async findOwnerForPayments(): Promise<User | null> {
@@ -352,7 +356,11 @@ export class UsersService {
     if (!ownerEmail) {
       throw new InternalServerErrorException('El email del dueño para pagos no está configurado.');
     }
-    return this.usersRepository.findOne({ where: { email: ownerEmail } });
+    return this.usersRepository
+      .createQueryBuilder('user')
+      .addSelect('user.mpAccessToken') // <-- ESTA LÍNEA SOLUCIONA EL PROBLEMA
+      .where('user.email = :email', { email: ownerEmail })
+      .getOne();
   }
 
   async findUpcomingBirthdays(days: number): Promise<User[]> {
