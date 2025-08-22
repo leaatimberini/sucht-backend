@@ -1,3 +1,4 @@
+// src/users/users.service.ts
 import {
   ConflictException,
   Injectable,
@@ -323,7 +324,7 @@ export class UsersService {
     accessToken: string | null;
   }> {
     const serviceFeeStr = await this.configService.get('adminServiceFee');
-    const adminUser = await this.findAdmin();
+    const adminUser = await this.findAdminForPayments();
     return {
       serviceFee: serviceFeeStr ? parseFloat(serviceFeeStr) : 0,
       accessToken: adminUser?.mpAccessToken || null,
@@ -338,12 +339,20 @@ export class UsersService {
       .getOne();
   }
 
-  async findAdmin(): Promise<User | null> {
-    return this.findUserByRole(UserRole.ADMIN);
+  async findAdminForPayments(): Promise<User | null> {
+    const adminEmail = await this.configService.get('MP_ADMIN_EMAIL');
+    if (!adminEmail) {
+      throw new InternalServerErrorException('El email del administrador de pagos no está configurado en las variables de entorno.');
+    }
+    return this.usersRepository.findOne({ where: { email: adminEmail.toLowerCase() } });
   }
 
-  async findOwner(): Promise<User | null> {
-    return this.findUserByRole(UserRole.OWNER);
+  async findOwnerForPayments(): Promise<User | null> {
+    const ownerEmail = await this.configService.get('MP_OWNER_EMAIL');
+    if (!ownerEmail) {
+      throw new InternalServerErrorException('El email del dueño de pagos no está configurado en las variables de entorno.');
+    }
+    return this.usersRepository.findOne({ where: { email: ownerEmail.toLowerCase() } });
   }
 
   async findUpcomingBirthdays(days: number): Promise<User[]> {
