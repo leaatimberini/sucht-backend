@@ -16,7 +16,7 @@ class UpdateGuestLimitDto {
 
 @Controller('admin/birthday')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.ADMIN, UserRole.OWNER) // Protegemos todo el controlador para admins/dueños
+@Roles(UserRole.ADMIN, UserRole.OWNER, UserRole.ORGANIZER) // Protegemos todo el controlador para admins/dueños
 export class AdminBirthdayController {
   constructor(private readonly adminBirthdayService: AdminBirthdayService) {}
 
