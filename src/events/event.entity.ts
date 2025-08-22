@@ -20,7 +20,7 @@ export class Event {
   title: string;
 
   @Column({ type: 'text', nullable: true })
-  description: string | null;
+  description: string | null; // <-- CORRECCIÓN
 
   @Column()
   location: string;
@@ -32,7 +32,7 @@ export class Event {
   endDate: Date;
 
   @Column({ nullable: true })
-  flyerImageUrl: string | null;
+  flyerImageUrl: string | null; // <-- CORRECCIÓN
 
   @Column({ type: 'timestamp', nullable: true })
   confirmationSentAt: Date | null;
@@ -54,11 +54,10 @@ export class Event {
     onDelete: 'CASCADE',
   })
   ticketTiers: TicketTier[];
-
-  // --- NUEVA RELACIÓN AÑADIDA ---
+  
   @OneToOne(() => Raffle, (raffle) => raffle.event, {
     cascade: true,
-    onDelete: 'SET NULL', // Si se borra el evento, el sorteo queda sin evento pero no se borra.
+    onDelete: 'SET NULL',
     nullable: true,
   })
   raffle: Raffle;
