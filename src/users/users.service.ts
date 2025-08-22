@@ -340,19 +340,19 @@ export class UsersService {
   }
 
   async findAdminForPayments(): Promise<User | null> {
-    const adminEmail = await this.configService.get('MP_ADMIN_EMAIL');
+    const adminEmail = process.env.MP_ADMIN_EMAIL;
     if (!adminEmail) {
-      throw new InternalServerErrorException('El email del administrador de pagos no está configurado en las variables de entorno.');
+      throw new InternalServerErrorException('El email del admin para comisiones no está configurado.');
     }
-    return this.usersRepository.findOne({ where: { email: adminEmail.toLowerCase() } });
+    return this.usersRepository.findOne({ where: { email: adminEmail } });
   }
 
   async findOwnerForPayments(): Promise<User | null> {
-    const ownerEmail = await this.configService.get('MP_OWNER_EMAIL');
+    const ownerEmail = process.env.MP_OWNER_EMAIL;
     if (!ownerEmail) {
-      throw new InternalServerErrorException('El email del dueño de pagos no está configurado en las variables de entorno.');
+      throw new InternalServerErrorException('El email del dueño para pagos no está configurado.');
     }
-    return this.usersRepository.findOne({ where: { email: ownerEmail.toLowerCase() } });
+    return this.usersRepository.findOne({ where: { email: ownerEmail } });
   }
 
   async findUpcomingBirthdays(days: number): Promise<User[]> {
