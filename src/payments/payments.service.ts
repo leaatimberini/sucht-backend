@@ -90,10 +90,11 @@ export class PaymentsService {
   private async processApprovedPayment(paymentId: string) {
     this.logger.log(`[processApprovedPayment] Iniciando para paymentId: ${paymentId}`);
     
-    const owner = await this.usersService.findOwnerForPayments();
-    if (!owner?.mpAccessToken) {
-      throw new InternalServerErrorException("La cuenta del dueño para recibir pagos no está configurada.");
-    }
+    const owner = await this.usersService.findOwnerForPayments();
+    if (!owner || !owner.mpAccessToken) {
+      this.logger.error('[createPreference] ERROR CRÍTICO: El dueño de pagos no fue encontrado o no tiene un token de MP.');
+      throw new InternalServerErrorException("La cuenta del dueño para recibir pagos no está configurada.");
+    }
 
     const mpClient = new MercadoPagoConfig({ accessToken: owner.mpAccessToken });
     const payment = new Payment(mpClient);
