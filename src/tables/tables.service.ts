@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger, InternalServerErrorException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Table, TableStatus } from './table.entity';
@@ -11,6 +11,7 @@ import { TicketsService } from 'src/tickets/tickets.service';
 import { TicketTiersService } from 'src/ticket-tiers/ticket-tiers.service';
 import { MailService } from 'src/mail/mail.service';
 import { ConfigurationService } from 'src/configuration/configuration.service';
+import { UsersService } from 'src/users/users.service';
 
 @Injectable()
 export class TablesService {
@@ -28,6 +29,7 @@ export class TablesService {
     private readonly ticketTiersService: TicketTiersService,
     private readonly mailService: MailService,
     private readonly configurationService: ConfigurationService,
+    private readonly usersService: UsersService,
   ) {}
 
   // --- Lógica de Categorías ---
@@ -92,8 +94,13 @@ export class TablesService {
     });
   }
 
-  async reserveTableManually(staffUser: User, dto: CreateManualReservationDto): Promise<TableReservation> {
+  async reserveTableManually(staffUserFromToken: User, dto: CreateManualReservationDto): Promise<TableReservation> {
     const { eventId, tableId, clientName, clientEmail, paymentType, amountPaid, guestCount } = dto;
+
+    const staffUser = await this.usersService.findOneById(staffUserFromToken.id);
+    if (!staffUser) {
+        throw new InternalServerErrorException('No se pudieron verificar los datos del staff.');
+    }
 
     const table = await this.tableRepository.findOneBy({ id: tableId, eventId });
     if (!table) throw new NotFoundException('La mesa seleccionada no existe o no pertenece a este evento.');
@@ -102,7 +109,8 @@ export class TablesService {
     const vipTier = await this.ticketTiersService.findVipTierForEvent(eventId);
     if (!vipTier) throw new NotFoundException('No se ha configurado un producto (TicketTier) de tipo Mesa VIP para este evento.');
     
-    const clientAsUserObject = { email: clientEmail, name: clientName } as User;
+    const clientAsUserObject = { email: clientEmail || `${clientName.replace(/\s+/g, '.')}@manual.sale`, name: clientName } as User;
+
     const ticket = await this.ticketsService.createTicketInternal(
         clientAsUserObject,
         { eventId, ticketTierId: vipTier.id, quantity: guestCount },
@@ -132,8 +140,6 @@ export class TablesService {
   }
   
   private async sendConfirmationEmail(reservation: TableReservation, table: Table, staffUser: User) {
-    // --- CORRECCIÓN DE SEGURIDAD ---
-    // Añadimos una guarda para asegurarnos de que el email existe antes de enviarlo.
     if (!reservation.clientEmail) {
         this.logger.warn(`Intento de enviar email de confirmación para la reserva ${reservation.id} sin un email de cliente.`);
         return;
