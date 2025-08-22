@@ -1,4 +1,3 @@
-// src/store/store.service.ts
 import { Injectable, NotFoundException, BadRequestException, InternalServerErrorException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository, DataSource, Not, IsNull } from 'typeorm';
@@ -198,7 +197,7 @@ export class StoreService {
       });
     }
 
-    const owner = await this.usersService.findOwner();
+    const owner = await this.usersService.findOwnerForPayments();
     if (!owner || !owner.mpAccessToken) {
       throw new InternalServerErrorException("La cuenta del dueño no tiene un Access Token de MP configurado.");
     }
