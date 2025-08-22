@@ -290,22 +290,22 @@ export class StoreService {
     }
   }
     
-  async validatePurchase(purchaseId: string): Promise<ProductPurchase> {
-      const purchase = await this.purchasesRepository.findOne({
-          where: { id: purchaseId },
-          relations: ['product', 'user'],
-      });
-
-      if (!purchase) {
-          throw new NotFoundException(`Compra de producto con ID "${purchaseId}" no encontrada.`);
-      }
+  async validatePurchase(purchaseId: string) {
+      const purchase = await this.findPurchaseById(purchaseId);
 
       if (purchase.redeemedAt) {
           throw new BadRequestException(`El producto ya fue canjeado por ${purchase.user.name} el ${purchase.redeemedAt.toLocaleString()}.`);
       }
 
       purchase.redeemedAt = new Date();
-      return this.purchasesRepository.save(purchase);
+      await this.purchasesRepository.save(purchase);
+
+      return {
+        message: 'Producto canjeado con éxito.',
+        userName: purchase.user.name,
+        productName: purchase.product.name,
+        redeemedAt: purchase.redeemedAt,
+      };
   }
 
   async getFullPurchaseHistory(): Promise<ProductPurchase[]> {

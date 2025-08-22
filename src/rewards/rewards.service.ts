@@ -53,13 +53,6 @@ export class RewardsService {
     }
   }
 
-  /**
-   * Asigna un premio a un usuario de forma gratuita, sin descontar puntos.
-   * Ideal para regalos, como el beneficio de cumpleaños.
-   * @param user El usuario que recibe el premio.
-   * @param rewardId El ID del 'Reward' plantilla (ej. "Champagne de Regalo").
-   * @param origin Un string para identificar la fuente de este regalo (ej. "BIRTHDAY").
-   */
   async assignFreeReward(user: User, rewardId: string, origin: string): Promise<UserReward> {
     this.logger.log(`[assignFreeReward] Asignando premio gratuito ${rewardId} a ${user.email} con origen ${origin}`);
     
@@ -76,7 +69,7 @@ export class RewardsService {
       userId: user.id,
       reward,
       rewardId: reward.id,
-      origin, // Guardamos la bandera de origen
+      origin,
     });
 
     const savedUserReward = await this.userRewardsRepository.save(userReward);
@@ -125,7 +118,7 @@ export class RewardsService {
         userId: user.id,
         reward,
         rewardId: reward.id,
-        origin: 'LOYALTY', // Los canjes por puntos tienen origen 'LOYALTY'
+        origin: 'LOYALTY',
       });
       const savedUserReward = await queryRunner.manager.save(userReward);
 
@@ -149,18 +142,21 @@ export class RewardsService {
     });
   }
 
-  async validateUserReward(userRewardId: string) {
-    this.logger.log(`[validateUserReward] Intento de validación para el UserReward ID: ${userRewardId}`);
-
+  async findUserRewardById(userRewardId: string): Promise<UserReward> {
     const userReward = await this.userRewardsRepository.findOne({
       where: { id: userRewardId },
       relations: ['user', 'reward'],
     });
-
     if (!userReward) {
-      this.logger.warn(`[validateUserReward] FALLO: QR de premio no encontrado (ID: ${userRewardId})`);
       throw new NotFoundException('QR de premio no válido.');
     }
+    return userReward;
+  }
+
+  async validateUserReward(userRewardId: string) {
+    this.logger.log(`[validateUserReward] Intento de validación para el UserReward ID: ${userRewardId}`);
+
+    const userReward = await this.findUserRewardById(userRewardId);
 
     if (userReward.redeemedAt !== null) {
       this.logger.warn(`[validateUserReward] FALLO: El premio ya fue canjeado el ${userReward.redeemedAt}`);
@@ -190,10 +186,8 @@ export class RewardsService {
       order: { redeemedAt: 'DESC' },
     });
   }
-  // Añade este nuevo método dentro de la clase RewardsService
+  
   async findBirthdayRewardForUser(userId: string, eventId: string): Promise<UserReward | null> {
-    // La relación con el evento es a través del ticket, así que la lógica podría ser más compleja
-    // Por ahora, asumimos que se busca por origen y usuario, lo que es suficiente.
     return this.userRewardsRepository.findOne({
         where: {
             userId,
