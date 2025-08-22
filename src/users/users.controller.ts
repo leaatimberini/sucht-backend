@@ -1,3 +1,4 @@
+// src/users/users.controller.ts
 import {
   Controller,
   Get,
@@ -11,6 +12,8 @@ import {
   UploadedFile,
   Request,
   Query,
+  HttpCode, 
+  HttpStatus, 
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
@@ -26,7 +29,7 @@ import { unlink } from 'fs/promises';
 import { Public } from 'src/auth/decorators/public.decorator';
 import { CompleteInvitationDto } from './dto/complete-invitation.dto';
 import { PaginationQueryDto } from 'src/common/dto/pagination-query.dto';
-
+import { ChangePasswordDto } from './dto/change-password.dto';
 @Controller('users')
 export class UsersController {
   constructor(
@@ -72,6 +75,17 @@ export class UsersController {
     const updatedUser = await this.usersService.updateProfile(userId, updateProfileDto);
     const { password, invitationToken, ...result } = updatedUser;
     return result;
+  }
+  
+  @Patch('profile/change-password')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.NO_CONTENT) // Devuelve 204 si es exitoso
+  async changePassword(
+    @Request() req,
+    @Body() changePasswordDto: ChangePasswordDto,
+  ) {
+    await this.usersService.changePassword(req.user.id, changePasswordDto);
+    // No devolvemos nada en el cuerpo de la respuesta
   }
 
   @Post('invite-staff')

@@ -1,4 +1,3 @@
-// backend/src/users/user.entity.ts
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, BeforeInsert, BeforeUpdate, OneToMany } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { Ticket } from 'src/tickets/ticket.entity';
@@ -22,7 +21,6 @@ export class User {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  // 👇 IMPORTANTE: especificar type cuando puede ser null
   @Column({ type: 'varchar', unique: true, nullable: true })
   username: string | null;
 
@@ -35,7 +33,6 @@ export class User {
   @Column({ select: false, nullable: true })
   password?: string;
 
-  // Mejor opción en Postgres: enum[]; si querés mantener simple-array, dejalo.
   @Column({ type: 'enum', enum: UserRole, array: true, default: [UserRole.CLIENT] })
   roles: UserRole[];
 
@@ -59,6 +56,14 @@ export class User {
 
   @Column({ type: 'varchar', nullable: true, select: false })
   invitationToken?: string | null;
+
+  // --- NUEVOS CAMPOS PARA RECUPERAR CONTRASEÑA ---
+  @Column({ type: 'varchar', nullable: true, select: false })
+  passwordResetToken?: string | null;
+
+  @Column({ type: 'timestamp', nullable: true, select: false })
+  passwordResetExpires?: Date | null;
+  // --- FIN DE NUEVOS CAMPOS ---
 
   @Column({ type: 'decimal', precision: 5, scale: 2, default: 0.0, nullable: true })
   rrppCommissionRate: number | null;

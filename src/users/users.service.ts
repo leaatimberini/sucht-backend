@@ -7,6 +7,7 @@ import {
   BadRequestException,
   Inject,
   forwardRef,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, ArrayContains } from 'typeorm';
@@ -21,6 +22,7 @@ import { startOfWeek, endOfWeek, isWithinInterval } from 'date-fns';
 import { CompleteInvitationDto } from './dto/complete-invitation.dto';
 import * as bcrypt from 'bcrypt';
 import { PaginationQueryDto } from 'src/common/dto/pagination-query.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 
 export interface PaginatedUsers {
   data: User[];
@@ -193,7 +195,28 @@ export class UsersService {
     Object.assign(userToUpdate, updateProfileDto);
     return this.usersRepository.save(userToUpdate);
   }
-
+  async changePassword(userId: string, changePasswordDto: ChangePasswordDto): Promise<void> {
+    const { currentPassword, newPassword } = changePasswordDto;
+    
+    // 1. Buscamos al usuario por su ID
+    const user = await this.findOneById(userId);
+    
+    // 2. Necesitamos obtener el hash de la contraseña actual, que no viene por defecto
+    const userWithPassword = await this.findOneByEmail(user.email);
+    if (!userWithPassword?.password) {
+      throw new BadRequestException('No se pudo verificar la contraseña actual. Es posible que hayas sido invitado y necesites establecer una contraseña primero.');
+    }
+    
+    // 3. Comparamos la contraseña actual que nos envió el usuario con la de la BD
+    const isPasswordMatching = await bcrypt.compare(currentPassword, userWithPassword.password);
+    if (!isPasswordMatching) {
+      throw new UnauthorizedException('La contraseña actual es incorrecta.');
+    }
+    
+    // 4. Si es correcta, actualizamos la contraseña con el nuevo hash
+    user.password = newPassword; // El hook @BeforeUpdate se encargará de hashearla
+    await this.usersRepository.save(user);
+  }
   async findOrCreateByEmail(email: string): Promise<User> {
     const lowerCaseEmail = email.toLowerCase();
     let user = await this.findOneByEmail(lowerCaseEmail);
