@@ -1,4 +1,3 @@
-// backend/src/owner-invitations/owner-invitations.service.ts
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { User } from '../users/user.entity';
 import { CreateInvitationDto } from './dto/create-invitation.dto';
@@ -46,6 +45,9 @@ export class OwnerInvitationService {
     if (!fullOwner) { throw new NotFoundException('No se encontraron los datos del Dueño.'); }
 
     const invitedUser = await this.usersService.findOrCreateByEmail(email);
+    
+    // --- LÍNEA CORREGIDA ---
+    // Nos aseguramos de llamar al método correcto para encontrar el próximo evento.
     const upcomingEvent = await this.eventsService.findNextUpcomingEvent();
     if (!upcomingEvent) { throw new NotFoundException('No hay un evento próximo para la invitación.'); }
 
@@ -95,7 +97,7 @@ export class OwnerInvitationService {
         <h3 style="color: #ffffff; margin: 5px 0 15px 0; font-size: 22px;">QR de Ingreso</h3>
         <div style="${qrBoxStyle}"><img src="${qrApiUrl}${finalTicket.id}" alt="QR de Ingreso" /></div>
         <p style="color: #bbbbbb; margin-top: 15px; font-size: 16px;">Válido para ${finalTicket.quantity} personas</p>
-        ${finalTicket.isVipAccess ? `<p style="color: #ffd700; font-weight: bold; margin-top: 10px;">ACCESO VIP</p>` : ''}
+        ${finalTicket.isVipAccess ? `<p style="color: #ffd700; font-weight: bold; margin-top: 10px; font-size: 20px;">ACCESO VIP</p>` : ''}
         <p style="color: #ffd700; font-weight: bold; margin-top: 5px;">${finalTicket.specialInstructions}</p>
       </div>
     ` : '';
