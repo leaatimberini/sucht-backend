@@ -101,7 +101,11 @@ export class StoreController {
     @Post('purchase/validate/:id')
     @UseGuards(JwtAuthGuard, RolesGuard)
     @Roles(UserRole.VERIFIER, UserRole.ADMIN, UserRole.OWNER, UserRole.BARRA)
-    async validateProductPurchase(@Param('id') id: string): Promise<ProductPurchase> {
+    // --- LÍNEA CORREGIDA ---
+    // Eliminamos el tipo de retorno explícito ': Promise<ProductPurchase>'
+    // para que coincida con lo que realmente devuelve el servicio.
+    async validateProductPurchase(@Param('id') id: string) {
         return this.storeService.validatePurchase(id);
     }
+
 }
