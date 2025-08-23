@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Event } from 'src/events/event.entity';
 import { Ticket, TicketStatus } from 'src/tickets/ticket.entity';
 import { User, UserRole } from 'src/users/user.entity';
-import { Between, In, LessThan, Repository, ArrayContains } from 'typeorm'; // 1. Importar ArrayContains
+import { Between, In, LessThan, Repository, ArrayContains } from 'typeorm';
 import { DashboardQueryDto } from './dto/dashboard-query.dto';
 import { TicketsService } from 'src/tickets/tickets.service';
 
@@ -29,15 +29,19 @@ export class DashboardService {
         const { eventId, startDate, endDate } = queryDto;
 
         try {
-            // 2. Simplificamos la consulta para que sea más clara y eficiente
+            // --- LÓGICA CORREGIDA ---
+            // 1. Definimos los roles que consideramos "promotores"
+            const promoterRoles = [UserRole.RRPP, UserRole.ORGANIZER];
+
             const query = this.usersRepository.createQueryBuilder('user')
                 .select([
-                    'user.id as "rrppId"',
-                    'user.name as "rrppName"',
-                    'user.username as "rrppUsername"'
+                    'user.id as "promoterId"',
+                    'user.name as "promoterName"',
+                    'user.username as "promoterUsername"',
+                    'user.roles as roles' // Incluimos los roles para referencia
                 ])
-                // Usamos ArrayContains, la forma correcta de buscar en arrays
-                .where({ roles: ArrayContains([UserRole.RRPP]) });
+                // 2. Usamos el operador '&&' de PostgreSQL para buscar usuarios que tengan CUALQUIERA de los roles en el array
+                .where("user.roles && :roles", { roles: promoterRoles });
 
             query.addSelect(
                 (subQuery) => {
@@ -69,20 +73,23 @@ export class DashboardService {
                 'peopleAdmitted',
             );
 
-            query.groupBy('user.id, user.name, user.username');
+            query.groupBy('user.id, user.name, user.username, user.roles');
             query.orderBy('user.name', 'ASC');
             
             const results = await query.getRawMany();
 
             return results.map(r => ({
-                ...r,
+                promoterId: r.promoterId,
+                promoterName: r.promoterName,
+                promoterUsername: r.promoterUsername,
+                roles: r.roles,
                 ticketsGenerated: parseInt(r.ticketsGenerated, 10),
                 peopleAdmitted: parseInt(r.peopleAdmitted, 10),
             }));
 
         } catch (err) {
             this.logger.error(`[getRRPPPerformance] Error: ${err.message}`, err.stack);
-            throw new InternalServerErrorException('Error al calcular performance de RRPP');
+            throw new InternalServerErrorException('Error al calcular performance de Promotores');
         }
     }
 

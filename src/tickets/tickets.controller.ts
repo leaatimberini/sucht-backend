@@ -85,6 +85,7 @@ export class TicketsController {
   redeemTicket(@Param('id') id: string, @Body() redeemTicketDto: RedeemTicketDto) {
     return this.ticketsService.redeemTicket(id, redeemTicketDto.quantity);
   }
+  
 
   @Delete(':id')
   @UseGuards(RolesGuard)

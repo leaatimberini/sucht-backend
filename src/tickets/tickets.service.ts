@@ -1,4 +1,3 @@
-// src/tickets/tickets.service.ts
 import { BadRequestException, Injectable, NotFoundException, InternalServerErrorException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, LessThan, Not, Repository, Between, In, DeleteResult } from 'typeorm';
@@ -15,10 +14,12 @@ import { DashboardQueryDto } from 'src/dashboard/dto/dashboard-query.dto';
 import { PointTransactionsService } from 'src/point-transactions/point-transactions.service';
 import { PointTransactionReason } from 'src/point-transactions/point-transaction.entity';
 import { ConfigurationService } from 'src/configuration/configuration.service';
+import { TZDate } from '@date-fns/tz';
 
 @Injectable()
 export class TicketsService {
   private readonly logger = new Logger(TicketsService.name);
+  private readonly timeZone = 'America/Argentina/Buenos_Aires';
 
   constructor(
     @InjectRepository(Ticket)
@@ -199,11 +200,13 @@ export class TicketsService {
   async deleteTicket(id: string): Promise<boolean> {
     const ticketToDelete = await this.ticketsRepository.findOne({ where: { id }, relations: ['tier'] });
     if (!ticketToDelete) return false;
+    
     const tier = ticketToDelete.tier;
-    if (tier) {
+    if (tier && ticketToDelete.origin !== 'OWNER_INVITATION') {
       tier.quantity += ticketToDelete.quantity;
       await this.ticketTiersRepository.save(tier);
     }
+    
     const result: DeleteResult = await this.ticketsRepository.delete(id);
     return (result.affected ?? 0) > 0;
   }
@@ -212,15 +215,19 @@ export class TicketsService {
     const ticket = await this.ticketsRepository.findOne({ where: { id }, relations: ['user', 'event', 'tier', 'promoter'] });
     if (!ticket) { throw new NotFoundException('Ticket not found.'); }
     
+    const now = new TZDate(new Date(), this.timeZone); // <-- USAR TZDate
     const shouldAwardPoints = ticket.redeemedCount === 0;
-    if (new Date() > new Date(ticket.event.endDate)) { throw new BadRequestException('Event has already finished.'); }
+
+    if (now > new Date(ticket.event.endDate)) { // La fecha del evento ya tiene la zona horaria correcta
+        throw new BadRequestException('Event has already finished.');
+    }
     const remaining = ticket.quantity - (ticket.redeemedCount || 0);
     if (remaining === 0) { throw new BadRequestException('Ticket has been fully redeemed.'); }
     if (quantityToRedeem > remaining) { throw new BadRequestException(`Only ${remaining} entries remaining on this ticket.`); }
     
     ticket.redeemedCount += quantityToRedeem;
     ticket.status = ticket.redeemedCount >= ticket.quantity ? TicketStatus.REDEEMED : TicketStatus.PARTIALLY_USED;
-    ticket.validatedAt = new Date();
+    ticket.validatedAt = now;
     await this.ticketsRepository.save(ticket);
 
     if (shouldAwardPoints) {
@@ -264,7 +271,9 @@ export class TicketsService {
   @Cron(CronExpression.EVERY_MINUTE)
   async handleUnconfirmedTickets() {
     this.logger.log('[CronJob] Ejecutando handleUnconfirmedTickets...');
-    const oneHourAgo = new Date(Date.now() - 3600 * 1000);
+    const now = new TZDate(new Date(), this.timeZone); // <-- USAR TZDate
+    const oneHourAgo = new TZDate(now.getTime() - 60 * 60 * 1000, this.timeZone); // <-- USAR TZDate
+    
     const unconfirmedTickets = await this.ticketsRepository.find({
       where: {
         confirmedAt: IsNull(),
