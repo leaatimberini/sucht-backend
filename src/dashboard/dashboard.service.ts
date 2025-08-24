@@ -29,18 +29,16 @@ export class DashboardService {
         const { eventId, startDate, endDate } = queryDto;
 
         try {
-            // --- LÓGICA CORREGIDA ---
-            // 1. Definimos los roles que consideramos "promotores"
             const promoterRoles = [UserRole.RRPP, UserRole.ORGANIZER];
 
             const query = this.usersRepository.createQueryBuilder('user')
+                // --- LÍNEA CORREGIDA ---
+                // Volvemos a usar los alias que el frontend espera: rrppId y rrppName
                 .select([
-                    'user.id as "promoterId"',
-                    'user.name as "promoterName"',
-                    'user.username as "promoterUsername"',
-                    'user.roles as roles' // Incluimos los roles para referencia
+                    'user.id as "rrppId"',
+                    'user.name as "rrppName"',
+                    'user.roles as roles'
                 ])
-                // 2. Usamos el operador '&&' de PostgreSQL para buscar usuarios que tengan CUALQUIERA de los roles en el array
                 .where("user.roles && :roles", { roles: promoterRoles });
 
             query.addSelect(
@@ -73,15 +71,16 @@ export class DashboardService {
                 'peopleAdmitted',
             );
 
-            query.groupBy('user.id, user.name, user.username, user.roles');
+            query.groupBy('user.id, user.name, user.roles');
             query.orderBy('user.name', 'ASC');
             
             const results = await query.getRawMany();
 
+            // --- LÍNEA CORREGIDA ---
+            // Mapeamos los resultados a las propiedades que el frontend espera
             return results.map(r => ({
-                promoterId: r.promoterId,
-                promoterName: r.promoterName,
-                promoterUsername: r.promoterUsername,
+                rrppId: r.rrppId,
+                rrppName: r.rrppName,
                 roles: r.roles,
                 ticketsGenerated: parseInt(r.ticketsGenerated, 10),
                 peopleAdmitted: parseInt(r.peopleAdmitted, 10),
