@@ -10,6 +10,8 @@ import { TicketsModule } from '../tickets/tickets.module';
 import { StoreModule } from '../store/store.module';
 import { UsersModule } from '../users/users.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { MailModule } from '../mail/mail.module'; // <-- Añadir
+import { ConfigurationModule } from '../configuration/configuration.module'; // <-- Añadir
 
 @Module({
   imports: [
@@ -19,6 +21,8 @@ import { NotificationsModule } from '../notifications/notifications.module';
     StoreModule,
     UsersModule,
     NotificationsModule,
+    MailModule, // <-- Añadir
+    ConfigurationModule, // <-- Añadir
   ],
   controllers: [RaffleController],
   providers: [RaffleService],

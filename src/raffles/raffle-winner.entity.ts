@@ -2,6 +2,7 @@ import { Entity, PrimaryGeneratedColumn, ManyToOne, JoinColumn, CreateDateColumn
 import { Raffle } from './raffle.entity';
 import { User } from '../users/user.entity';
 import { RafflePrize } from './raffle-prize.entity';
+import { ProductPurchase } from '../store/product-purchase.entity'; // 1. Importar
 
 @Entity('raffle_winners')
 export class RaffleWinner {
@@ -28,6 +29,15 @@ export class RaffleWinner {
 
     @Column()
     prizeId: string;
+
+    // --- 2. AÑADIR NUEVA RELACIÓN Y COLUMNA ---
+    @ManyToOne(() => ProductPurchase, { eager: true })
+    @JoinColumn({ name: 'prizePurchaseId' })
+    prizePurchase: ProductPurchase;
+
+    @Column()
+    prizePurchaseId: string;
+    // --- FIN ---
 
     @CreateDateColumn({ type: 'timestamp' })
     createdAt: Date;
