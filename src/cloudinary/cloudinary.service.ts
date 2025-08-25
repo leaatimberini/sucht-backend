@@ -16,6 +16,8 @@ export class CloudinaryService {
           if (error) {
             return reject(new InternalServerErrorException(error.message));
           }
+          // --- CORRECCIÓN DE SEGURIDAD ---
+          // Verificamos que el resultado exista antes de resolver la promesa.
           if (result) {
             resolve(result);
           } else {
@@ -28,7 +30,9 @@ export class CloudinaryService {
   }
 
   generateSignedDownloadUrl(publicId: string): { downloadUrl: string } {
-    const cleanPublicId = publicId.substring(publicId.indexOf('/') + 1, publicId.lastIndexOf('.'));
+    // Extraemos el public_id limpio, sin la extensión del archivo.
+    const pathWithoutExtension = publicId.substring(0, publicId.lastIndexOf('.'));
+    const cleanPublicId = pathWithoutExtension.substring(pathWithoutExtension.indexOf('/') + 1);
     
     const downloadUrl = cloudinary.url(cleanPublicId, {
       flags: 'attachment',
