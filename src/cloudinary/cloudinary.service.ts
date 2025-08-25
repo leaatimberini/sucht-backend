@@ -16,8 +16,6 @@ export class CloudinaryService {
           if (error) {
             return reject(new InternalServerErrorException(error.message));
           }
-          // --- CORRECCIÓN DE SEGURIDAD ---
-          // Verificamos que el resultado exista antes de resolver la promesa.
           if (result) {
             resolve(result);
           } else {
@@ -29,15 +27,23 @@ export class CloudinaryService {
     });
   }
 
-  generateSignedDownloadUrl(publicId: string): { downloadUrl: string } {
-    // Extraemos el public_id limpio, sin la extensión del archivo.
-    const pathWithoutExtension = publicId.substring(0, publicId.lastIndexOf('.'));
-    const cleanPublicId = pathWithoutExtension.substring(pathWithoutExtension.indexOf('/') + 1);
-    
-    const downloadUrl = cloudinary.url(cleanPublicId, {
-      flags: 'attachment',
-    });
-    
-    return { downloadUrl };
+  generateSignedDownloadUrl(imageUrl: string): { downloadUrl: string } {
+    try {
+      // --- LÓGICA CORREGIDA Y ROBUSTA ---
+      // Esta lógica extrae el public_id de la URL completa que guardamos en la base de datos.
+      const urlSegments = imageUrl.split('/');
+      const uploadIndex = urlSegments.findIndex(seg => seg === 'upload');
+      // El public_id es todo lo que viene después de la versión (ej. v123456)
+      const publicIdWithFormat = urlSegments.slice(uploadIndex + 2).join('/');
+      const publicId = publicIdWithFormat.substring(0, publicIdWithFormat.lastIndexOf('.'));
+      
+      const downloadUrl = cloudinary.url(publicId, {
+        flags: 'attachment', // Esta bandera le dice al navegador que inicie una descarga.
+      });
+      
+      return { downloadUrl };
+    } catch (error) {
+      throw new InternalServerErrorException('No se pudo generar la URL de descarga desde la URL de la imagen proporcionada.');
+    }
   }
 }
