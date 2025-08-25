@@ -28,9 +28,12 @@ export class CloudinaryService {
   }
 
   generateSignedDownloadUrl(publicId: string): { downloadUrl: string } {
-    const downloadUrl = cloudinary.url(publicId, {
+    const cleanPublicId = publicId.substring(publicId.indexOf('/') + 1, publicId.lastIndexOf('.'));
+    
+    const downloadUrl = cloudinary.url(cleanPublicId, {
       flags: 'attachment',
     });
+    
     return { downloadUrl };
   }
 }
