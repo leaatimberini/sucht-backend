@@ -6,6 +6,7 @@ import { User, UserRole } from 'src/users/user.entity';
 import { Between, In, LessThan, Repository, ArrayContains } from 'typeorm';
 import { DashboardQueryDto } from './dto/dashboard-query.dto';
 import { TicketsService } from 'src/tickets/tickets.service';
+import { PaginationQueryDto } from 'src/common/dto/pagination-query.dto';
 
 @Injectable()
 export class DashboardService {
@@ -195,23 +196,32 @@ export class DashboardService {
         });
     }
 
-    async getAttendanceRanking(queryDto: DashboardQueryDto, limit: number = 25) {
-        const { startDate, endDate } = queryDto;
+    async getAttendanceRanking(paginationQuery: PaginationQueryDto) {
+        const { page, limit } = paginationQuery;
+        const skip = (page - 1) * limit;
+
         const query = this.usersRepository.createQueryBuilder("user")
             .select(["user.id as userId", "user.name as userName", "user.email as userEmail"])
-            .addSelect("COALESCE(SUM(ticket.redeemedCount), 0)", "totalAttendance")
-            .leftJoin("user.tickets", "ticket", 
-                startDate && endDate 
-                ? `ticket.validatedAt BETWEEN '${startDate}' AND '${endDate}' AND ticket.redeemedCount > 0`
-                : 'ticket.redeemedCount > 0'
-            )
+            .addSelect("COUNT(DISTINCT ticket.eventId)", "totalAttendance") // Contamos eventos únicos
+            .innerJoin("user.tickets", "ticket", "ticket.redeemedCount > 0")
             .where({ roles: ArrayContains([UserRole.CLIENT]) })
             .groupBy("user.id, user.name, user.email")
             .orderBy('"totalAttendance"', 'DESC')
+            .offset(skip)
             .limit(limit);
 
-        const results = await query.getRawMany();
-        return results.map(r => ({ ...r, totalAttendance: parseInt(r.totalAttendance, 10) }));
+        const total = await query.getCount();
+        const data = await query.getRawMany();
+        
+        const results = data.map(r => ({ ...r, totalAttendance: parseInt(r.totalAttendance, 10) }));
+
+        return {
+            data: results,
+            total,
+            page,
+            limit,
+            totalPages: Math.ceil(total / limit),
+        };
     }
 
     async getPerfectAttendance(startDate: string, endDate: string): Promise<User[]> {
