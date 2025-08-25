@@ -5,15 +5,13 @@ import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import { UserRole } from 'src/users/user.entity';
 import { DashboardQueryDto } from './dto/dashboard-query.dto';
+import { PaginationQueryDto } from 'src/common/dto/pagination-query.dto'; // 1. Importar el DTO de paginación
 
 @Controller('dashboard')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class DashboardController {
   constructor(private readonly dashboardService: DashboardService) {}
 
-  /**
-   * NUEVO ENDPOINT: Expone el historial completo de tickets.
-   */
   @Get('full-history')
   @Roles(UserRole.ADMIN, UserRole.OWNER)
   getFullHistory(@Query() queryDto: DashboardQueryDto) {
@@ -53,8 +51,9 @@ export class DashboardController {
 
   @Get('loyalty/attendance-ranking')
   @Roles(UserRole.ADMIN, UserRole.OWNER)
-  getAttendanceRanking(@Query() queryDto: DashboardQueryDto) {
-    return this.dashboardService.getAttendanceRanking(queryDto);
+  // 2. Usar el DTO de paginación en lugar del DTO del dashboard
+  getAttendanceRanking(@Query() paginationQuery: PaginationQueryDto) {
+    return this.dashboardService.getAttendanceRanking(paginationQuery);
   }
 
   @Get('loyalty/perfect-attendance')
