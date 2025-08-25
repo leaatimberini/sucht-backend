@@ -46,6 +46,8 @@ export class OwnerInvitationService {
 
     const invitedUser = await this.usersService.findOrCreateByEmail(email);
     
+    // --- LÍNEA CORREGIDA ---
+    // Nos aseguramos de llamar al método correcto para encontrar el próximo evento.
     const upcomingEvent = await this.eventsService.findNextUpcomingEvent();
     if (!upcomingEvent) { throw new NotFoundException('No hay un evento próximo para la invitación.'); }
 
