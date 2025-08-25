@@ -27,23 +27,10 @@ export class CloudinaryService {
     });
   }
 
-  generateSignedDownloadUrl(imageUrl: string): { downloadUrl: string } {
-    try {
-      // --- LÓGICA CORREGIDA Y ROBUSTA ---
-      // Esta lógica extrae el public_id de la URL completa que guardamos en la base de datos.
-      const urlSegments = imageUrl.split('/');
-      const uploadIndex = urlSegments.findIndex(seg => seg === 'upload');
-      // El public_id es todo lo que viene después de la versión (ej. v123456)
-      const publicIdWithFormat = urlSegments.slice(uploadIndex + 2).join('/');
-      const publicId = publicIdWithFormat.substring(0, publicIdWithFormat.lastIndexOf('.'));
-      
-      const downloadUrl = cloudinary.url(publicId, {
-        flags: 'attachment', // Esta bandera le dice al navegador que inicie una descarga.
-      });
-      
-      return { downloadUrl };
-    } catch (error) {
-      throw new InternalServerErrorException('No se pudo generar la URL de descarga desde la URL de la imagen proporcionada.');
-    }
+  generateSignedDownloadUrl(publicId: string): { downloadUrl: string } {
+    const downloadUrl = cloudinary.url(publicId, {
+      flags: 'attachment',
+    });
+    return { downloadUrl };
   }
 }
