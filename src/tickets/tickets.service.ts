@@ -55,6 +55,7 @@ export class TicketsService {
         throw new BadRequestException('La cantidad de entradas no es válida.');
     }
     
+    // Lógica de stock corregida para invitaciones del dueño
     if (origin !== 'OWNER_INVITATION' && tier.quantity < numericQuantity) {
       throw new BadRequestException(`No quedan suficientes. Disponibles: ${tier.quantity}.`);
     }
@@ -68,6 +69,7 @@ export class TicketsService {
       user, event, tier, quantity: numericQuantity, promoter, amountPaid, status, paymentId, origin, isVipAccess, specialInstructions,
     });
     
+    // Solo se descuenta stock si no es una invitación del dueño
     if (origin !== 'OWNER_INVITATION') {
       tier.quantity = Number(tier.quantity) - numericQuantity;
       await this.ticketTiersRepository.save(tier);
@@ -90,12 +92,10 @@ export class TicketsService {
   ): Promise<Ticket> {
     
     const savedTicket = await this.createTicketInternal(user, data, promoter, amountPaid, paymentId, origin, isVipAccess, specialInstructions);
-
     const fullTicket = await this.findOne(savedTicket.id);
     const { event, tier, quantity } = fullTicket;
     
     const frontendUrl = await this.configurationService.get('FRONTEND_URL') || 'https://sucht.com.ar';
-    
     let actionUrl = `${frontendUrl}/mi-cuenta`;
     let buttonText = 'VER EN MI CUENTA';
 
@@ -215,10 +215,10 @@ export class TicketsService {
     const ticket = await this.ticketsRepository.findOne({ where: { id }, relations: ['user', 'event', 'tier', 'promoter'] });
     if (!ticket) { throw new NotFoundException('Ticket not found.'); }
     
-    const now = new TZDate(new Date(), this.timeZone); // <-- USAR TZDate
+    const now = new TZDate(new Date(), this.timeZone);
     const shouldAwardPoints = ticket.redeemedCount === 0;
 
-    if (now > new Date(ticket.event.endDate)) { // La fecha del evento ya tiene la zona horaria correcta
+    if (now > new Date(ticket.event.endDate)) {
         throw new BadRequestException('Event has already finished.');
     }
     const remaining = ticket.quantity - (ticket.redeemedCount || 0);
@@ -271,8 +271,8 @@ export class TicketsService {
   @Cron(CronExpression.EVERY_MINUTE)
   async handleUnconfirmedTickets() {
     this.logger.log('[CronJob] Ejecutando handleUnconfirmedTickets...');
-    const now = new TZDate(new Date(), this.timeZone); // <-- USAR TZDate
-    const oneHourAgo = new TZDate(now.getTime() - 60 * 60 * 1000, this.timeZone); // <-- USAR TZDate
+    const now = new TZDate(new Date(), this.timeZone);
+    const oneHourAgo = new TZDate(now.getTime() - 60 * 60 * 1000, this.timeZone);
     
     const unconfirmedTickets = await this.ticketsRepository.find({
       where: {

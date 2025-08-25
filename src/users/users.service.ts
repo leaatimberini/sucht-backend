@@ -1,4 +1,3 @@
-// src/users/users.service.ts
 import {
   ConflictException,
   Injectable,
@@ -23,6 +22,7 @@ import { CompleteInvitationDto } from './dto/complete-invitation.dto';
 import * as bcrypt from 'bcrypt';
 import { PaginationQueryDto } from 'src/common/dto/pagination-query.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { ConfigService } from '@nestjs/config';
 
 export interface PaginatedUsers {
   data: User[];
@@ -36,7 +36,7 @@ export class UsersService {
   constructor(
     @InjectRepository(User)
     private usersRepository: Repository<User>,
-    private readonly configService: ConfigurationService,
+    private readonly configService: ConfigService,
     @Inject(forwardRef(() => NotificationsService))
     private readonly notificationsService: NotificationsService,
   ) {}
@@ -135,8 +135,7 @@ export class UsersService {
     return this.usersRepository
       .createQueryBuilder('user')
       .where('user.email = :email', { email: email.toLowerCase() })
-      .addSelect('user.password')
-      .addSelect('user.invitationToken')
+      .addSelect(['user.password', 'user.invitationToken'])
       .getOne();
   }
 
@@ -195,32 +194,36 @@ export class UsersService {
     Object.assign(userToUpdate, updateProfileDto);
     return this.usersRepository.save(userToUpdate);
   }
+  
   async changePassword(userId: string, changePasswordDto: ChangePasswordDto): Promise<void> {
     const { currentPassword, newPassword } = changePasswordDto;
     
-    // 1. Buscamos al usuario por su ID
     const user = await this.findOneById(userId);
-    
-    // 2. Necesitamos obtener el hash de la contraseña actual, que no viene por defecto
     const userWithPassword = await this.findOneByEmail(user.email);
+
     if (!userWithPassword?.password) {
       throw new BadRequestException('No se pudo verificar la contraseña actual. Es posible que hayas sido invitado y necesites establecer una contraseña primero.');
     }
     
-    // 3. Comparamos la contraseña actual que nos envió el usuario con la de la BD
     const isPasswordMatching = await bcrypt.compare(currentPassword, userWithPassword.password);
     if (!isPasswordMatching) {
       throw new UnauthorizedException('La contraseña actual es incorrecta.');
     }
     
-    // 4. Si es correcta, actualizamos la contraseña con el nuevo hash
-    user.password = newPassword; // El hook @BeforeUpdate se encargará de hashearla
+    user.password = newPassword;
     await this.usersRepository.save(user);
   }
+
   async findOrCreateByEmail(email: string): Promise<User> {
     const lowerCaseEmail = email.toLowerCase();
     let user = await this.findOneByEmail(lowerCaseEmail);
-    if (user) return user;
+
+    if (user) {
+        if (user.invitationToken) {
+            return user;
+        }
+        return user;
+    }
 
     const tempName = lowerCaseEmail.split('@')[0];
     const invitationToken = randomBytes(32).toString('hex');
@@ -241,9 +244,11 @@ export class UsersService {
   async completeInvitation(dto: CompleteInvitationDto): Promise<User> {
     const { token, name, dateOfBirth, password } = dto;
 
-    const user = await this.usersRepository.findOne({
-      where: { invitationToken: token },
-    });
+    const user = await this.usersRepository
+      .createQueryBuilder('user')
+      .where('user.invitationToken = :token', { token })
+      .getOne();
+      
     if (!user) {
       throw new BadRequestException(
         'El token de invitación no es válido o ha expirado.',
@@ -252,7 +257,7 @@ export class UsersService {
 
     user.name = name;
     user.dateOfBirth = new Date(dateOfBirth);
-    user.password = await bcrypt.hash(password, 10);
+    user.password = password;
     user.invitationToken = null;
 
     return this.usersRepository.save(user);
@@ -354,14 +359,6 @@ export class UsersService {
     };
   }
 
-  private async findUserByRole(role: UserRole): Promise<User | null> {
-    return this.usersRepository
-      .createQueryBuilder('user')
-      .addSelect('user.mpAccessToken')
-      .where(':role = ANY(user.roles)', { role })
-      .getOne();
-  }
-
   async findAdminForPayments(): Promise<User | null> {
     const adminEmail = process.env.MP_ADMIN_EMAIL;
     if (!adminEmail) {
@@ -369,7 +366,7 @@ export class UsersService {
     }
     return this.usersRepository
       .createQueryBuilder('user')
-      .addSelect('user.mpAccessToken') // <-- ESTA LÍNEA SOLUCIONA EL PROBLEMA
+      .addSelect('user.mpAccessToken')
       .where('user.email = :email', { email: adminEmail })
       .getOne();
   }
@@ -381,7 +378,7 @@ export class UsersService {
     }
     return this.usersRepository
       .createQueryBuilder('user')
-      .addSelect('user.mpAccessToken') // <-- ESTA LÍNEA SOLUCIONA EL PROBLEMA
+      .addSelect('user.mpAccessToken')
       .where('user.email = :email', { email: ownerEmail })
       .getOne();
   }
@@ -391,14 +388,8 @@ export class UsersService {
     const futureDate = new Date();
     futureDate.setDate(today.getDate() + days);
 
-    const todayMonthDay = `${String(today.getMonth() + 1).padStart(
-      2,
-      '0',
-    )}-${String(today.getDate()).padStart(2, '0')}`;
-    const futureMonthDay = `${String(futureDate.getMonth() + 1).padStart(
-      2,
-      '0',
-    )}-${String(futureDate.getDate()).padStart(2, '0')}`;
+    const todayMonthDay = `${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    const futureMonthDay = `${String(futureDate.getMonth() + 1).padStart(2, '0')}-${String(futureDate.getDate()).padStart(2, '0')}`;
 
     let queryBuilder = this.usersRepository.createQueryBuilder('user');
 
@@ -422,19 +413,20 @@ export class UsersService {
       .orderBy(`to_char("dateOfBirth", 'MM-DD')`)
       .getMany();
   }
+  
   async save(user: User): Promise<User> {
     return this.usersRepository.save(user);
   }
-
 
   async findUserByPasswordResetToken(token: string): Promise<User | null> {
     return this.usersRepository.findOne({
       where: {
         passwordResetToken: token,
-        passwordResetExpires: MoreThan(new Date()), // El token no debe haber expirado
+        passwordResetExpires: MoreThan(new Date()),
       },
     });
   }
+
   async updateMercadoPagoCredentials(
     userId: string,
     accessToken: string | null,

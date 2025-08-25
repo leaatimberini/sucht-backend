@@ -1,4 +1,3 @@
-// src/events/events.service.ts
 import { Injectable, NotFoundException, forwardRef, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Between, Repository, LessThan } from 'typeorm';
@@ -14,6 +13,7 @@ import { Logger } from '@nestjs/common';
 @Injectable()
 export class EventsService {
   private readonly logger = new Logger(EventsService.name);
+  private readonly timeZone = 'America/Argentina/Buenos_Aires';
 
   constructor(
     @InjectRepository(Event)
@@ -27,7 +27,7 @@ export class EventsService {
   async handleScheduledEvents() {
     this.logger.log('Revisando eventos programados para publicar...');
     
-    const now = new TZDate(new Date(), 'America/Argentina/Buenos_Aires');
+    const now = new TZDate(new Date(), this.timeZone);
 
     const eventsToPublish = await this.eventsRepository.find({
       where: {
@@ -56,14 +56,13 @@ export class EventsService {
 
   async create(createEventDto: CreateEventDto, flyerImageUrl?: string): Promise<Event> {
     const { startDate, endDate, publishAt, ...restOfDto } = createEventDto;
-    const timeZone = 'America/Argentina/Buenos_Aires';
 
     const eventData: Partial<Event> = {
       ...restOfDto,
       flyerImageUrl: flyerImageUrl,
-      startDate: new TZDate(startDate, timeZone),
-      endDate: new TZDate(endDate, timeZone),
-      publishAt: publishAt ? new TZDate(publishAt, timeZone) : new Date(),
+      startDate: new TZDate(startDate, this.timeZone),
+      endDate: new TZDate(endDate, this.timeZone),
+      publishAt: publishAt ? new TZDate(publishAt, this.timeZone) : new Date(),
       isPublished: !publishAt,
     };
     const event = this.eventsRepository.create(eventData);
@@ -74,13 +73,12 @@ export class EventsService {
   async update(id: string, updateEventDto: UpdateEventDto, flyerImageUrl?: string): Promise<Event> {
     const event = await this.findOne(id);
     const { startDate, endDate, publishAt, ...restOfDto } = updateEventDto;
-    const timeZone = 'America/Argentina/Buenos_Aires';
     
     const updatePayload: Partial<Event> = { ...restOfDto };
 
-    if (startDate) updatePayload.startDate = new TZDate(startDate, timeZone);
-    if (endDate) updatePayload.endDate = new TZDate(endDate, timeZone);
-    if (publishAt) updatePayload.publishAt = new TZDate(publishAt, timeZone);
+    if (startDate) updatePayload.startDate = new TZDate(startDate, this.timeZone);
+    if (endDate) updatePayload.endDate = new TZDate(endDate, this.timeZone);
+    if (publishAt) updatePayload.publishAt = new TZDate(publishAt, this.timeZone);
     
     if (flyerImageUrl !== undefined) {
       updatePayload.flyerImageUrl = flyerImageUrl;
@@ -90,9 +88,6 @@ export class EventsService {
     return this.eventsRepository.save(event);
   }
   
-  /**
-   * Devuelve solo los eventos publicados para la vista del cliente.
-   */
   async findAll(): Promise<Event[]> {
     return this.eventsRepository.find({ 
         where: { isPublished: true },
@@ -100,9 +95,6 @@ export class EventsService {
     });
   }
 
-  /**
-   * NUEVO MÉTODO: Devuelve TODOS los eventos (publicados o no) para el panel de admin.
-   */
   async findAllForAdmin(): Promise<Event[]> {
     return this.eventsRepository.find({ order: { startDate: 'DESC' } });
   }
@@ -139,12 +131,11 @@ export class EventsService {
   }
 
   async findNextUpcomingEvent(): Promise<Event | null> {
-    const timeZone = 'America/Argentina/Buenos_Aires';
-    const now = new TZDate(new Date(), timeZone);
+    const now = new TZDate(new Date(), this.timeZone);
 
     return this.eventsRepository
       .createQueryBuilder('event')
-      .where('event.startDate >= :now', { now })
+      .where('event.endDate >= :now', { now }) // Comparamos contra la fecha de FIN
       .andWhere('event.isPublished = true')
       .orderBy('event.startDate', 'ASC')
       .getOne();
