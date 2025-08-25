@@ -1,4 +1,4 @@
-import { Module, forwardRef } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { BirthdayService } from './birthday.service';
 import { BirthdayController } from './birthday.controller';
 import { UsersModule } from '../users/users.module';
@@ -8,10 +8,13 @@ import { TicketsModule } from '../tickets/tickets.module';
 import { RewardsModule } from '../rewards/rewards.module';
 import { ConfigurationModule } from '../configuration/configuration.module';
 import { PaymentsModule } from '../payments/payments.module';
-import { NotificationsModule } from '../notifications/notifications.module'; // 1. Importar
+import { NotificationsModule } from '../notifications/notifications.module';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { TicketTier } from '../ticket-tiers/ticket-tier.entity';
 
 @Module({
   imports: [
+    TypeOrmModule.forFeature([TicketTier]), // <-- Añadir
     UsersModule,
     EventsModule,
     TicketTiersModule,
@@ -19,7 +22,7 @@ import { NotificationsModule } from '../notifications/notifications.module'; // 
     RewardsModule,
     ConfigurationModule,
     PaymentsModule,
-    forwardRef(() => NotificationsModule), // 2. Añadir a los imports
+    NotificationsModule,
   ],
   controllers: [BirthdayController],
   providers: [BirthdayService],

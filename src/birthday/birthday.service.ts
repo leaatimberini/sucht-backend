@@ -9,12 +9,17 @@ import { User } from '../users/user.entity';
 import { PaymentsService } from '../payments/payments.service';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { NotificationsService } from '../notifications/notifications.service';
+import { InjectRepository } from '@nestjs/typeorm';
+import { TicketTier, ProductType } from '../ticket-tiers/ticket-tier.entity';
+import { Repository } from 'typeorm';
 
 @Injectable()
 export class BirthdayService {
   private readonly logger = new Logger(BirthdayService.name);
 
   constructor(
+    @InjectRepository(TicketTier)
+    private ticketTiersRepository: Repository<TicketTier>,
     private readonly usersService: UsersService,
     private readonly eventsService: EventsService,
     private readonly ticketTiersService: TicketTiersService,
@@ -65,19 +70,30 @@ export class BirthdayService {
       throw new NotFoundException('No hay eventos próximos para asociar el beneficio.');
     }
 
-    const birthdayTier = await this.ticketTiersService.findBirthdayTierForEvent(upcomingEvent.id);
-    if (!birthdayTier) {
-      throw new NotFoundException('No se ha configurado una entrada de cumpleaños para este evento.');
-    }
+    // Lógica Refactorizada: Crear un TicketTier dinámico para el cumpleaños.
+    const birthdayTierName = `Beneficio Cumpleaños - ${user.name}`;
+    const birthdayTierDescription = `Ingreso válido hasta las 03:00 hs.`;
+    
+    const birthdayTier = this.ticketTiersRepository.create({
+        event: upcomingEvent,
+        name: `Beneficio Cumpleaños - ${user.name}`,
+        description: `Ingreso válido hasta las 03:00 hs.`,
+        price: 0,
+        isFree: true,
+        productType: ProductType.TICKET,
+        quantity: guestLimit + 1,
+        isBirthdayDefault: true,
+    });
+    const savedTier = await this.ticketTiersRepository.save(birthdayTier);
 
     const birthdayTicket = await this.ticketsService.createTicketAndSendEmail(
       user,
       {
         eventId: upcomingEvent.id,
-        ticketTierId: birthdayTier.id,
+        ticketTierId: savedTier.id,
         quantity: guestLimit + 1,
       },
-      null, 0, null, 'BIRTHDAY'
+      null, 0, null, 'BIRTHDAY', false, savedTier.description
     );
 
     const birthdayRewardId = await this.configurationService.get('birthday_reward_id');
