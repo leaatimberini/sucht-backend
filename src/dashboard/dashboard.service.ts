@@ -200,23 +200,33 @@ export class DashboardService {
         const { page, limit } = paginationQuery;
         const skip = (page - 1) * limit;
 
-        const query = this.usersRepository.createQueryBuilder("user")
-            .select(["user.id as userId", "user.name as userName", "user.email as userEmail"])
-            .addSelect("COUNT(DISTINCT ticket.eventId)", "totalAttendance") // Contamos eventos únicos
-            .innerJoin("user.tickets", "ticket", "ticket.redeemedCount > 0")
-            .where({ roles: ArrayContains([UserRole.CLIENT]) })
-            .groupBy("user.id, user.name, user.email")
-            .orderBy('"totalAttendance"', 'DESC')
-            .offset(skip)
-            .limit(limit);
+        // Contamos el total de usuarios que tienen al menos una asistencia para la paginación
+        const totalUsersQuery = await this.usersRepository.query(
+            `SELECT COUNT(DISTINCT "userId") FROM (
+                SELECT "userId" FROM tickets WHERE "redeemedCount" > 0
+            ) as attended_users`
+        );
+        const total = parseInt(totalUsersQuery[0].count, 10);
 
-        const total = await query.getCount();
-        const data = await query.getRawMany();
+        // Obtenemos los datos para la página actual
+        const data = await this.usersRepository.query(
+            `SELECT 
+                "user"."id" as "userId", 
+                "user"."name" as "userName", 
+                "user"."email" as "userEmail",
+                COUNT(DISTINCT "ticket"."eventId") as "totalAttendance"
+            FROM "users" "user"
+            INNER JOIN "tickets" "ticket" ON "ticket"."userId" = "user"."id" AND "ticket"."redeemedCount" > 0
+            WHERE $1 = ANY("user"."roles")
+            GROUP BY "user"."id"
+            ORDER BY "totalAttendance" DESC
+            LIMIT $2
+            OFFSET $3`,
+            [UserRole.CLIENT, limit, skip]
+        );
         
-        const results = data.map(r => ({ ...r, totalAttendance: parseInt(r.totalAttendance, 10) }));
-
         return {
-            data: results,
+            data,
             total,
             page,
             limit,
