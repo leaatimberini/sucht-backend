@@ -16,8 +16,6 @@ export class CloudinaryService {
           if (error) {
             return reject(new InternalServerErrorException(error.message));
           }
-          // --- CORRECCIÓN DE SEGURIDAD ---
-          // Verificamos que el resultado exista antes de resolver la promesa.
           if (result) {
             resolve(result);
           } else {
@@ -29,15 +27,26 @@ export class CloudinaryService {
     });
   }
 
-  generateSignedDownloadUrl(publicId: string): { downloadUrl: string } {
-    // Extraemos el public_id limpio, sin la extensión del archivo.
-    const pathWithoutExtension = publicId.substring(0, publicId.lastIndexOf('.'));
-    const cleanPublicId = pathWithoutExtension.substring(pathWithoutExtension.indexOf('/') + 1);
-    
-    const downloadUrl = cloudinary.url(cleanPublicId, {
-      flags: 'attachment',
-    });
-    
-    return { downloadUrl };
+  generateSignedDownloadUrl(imageUrl: string): { downloadUrl: string } {
+    try {
+      // --- LÓGICA CORREGIDA Y ROBUSTA ---
+      const uploadMarker = '/upload/';
+      const startIndex = imageUrl.indexOf(uploadMarker);
+      if (startIndex === -1) {
+        throw new Error('URL de Cloudinary no válida.');
+      }
+      
+      const path = imageUrl.substring(startIndex + uploadMarker.length);
+      const pathWithoutVersion = path.substring(path.indexOf('/') + 1);
+      const publicId = pathWithoutVersion.substring(0, pathWithoutVersion.lastIndexOf('.'));
+      
+      const downloadUrl = cloudinary.url(publicId, {
+        flags: 'attachment',
+      });
+      
+      return { downloadUrl };
+    } catch (error) {
+      throw new InternalServerErrorException('No se pudo generar la URL de descarga.');
+    }
   }
 }
