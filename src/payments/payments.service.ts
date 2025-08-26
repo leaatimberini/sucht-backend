@@ -174,6 +174,18 @@ export class PaymentsService {
     return `https://auth.mercadopago.com.ar/authorization?client_id=${clientId}&response_type=code&platform_id=mp&redirect_uri=${redirectUri}&state=${state}`;
   }
 
+  getTaloAuthUrl(userId: string): { authUrl: string } {
+    const clientId = this.configService.get('TALO_CLIENT_ID');
+    const redirectUri = this.configService.get('TALO_REDIRECT_URI');
+    // Usamos el 'state' para saber qué usuario está haciendo la vinculación
+    const state = Buffer.from(JSON.stringify({ userId })).toString('base64');
+    
+    // Construimos la URL de autorización de Talo
+    const authUrl = `https://talo.com.ar/oauth/authorize?response_type=code&client_id=${clientId}&redirect_uri=${redirectUri}&scope=read+write&state=${state}`;
+    
+    return { authUrl };
+  }
+
   async exchangeCodeForAccessToken(state: string, code: string): Promise<void> {
     let userId: string;
     try {
