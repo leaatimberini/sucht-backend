@@ -17,9 +17,12 @@ export class ConfigurationController {
     return this.configService.getFormattedConfig();
   }
 
+  /**
+   * Endpoint protegido para que SOLO los Admins puedan actualizar la configuración.
+   */
   @Patch()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.OWNER, UserRole.ADMIN)
+  @Roles(UserRole.ADMIN) // <-- CORRECCIÓN: Se elimina UserRole.OWNER
   @HttpCode(HttpStatus.NO_CONTENT)
   updateConfigurations(@Body() updateConfigurationDto: UpdateConfigurationDto) {
     return this.configService.updateConfiguration(updateConfigurationDto);
