@@ -1,57 +1,56 @@
-// src/configuration/dto/update-configuration.dto.ts
-import { IsOptional, IsString, IsNotEmpty, IsBoolean, IsNumber, IsUUID } from 'class-validator';
-import { Type } from 'class-transformer';
+import { IsString, IsOptional, IsBoolean, IsNumber, Min, Max, IsUUID, IsArray, IsIn } from 'class-validator';
+import { Transform } from 'class-transformer';
 
 export class UpdateConfigurationDto {
-  @IsOptional()
-  @IsString()
-  metaPixelId?: string;
+    // --- Campos existentes ---
+    @IsOptional()
+    @IsString()
+    termsAndConditionsText?: string;
 
-  @IsOptional()
-  @IsString()
-  googleAnalyticsId?: string;
+    @IsOptional()
+    @IsString()
+    birthday_reward_id?: string;
+    
+    // --- Nuevos campos para Pagos ---
+    @IsOptional()
+    @Transform(({ value }) => value === 'true' || value === true)
+    @IsBoolean()
+    paymentsEnabled?: boolean;
 
-  @IsOptional()
-  @IsString()
-  @IsNotEmpty()
-  termsAndConditionsText?: string;
+    @IsOptional()
+    @IsUUID('4')
+    paymentOwnerUserId?: string;
 
-  @IsOptional()
-  @IsBoolean()
-  paymentsEnabled?: boolean;
+    @IsOptional()
+    @IsNumber()
+    @Min(0)
+    @Max(100)
+    adminServiceFeePercentage?: number;
 
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber({ maxDecimalPlaces: 2 })
-  adminServiceFee?: number;
+    @IsOptional()
+    @Transform(({ value }) => value === 'true' || value === true)
+    @IsBoolean()
+    rrppCommissionEnabled?: boolean;
 
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber({ maxDecimalPlaces: 2 })
-  rrppCommissionRate?: number;
+    // --- Nuevos campos para Métodos de Pago ---
+    @IsOptional()
+    @IsArray()
+    @IsIn(['mercadopago', 'talo'], { each: true })
+    enabledPaymentMethods?: string[];
 
-  @IsOptional()
-  @IsBoolean()
-  isRewardsStoreEnabled?: boolean;
+    // --- Otros campos existentes ---
+    @IsOptional()
+    @Transform(({ value }) => value === 'true' || value === true)
+    @IsBoolean()
+    notifications_birthday_enabled?: boolean;
+    
+    @IsOptional()
+    @Transform(({ value }) => value === 'true' || value === true)
+    @IsBoolean()
+    notifications_raffle_enabled?: boolean;
 
-  @IsOptional()
-  @IsUUID('4')
-  birthday_reward_id?: string;
-
-  @IsOptional()
-  @IsUUID('4')
-  raffle_prize_product_id?: string;
-
-  // --- NUEVOS CAMPOS AÑADIDOS PARA LAS NOTIFICACIONES ---
-  @IsOptional()
-  @IsBoolean()
-  notifications_newEvent_enabled?: boolean;
-
-  @IsOptional()
-  @IsBoolean()
-  notifications_birthday_enabled?: boolean;
-  
-  @IsOptional()
-  @IsBoolean()
-  notifications_raffle_enabled?: boolean;
+    @IsOptional()
+    @Transform(({ value }) => value === 'true' || value === true)
+    @IsBoolean()
+    notifications_newEvent_enabled?: boolean;
 }

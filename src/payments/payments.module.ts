@@ -1,24 +1,26 @@
 import { Module, forwardRef } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { PaymentsService } from './payments.service';
 import { PaymentsController } from './payments.controller';
-import { ConfigModule } from '@nestjs/config';
-import { TicketsModule } from 'src/tickets/tickets.module';
 import { UsersModule } from 'src/users/users.module';
+import { TicketsModule } from 'src/tickets/tickets.module';
 import { TicketTiersModule } from 'src/ticket-tiers/ticket-tiers.module';
 import { ConfigurationModule } from 'src/configuration/configuration.module';
-import { StoreModule } from 'src/store/store.module'; // 1. Importar StoreModule
+import { StoreModule } from 'src/store/store.module';
+import { TaloService } from './talo.service'; // 1. Importar TaloService
+import { MercadoPagoService } from './mercadopago.service'; // 2. Importar MercadoPagoService
 
 @Module({
   imports: [
-    ConfigModule,
-    forwardRef(() => TicketsModule),
     forwardRef(() => UsersModule),
+    forwardRef(() => TicketsModule),
     forwardRef(() => TicketTiersModule),
-    forwardRef(() => ConfigurationModule),
-    forwardRef(() => StoreModule), // 2. Añadir StoreModule a los imports
+    ConfigurationModule,
+    StoreModule,
   ],
   controllers: [PaymentsController],
-  providers: [PaymentsService],
+  // 3. Añadir los nuevos servicios a los providers y exportarlos
+  providers: [PaymentsService, TaloService, MercadoPagoService],
   exports: [PaymentsService],
 })
 export class PaymentsModule {}

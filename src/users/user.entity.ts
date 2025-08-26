@@ -53,17 +53,19 @@ export class User {
 
   @Column({ type: 'integer', nullable: true })
   mpUserId?: number | null;
+  
+  // --- NUEVO CAMPO PARA CBU/CVU (TALO) ---
+  @Column({ type: 'varchar', length: 22, nullable: true })
+  cbu: string | null;
 
   @Column({ type: 'varchar', nullable: true, select: false })
   invitationToken?: string | null;
 
-  // --- NUEVOS CAMPOS PARA RECUPERAR CONTRASEÑA ---
   @Column({ type: 'varchar', nullable: true, select: false })
   passwordResetToken?: string | null;
 
   @Column({ type: 'timestamp', nullable: true, select: false })
   passwordResetExpires?: Date | null;
-  // --- FIN DE NUEVOS CAMPOS ---
 
   @Column({ type: 'decimal', precision: 5, scale: 2, default: 0.0, nullable: true })
   rrppCommissionRate: number | null;

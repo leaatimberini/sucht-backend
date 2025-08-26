@@ -13,21 +13,18 @@ export class ConfigurationService {
     private configRepository: Repository<Configuration>,
   ) {}
 
-  /**
-   * MÉTODO CORREGIDO: Procesa las actualizaciones de forma secuencial para garantizar el guardado.
-   */
   async updateConfiguration(updateConfigurationDto: UpdateConfigurationDto): Promise<void> {
     this.logger.log(`[updateConfiguration] Recibido DTO para actualizar: ${JSON.stringify(updateConfigurationDto)}`);
 
-    // Usamos un bucle for...of para procesar cada clave una por una
     for (const [key, value] of Object.entries(updateConfigurationDto)) {
       if (value !== null && value !== undefined) {
-        this.logger.log(`[updateConfiguration] Guardando -> key: '${key}', value: '${String(value)}'`);
+        // Si el valor es un array (para enabledPaymentMethods), lo convertimos a string
+        const valueToStore = Array.isArray(value) ? value.join(',') : String(value);
+
+        this.logger.log(`[updateConfiguration] Guardando -> key: '${key}', value: '${valueToStore}'`);
         
-        // El 'await' dentro del bucle asegura que cada 'upsert' se complete
-        // antes de iniciar el siguiente.
         await this.configRepository.upsert(
-          { key, value: String(value) },
+          { key, value: valueToStore },
           ['key'],
         );
       }
@@ -43,18 +40,23 @@ export class ConfigurationService {
     return config ? config.value : null;
   }
 
-  async getFormattedConfig(): Promise<{ [key: string]: string | boolean | number }> {
+  async getFormattedConfig(): Promise<{ [key: string]: any }> {
     const configurations = await this.configRepository.find();
     
     return configurations.reduce((acc, config) => {
-      let parsedValue: string | boolean | number = config.value;
-      if (config.value === 'true') {
+      let parsedValue: any = config.value;
+      
+      // Caso especial para enabledPaymentMethods
+      if (config.key === 'enabledPaymentMethods') {
+        parsedValue = config.value.split(',').filter(Boolean); // Convierte a array
+      } else if (config.value === 'true') {
         parsedValue = true;
       } else if (config.value === 'false') {
         parsedValue = false;
       } else if (!isNaN(Number(config.value)) && !isNaN(parseFloat(config.value)) && config.value !== '') {
         parsedValue = parseFloat(config.value);
       }
+      
       acc[config.key] = parsedValue;
       return acc;
     }, {});
