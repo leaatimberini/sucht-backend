@@ -1,6 +1,6 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, InternalServerErrorException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { EventsService } from '../events/events.service';
 import { TicketsService } from '../tickets/tickets.service';
@@ -14,6 +14,7 @@ import { TZDate } from '@date-fns/tz';
 import { User } from '../users/user.entity';
 import { MailService } from '../mail/mail.service';
 import { ConfigurationService } from '../configuration/configuration.service';
+import { RafflePrize } from './raffle-prize.entity';
 
 @Injectable()
 export class RaffleService {
@@ -24,6 +25,8 @@ export class RaffleService {
     private readonly raffleRepository: Repository<Raffle>,
     @InjectRepository(RaffleWinner)
     private readonly raffleWinnerRepository: Repository<RaffleWinner>,
+    @InjectRepository(RafflePrize)
+    private readonly rafflePrizeRepository: Repository<RafflePrize>,
     private readonly eventsService: EventsService,
     private readonly ticketsService: TicketsService,
     private readonly storeService: StoreService,
@@ -31,32 +34,60 @@ export class RaffleService {
     private readonly notificationsService: NotificationsService,
     private readonly mailService: MailService,
     private readonly configurationService: ConfigurationService,
+    private readonly dataSource: DataSource,
   ) {}
 
   async createOrUpdateRaffle(eventId: string, dto: ConfigureRaffleDto): Promise<Raffle> {
-    const event = await this.eventsService.findOne(eventId);
-    if (!event) throw new NotFoundException('Evento no encontrado.');
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
-    let raffle = await this.raffleRepository.findOne({ where: { eventId }, relations: ['prizes'] });
+    try {
+        const event = await this.eventsService.findOne(eventId);
+        if (!event) throw new NotFoundException('Evento no encontrado.');
 
-    if (raffle) {
-      // Si ya existe, actualizamos sus propiedades
-      raffle.drawDate = new TZDate(dto.drawDate, 'America/Argentina/Buenos_Aires');
-      raffle.numberOfWinners = dto.numberOfWinners;
-      // Reemplazamos los premios antiguos por los nuevos
-      raffle.prizes = dto.prizes.map(p => ({ ...p })) as any;
-    } else {
-      // Si no existe, creamos una nueva instancia
-      raffle = this.raffleRepository.create({
-        event,
-        eventId,
-        drawDate: new TZDate(dto.drawDate, 'America/Argentina/Buenos_Aires'),
-        numberOfWinners: dto.numberOfWinners,
-        prizes: dto.prizes as any,
-      });
+        let raffle = await this.raffleRepository.findOne({ where: { eventId } });
+
+        if (raffle) {
+            await queryRunner.manager.delete(RafflePrize, { raffleId: raffle.id });
+            raffle.drawDate = new TZDate(dto.drawDate, 'America/Argentina/Buenos_Aires');
+            raffle.numberOfWinners = dto.numberOfWinners;
+            raffle.status = RaffleStatus.PENDING;
+        } else {
+            raffle = this.raffleRepository.create({
+                event,
+                eventId,
+                drawDate: new TZDate(dto.drawDate, 'America/Argentina/Buenos_Aires'),
+                numberOfWinners: dto.numberOfWinners,
+                status: RaffleStatus.PENDING,
+            });
+        }
+        
+        const savedRaffle = await queryRunner.manager.save(raffle);
+
+        const newPrizes = dto.prizes.map(p => {
+            return this.rafflePrizeRepository.create({
+                raffleId: savedRaffle.id,
+                productId: p.productId,
+                prizeRank: p.prizeRank,
+            });
+        });
+        
+        await queryRunner.manager.save(newPrizes);
+        
+        await queryRunner.commitTransaction();
+
+        // --- CORRECCIÓN ---
+        // Devolvemos el objeto que acabamos de guardar, que sabemos que no es nulo.
+        return savedRaffle;
+
+    } catch (error) {
+        await queryRunner.rollbackTransaction();
+        this.logger.error('Error al configurar el sorteo:', error);
+        throw new InternalServerErrorException('No se pudo guardar la configuración del sorteo.');
+    } finally {
+        await queryRunner.release();
     }
-    
-    return this.raffleRepository.save(raffle);
   }
 
   @Cron(CronExpression.EVERY_MINUTE)
@@ -95,7 +126,7 @@ export class RaffleService {
     const winners = this.selectWinners(uniqueParticipants, raffle.numberOfWinners);
 
     for (let i = 0; i < winners.length; i++) {
-      const winnerUser = winners[i];
+      const winnerUser = await this.usersService.findOneById(winners[i].id);
       const prize = raffle.prizes.find(p => p.prizeRank === i + 1);
       if (!prize || !prize.product) {
         this.logger.error(`No se encontró un premio o producto válido para el puesto ${i + 1}.`);
@@ -107,9 +138,9 @@ export class RaffleService {
       );
       
       const winnerRecord = this.raffleWinnerRepository.create({
-        raffle,
-        user: winnerUser,
-        prize,
+        raffleId: raffle.id,
+        userId: winnerUser.id,
+        prizeId: prize.id,
         prizePurchaseId: prizePurchase.id,
       });
       await this.raffleWinnerRepository.save(winnerRecord);
