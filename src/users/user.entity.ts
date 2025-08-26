@@ -1,3 +1,4 @@
+// src/users/user.entity.ts
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, BeforeInsert, BeforeUpdate, OneToMany } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { Ticket } from 'src/tickets/ticket.entity';
@@ -53,7 +54,16 @@ export class User {
 
   @Column({ type: 'integer', nullable: true })
   mpUserId?: number | null;
-  
+ 
+  @Column({ type: 'varchar', nullable: true, select: false })
+  taloAccessToken?: string | null;
+
+  @Column({ type: 'varchar', nullable: true, select: false })
+  taloRefreshToken?: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  taloUserId?: string | null;
+
   // --- NUEVO CAMPO PARA CBU/CVU (TALO) ---
   @Column({ type: 'varchar', length: 22, nullable: true })
   cbu: string | null;
