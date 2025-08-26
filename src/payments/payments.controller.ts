@@ -98,4 +98,14 @@ export class PaymentsController {
     
     return { status: 'received' };
   }
+
+  /**
+   * NUEVO ENDPOINT: Devuelve la URL para vincular Talo.
+   */
+  @Get('connect/talo')
+  @UseGuards(JwtAuthGuard)
+  getTaloAuthUrl(@Request() req) {
+    return this.paymentsService.getTaloAuthUrl(req.user.id);
+  }
+
 }
