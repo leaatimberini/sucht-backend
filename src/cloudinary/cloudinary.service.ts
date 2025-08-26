@@ -29,7 +29,6 @@ export class CloudinaryService {
 
   generateSignedDownloadUrl(imageUrl: string): { downloadUrl: string } {
     try {
-      // --- LÓGICA CORREGIDA Y ROBUSTA ---
       const uploadMarker = '/upload/';
       const startIndex = imageUrl.indexOf(uploadMarker);
       if (startIndex === -1) {
@@ -37,11 +36,13 @@ export class CloudinaryService {
       }
       
       const path = imageUrl.substring(startIndex + uploadMarker.length);
-      const pathWithoutVersion = path.substring(path.indexOf('/') + 1);
-      const publicId = pathWithoutVersion.substring(0, pathWithoutVersion.lastIndexOf('.'));
+      const publicIdWithVersion = path.substring(0, path.lastIndexOf('.'));
       
-      const downloadUrl = cloudinary.url(publicId, {
+      // --- LÓGICA CORREGIDA ---
+      // Usamos el public_id completo (incluyendo la versión) y forzamos HTTPS.
+      const downloadUrl = cloudinary.url(publicIdWithVersion, {
         flags: 'attachment',
+        secure: true, // Fuerza el uso de HTTPS
       });
       
       return { downloadUrl };
