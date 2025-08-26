@@ -10,20 +10,26 @@ export class TaloService {
   private readonly clientId: string;
   private readonly clientSecret: string;
   private readonly redirectUri: string;
-    private readonly apiKey: string;
+  private readonly apiKey: string;
 
   constructor(private readonly configService: ConfigService) {
+    // 1. Leemos TODAS las credenciales necesarias
     const id = this.configService.get<string>('TALO_CLIENT_ID');
     const secret = this.configService.get<string>('TALO_CLIENT_SECRET');
     const uri = this.configService.get<string>('TALO_REDIRECT_URI');
+    const key = this.configService.get<string>('TALO_API_KEY');
 
-    if (!id || !secret || !uri) {
-      this.logger.error('Las credenciales de Talo (ID, Secret, URI) no están configuradas en .env');
+    // 2. Verificamos que TODAS existan
+    if (!id || !secret || !uri || !key) {
+      this.logger.error('Las credenciales de Talo (ID, Secret, URI, API Key) no están configuradas en .env');
       throw new Error('Credenciales de Talo no configuradas.');
     }
+    
+    // 3. Asignamos todas las propiedades
     this.clientId = id;
     this.clientSecret = secret;
     this.redirectUri = uri;
+    this.apiKey = key; 
   }
 
   getTaloAuthUrl(userId: string): { authUrl: string } {
@@ -57,7 +63,7 @@ export class TaloService {
         preferenceDto,
         {
           headers: {
-            'Authorization': `Bearer ${this.apiKey}`, // <-- CORRECCIÓN
+            'Authorization': `Bearer ${this.apiKey}`,
             'Content-Type': 'application/json',
           },
         },
