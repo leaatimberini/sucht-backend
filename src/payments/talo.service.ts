@@ -1,4 +1,3 @@
-// src/payments/talo.service.ts
 import { Injectable, Logger, InternalServerErrorException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
@@ -8,18 +7,17 @@ import { User } from 'src/users/user.entity';
 @Injectable()
 export class TaloService {
   private readonly logger = new Logger(TaloService.name);
-  private readonly taloApiUrl = 'https://talo.com.ar/api/v1';
+  private readonly taloApiUrl = 'https://api.talo.com.ar/api/v1'; // URL de producción
   private readonly clientId: string;
   private readonly clientSecret: string;
   private readonly redirectUri: string;
 
   constructor(private readonly configService: ConfigService) {
-    // 1. Leemos SOLO las credenciales globales necesarias
+    // Leemos las credenciales globales de la APLICACIÓN para el flujo de OAuth
     const id = this.configService.get<string>('TALO_CLIENT_ID');
     const secret = this.configService.get<string>('TALO_CLIENT_SECRET');
     const uri = this.configService.get<string>('TALO_REDIRECT_URI');
 
-    // 2. Verificamos que existan
     if (!id || !secret || !uri) {
       this.logger.error('Las credenciales globales de Talo (ID, Secret, Redirect URI) no están configuradas en .env');
       throw new Error('Credenciales de Talo no configuradas.');
@@ -31,7 +29,7 @@ export class TaloService {
   }
 
   /**
-   * Genera la URL de autorización para vincular la cuenta de Talo de un usuario
+   * Genera la URL de autorización para vincular la cuenta de Talo de un usuario.
    */
   getTaloAuthUrl(userId: string): { authUrl: string } {
     const state = Buffer.from(JSON.stringify({ userId })).toString('base64');
@@ -40,7 +38,7 @@ export class TaloService {
   }
 
   /**
-   * Intercambia el código de autorización por tokens de acceso/refresh
+   * Intercambia el código de autorización por tokens de acceso/refresh.
    */
   async exchangeCodeForTokens(code: string): Promise<any> {
     try {
@@ -51,7 +49,7 @@ export class TaloService {
         code,
         redirect_uri: this.redirectUri,
       });
-      return response.data; // { access_token, refresh_token, expires_in, ... }
+      return response.data; // { access_token, refresh_token, expires_in, user_id, ... }
     } catch (error) {
       this.logger.error('Error al intercambiar el código de Talo por tokens:', error.response?.data || error.message);
       throw new InternalServerErrorException('No se pudo obtener el token de acceso de Talo.');
@@ -59,7 +57,7 @@ export class TaloService {
   }
 
   /**
-   * Crea una preferencia de pago en Talo usando el token del usuario dueño (owner/admin/rrpp)
+   * Crea una preferencia de pago en Talo usando el TOKEN DEL USUARIO que recibe el pago.
    */
   async createPreference(user: User, preferenceDto: CreateTaloPreferenceDto) {
     if (!user.taloAccessToken) {
@@ -67,7 +65,7 @@ export class TaloService {
       throw new InternalServerErrorException('El usuario no tiene vinculada una cuenta de Talo.');
     }
 
-    this.logger.log(`Creando preferencia de pago en Talo para: ${preferenceDto.description}, usuario: ${user.id}`);
+    this.logger.log(`Creando preferencia de pago en Talo para: ${preferenceDto.description}, a través de la cuenta del usuario: ${user.id}`);
 
     try {
       const response = await axios.post(
@@ -75,7 +73,7 @@ export class TaloService {
         preferenceDto,
         {
           headers: {
-            'Authorization': `Bearer ${user.taloAccessToken}`,
+            'Authorization': `Bearer ${user.taloAccessToken}`, // Usamos el token del usuario
             'Content-Type': 'application/json',
           },
         },
@@ -90,11 +88,11 @@ export class TaloService {
   }
 
   /**
-   * Manejo del webhook de Talo
+   * Manejo del webhook de Talo.
    */
   async handleWebhook(payload: any) {
     this.logger.log('Webhook de Talo recibido:', payload);
-    // TODO: actualizar estados de pagos en DB
+    // TODO: Implementar la lógica para actualizar el estado del pago en la base de datos.
     return { received: true };
   }
 }
