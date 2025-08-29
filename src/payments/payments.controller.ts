@@ -1,5 +1,5 @@
 // backend/src/payments/payments.controller.ts
-import { Controller, Post, Body, UseGuards, Request, Get, Res, Query, HttpStatus, HttpException, HttpCode, Delete } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Request, Get, Res, Query, HttpStatus, HttpException, HttpCode, Delete, Redirect } from '@nestjs/common';
 import { PaymentsService } from './payments.service';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { AcquireTicketDto } from 'src/tickets/dto/acquire-ticket.dto';
@@ -11,13 +11,14 @@ import { Public } from 'src/auth/decorators/public.decorator';
 import { FinalizePurchaseDto } from './dto/finalize-purchase.dto';
 import { AuthenticatedRequest } from 'src/auth/interfaces/authenticated-request.interface';
 import { UsersService } from 'src/users/users.service';
+import { TaloService } from './talo.service';
 
 @Controller('payments')
 export class PaymentsController {
-  // Se inyecta UsersService para usarlo en el método de desvincular
-  constructor(
+  constructor(
     private readonly paymentsService: PaymentsService,
-    private readonly usersService: UsersService
+    private readonly usersService: UsersService,
+    private readonly taloService: TaloService,
   ) {}
 
   @Post('create-preference')
@@ -41,14 +42,13 @@ export class PaymentsController {
     return this.paymentsService.finalizePurchase(finalizePurchaseDto.paymentId, req.user);
   }
   
-  @Get('connect/mercadopago')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.RRPP)
-  async getAuthUrl(@Request() req: AuthenticatedRequest) {
-    const userId = req.user.id;
-    const authUrl = this.paymentsService.getMercadoPagoAuthUrl(userId);
-    return { authUrl };
-  }
+  @Get('connect/mercadopago')
+  @UseGuards(JwtAuthGuard)
+  @Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.RRPP)
+  async getAuthUrl(@Request() req: AuthenticatedRequest) {
+    const authUrl = this.paymentsService.getMercadoPagoAuthUrl(req.user.id);
+    return { authUrl };
+  }
 
   // ==========================================================
   // ===== NUEVO ENDPOINT PARA DESVINCULAR MERCADO PAGO =====
@@ -62,25 +62,17 @@ export class PaymentsController {
     return { message: 'Cuenta de Mercado Pago desvinculada exitosamente.' };
   }
 
-  @Get('mercadopago/callback')
-  @Public()
-  async handleMercadoPagoCallback(
-    @Query('code') code: string,
-    @Query('state') state: string,
-    @Res() res: Response,
-  ) {
-    if (!code || !state) {
-      return res.redirect(`${process.env.FRONTEND_URL}/dashboard/settings?error=auth_failed`);
-    }
-    
-    try {
-      await this.paymentsService.exchangeCodeForAccessToken(state, code);
-      return res.redirect(`${process.env.FRONTEND_URL}/dashboard/settings?success=true`);
-    } catch (error) {
-      console.error('Error in Mercado Pago callback:', error);
-      return res.redirect(`${process.env.FRONTEND_URL}/dashboard/settings?error=server_error`);
-    }
-  }
+  @Get('mercadopago/callback')
+  @Public()
+  @Redirect('/dashboard/settings', 302)
+  async handleMercadoPagoCallback(@Query('code') code: string, @Query('state') state: string) {
+    try {
+      await this.paymentsService.exchangeCodeForAccessToken(state, code);
+      return { url: '/dashboard/settings?success=true' };
+    } catch (error) {
+      return { url: '/dashboard/settings?error=true' };
+    }
+  }
 
   @Post('webhook')
   @Public()
@@ -105,7 +97,30 @@ export class PaymentsController {
   @Get('connect/talo')
   @UseGuards(JwtAuthGuard)
   getTaloAuthUrl(@Request() req) {
-    return this.paymentsService.getTaloAuthUrl(req.user.id);
+    return this.taloService.getTaloAuthUrl(req.user.id);
   }
+  @Public()
+  @Get('callback/talo')
+  @Redirect('/dashboard/settings', 302)
+  async handleTaloCallback(@Query('code') code: string, @Query('state') state: string) {
+    try {
+      const decodedState = JSON.parse(Buffer.from(state, 'base64').toString('ascii'));
+      const userId = decodedState.userId;
+      if (!userId) throw new Error('User ID no encontrado en el state');
 
+      const tokens = await this.taloService.exchangeCodeForTokens(code);
+      
+      await this.usersService.updateTaloCredentials(
+          userId, 
+          tokens.access_token, 
+          tokens.refresh_token, 
+          tokens.user_id
+      );
+      
+      return { url: '/dashboard/settings?success_talo=true' };
+    } catch (error) {
+      console.error("Error en el callback de Talo:", error);
+      return { url: '/dashboard/settings?error_talo=true' };
+    }
+  }
 }

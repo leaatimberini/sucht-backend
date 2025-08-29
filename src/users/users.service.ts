@@ -441,7 +441,25 @@ export class UsersService {
     };
     await this.usersRepository.update(userId, updatePayload);
   }
+  async updateTaloCredentials(
+    userId: string,
+    accessToken: string | null,
+    refreshToken: string | null,
+    taloUserId: string | null,
+  ): Promise<void> {
+    if (!userId) {
+      throw new NotFoundException('Se requiere un ID de usuario.');
+    }
+    const updatePayload = {
+      taloAccessToken: accessToken,
+      taloRefreshToken: refreshToken,
+      taloUserId: taloUserId,
+    };
+    await this.usersRepository.update(userId, updatePayload);
+  }
+
 }
+
 
 const formatDateToInput = (date?: Date | string | null): string => {
   if (!date) return '';

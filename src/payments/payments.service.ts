@@ -137,54 +137,41 @@ export class PaymentsService {
     // --- 🔑 INTEGRACIÓN CON TALO ---
     if (paymentMethod === 'talo') {
       const adminAccount = await this.usersService.findAdminForPayments();
-      const adminFeePercentage = parseFloat(
-        (await this.configurationService.get('adminServiceFeePercentage')) ||
-          '0',
-      );
+      const adminFeePercentage = parseFloat((await this.configurationService.get('adminServiceFeePercentage')) || '0');
 
-      if (!adminAccount || !adminAccount.cbu) {
-        throw new InternalServerErrorException(
-          'La cuenta de Admin para recibir comisiones no está configurada o no tiene CBU/CVU.',
-        );
+      if (!adminAccount?.cbu) {
+        throw new InternalServerErrorException('La cuenta de Admin no tiene CBU/CVU configurado.');
       }
-      if (!paymentOwner.cbu) {
-        throw new InternalServerErrorException(
-          'La cuenta de Dueño para recibir pagos no tiene CBU/CVU configurado.',
-        );
+      if (!paymentOwner?.cbu) {
+        throw new InternalServerErrorException('La cuenta de Dueño no tiene CBU/CVU configurado.');
       }
 
-      // Calcular splits
-      const adminFee = amountToPay * (adminFeePercentage / 100);
+      const adminFee = Math.round(amountToPay * (adminFeePercentage / 100));
       let ownerAmount = amountToPay - adminFee;
 
       const split_receivers: { cbu_cvu: string; amount: number }[] = [
-        { cbu_cvu: paymentOwner.cbu, amount: ownerAmount },
+        { cbu_cvu: paymentOwner.cbu, amount: 0 }, // Placeholder para el owner
         { cbu_cvu: adminAccount.cbu, amount: adminFee },
       ];
 
       // Si hay RRPP/promotor, sumarlo también
-      if (promoterUsername) {
-        const promoter = await this.usersService.findOneByUsername(
-          promoterUsername,
-        );
-        if (promoter?.cbu) {
-          const promoterFeePercentage = parseFloat(
-            (await this.configurationService.get(
-              'promoterServiceFeePercentage',
-            )) || '0',
-          );
-          const promoterFee = amountToPay * (promoterFeePercentage / 100);
-
+      const rrppCommissionEnabled = await this.configurationService.get('rrppCommissionEnabled');
+      if (promoterUsername && rrppCommissionEnabled === 'true') {
+        const promoter = await this.usersService.findOneByUsername(promoterUsername);
+        if (promoter?.cbu && promoter.rrppCommissionRate) {
+          const promoterFee = Math.round(amountToPay * (promoter.rrppCommissionRate / 100));
           split_receivers.push({ cbu_cvu: promoter.cbu, amount: promoterFee });
           ownerAmount -= promoterFee;
-          // Actualizamos el monto del owner en la lista
-          split_receivers[0].amount = ownerAmount;
         }
       }
+      split_receivers[0].amount = ownerAmount; // Asignamos el monto final al owner
 
-      return this.taloService.createPreference(paymentOwner, {
+      if (!paymentOwner.taloAccessToken) {
+        throw new InternalServerErrorException('El Dueño receptor de pagos no ha vinculado su cuenta de Talo.');
+      }
+      return this.taloService.createPreference(paymentOwner.taloAccessToken, {
         amount: amountToPay,
-        description: `Entrada para ${tier.event.title}`,
+        description: `Entrada: ${tier.name} para ${tier.event.title}`,
         external_reference: externalReference,
         split_receivers,
       });
