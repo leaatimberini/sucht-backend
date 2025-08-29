@@ -28,31 +28,33 @@ export class TaloService {
     this.redirectUri = uri;
   }
 
-  getTaloAuthUrl(userId: string): { authUrl: string } {
-    const state = Buffer.from(JSON.stringify({ userId })).toString('base64');
-    // CAMBIO: Apuntamos a la URL de la aplicación para el flujo de autorización.
-    const authUrl = `https://app.talo.com.ar/oauth/authorize?response_type=code&client_id=${this.clientId}&redirect_uri=${this.redirectUri}&scope=read+write&state=${state}`;
-    this.logger.log(`URL de autorización de Talo generada: ${authUrl}`);
-    return { authUrl };
-  }
+getTaloAuthUrl(userId: string): { authUrl: string } {
+  // Ya no usamos el flujo OAuth tradicional con response_type, state, scope, etc.
+  // En partners es directo: redirigís al usuario a esta URL
+  const authUrl = `https://app.talo.com.ar/authorize/${this.clientId}?referred_user_id=${userId}`;
+  this.logger.log(`URL de autorización de Talo generada: ${authUrl}`);
+  return { authUrl };
+}
 
-  async exchangeCodeForTokens(code: string): Promise<any> {
-    try {
-      // CAMBIO: Usamos la URL correcta de la API para el intercambio de tokens.
-      const response = await axios.post(`${this.taloApiUrl}/oauth/token`, {
-        grant_type: 'authorization_code',
-        client_id: this.clientId,
-        client_secret: this.clientSecret,
-        code,
-        redirect_uri: this.redirectUri,
-      });
-      this.logger.log('Código intercambiado por tokens de Talo exitosamente.');
-      return response.data;
-    } catch (error) {
-      this.logger.error('Error al intercambiar el código de Talo por tokens:', error.response?.data || error.message);
-      throw new InternalServerErrorException('No se pudo obtener el token de acceso de Talo.');
-    }
+async exchangeCodeForTokens(userId: string): Promise<any> {
+  try {
+    const response = await axios.post(
+      `https://api.talo.com.ar/users/${userId}/tokens`,
+      {
+        client_id: this.clientId,      // tu partner_id
+        client_secret: this.clientSecret
+      }
+    );
+    this.logger.log('Token generado exitosamente para el usuario de Talo.');
+    return response.data;
+  } catch (error) {
+    this.logger.error(
+      'Error al generar token de Talo:',
+      error.response?.data || error.message
+    );
+    throw new InternalServerErrorException('No se pudo obtener el token de acceso de Talo.');
   }
+}
 
   async createPreference(accessToken: string, preferenceDto: CreateTaloPreferenceDto) {
     this.logger.log(`Creando preferencia de pago en Talo para: ${preferenceDto.description}`);
