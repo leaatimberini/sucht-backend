@@ -1,3 +1,4 @@
+// src/payments/talo.service.ts
 import { Injectable, Logger, InternalServerErrorException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
@@ -6,7 +7,8 @@ import { CreateTaloPreferenceDto } from './dto/create-talo-preference.dto';
 @Injectable()
 export class TaloService {
   private readonly logger = new Logger(TaloService.name);
-  private readonly taloApiUrl = 'https://talo.com.ar/api/v1';
+  // CAMBIO: Apuntamos a la URL correcta de la API de Talo.
+  private readonly taloApiUrl = 'https://api.talo.com.ar/v1'; 
   private readonly clientId: string;
   private readonly clientSecret: string;
   private readonly redirectUri: string;
@@ -28,12 +30,15 @@ export class TaloService {
 
   getTaloAuthUrl(userId: string): { authUrl: string } {
     const state = Buffer.from(JSON.stringify({ userId })).toString('base64');
-    const authUrl = `https://talo.com.ar/oauth/authorize?response_type=code&client_id=${this.clientId}&redirect_uri=${this.redirectUri}&scope=read+write&state=${state}`;
+    // CAMBIO: Apuntamos a la URL de la aplicación para el flujo de autorización.
+    const authUrl = `https://app.talo.com.ar/oauth/authorize?response_type=code&client_id=${this.clientId}&redirect_uri=${this.redirectUri}&scope=read+write&state=${state}`;
+    this.logger.log(`URL de autorización de Talo generada: ${authUrl}`);
     return { authUrl };
   }
 
   async exchangeCodeForTokens(code: string): Promise<any> {
     try {
+      // CAMBIO: Usamos la URL correcta de la API para el intercambio de tokens.
       const response = await axios.post(`${this.taloApiUrl}/oauth/token`, {
         grant_type: 'authorization_code',
         client_id: this.clientId,
@@ -41,6 +46,7 @@ export class TaloService {
         code,
         redirect_uri: this.redirectUri,
       });
+      this.logger.log('Código intercambiado por tokens de Talo exitosamente.');
       return response.data;
     } catch (error) {
       this.logger.error('Error al intercambiar el código de Talo por tokens:', error.response?.data || error.message);
@@ -56,7 +62,7 @@ export class TaloService {
         preferenceDto,
         {
           headers: {
-            'Authorization': `Bearer ${accessToken}`, // Usamos el token que nos pasan
+            'Authorization': `Bearer ${accessToken}`,
             'Content-Type': 'application/json',
           },
         },
@@ -71,6 +77,8 @@ export class TaloService {
 
   async handleWebhook(payload: any) {
     this.logger.log('Webhook de Talo recibido:', payload);
+    // Aquí iría la lógica para procesar el webhook, similar a la de Mercado Pago.
+    // Por ahora, solo confirmamos la recepción.
     return { received: true };
   }
 }
