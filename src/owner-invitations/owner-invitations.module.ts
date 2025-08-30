@@ -1,7 +1,8 @@
-// owner-invitations.module.ts
-import { Module } from '@nestjs/common';
+// src/owner-invitations/owner-invitations.module.ts
+
+import { Module, forwardRef } from '@nestjs/common'; // 1. Importar forwardRef
 import { OwnerInvitationService } from './owner-invitations.service';
-import { OwnerInvitationController } from './owner-invitations.controller';
+import { OwnerInvitationsController } from './owner-invitations.controller';
 import { UsersModule } from '../users/users.module';
 import { EventsModule } from '../events/events.module';
 import { TicketTiersModule } from '../ticket-tiers/ticket-tiers.module';
@@ -15,20 +16,20 @@ import { ProductPurchase } from '../store/product-purchase.entity';
 
 @Module({
   imports: [
-    // --- LÍNEA AÑADIDA ---
-    // Registramos las entidades que el servicio necesita inyectar directamente.
     TypeOrmModule.forFeature([Ticket, ProductPurchase]),
-    
-    // Importamos todos los módulos cuyos servicios vamos a orquestar
-    UsersModule,
+
+    // 2. Aplicamos forwardRef a los módulos que son parte del ciclo
+    forwardRef(() => UsersModule),
+    forwardRef(() => TicketsModule),
+
+    // El resto de módulos no parecen ser parte del ciclo
     EventsModule,
     TicketTiersModule,
-    TicketsModule,
     StoreModule,
     MailModule,
     ConfigurationModule,
   ],
-  controllers: [OwnerInvitationController],
+  controllers: [OwnerInvitationsController],
   providers: [OwnerInvitationService],
 })
 export class OwnerInvitationModule {}
