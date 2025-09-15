@@ -93,7 +93,6 @@ export class PaymentsService {
             amountToPay = Number(tier.price) * quantity;
         }
 
-        // ❌ CORRECCIÓN: Ahora buscamos el ADMIN para la preferencia, no el OWNER.
         const paymentAdmin = await this.usersService.findAdminForPayments();
         if (!paymentAdmin) {
             throw new InternalServerErrorException(
@@ -211,8 +210,7 @@ export class PaymentsService {
             receiverList.push({ id: ownerAccount.mpUserId, amount: ownerAmount });
         }
 
-        // ❌ CORRECCIÓN: Se pasa el Admin como 'owner' para la preferencia de MP
-        return this.mercadoPagoService.createPreference(
+        const result = await this.mercadoPagoService.createPreference(
             buyer,
             paymentAdmin,
             items,
@@ -221,6 +219,11 @@ export class PaymentsService {
             notificationUrl,
             receiverList
         );
+
+        // ✅ CORRECCIÓN: Devolver solo el preferenceId, ya que el publicKey es un valor global.
+        return {
+            preferenceId: result.preferenceId,
+        };
     }
 
     private async processApprovedPayment(paymentId: string) {
@@ -228,7 +231,6 @@ export class PaymentsService {
             `[processApprovedPayment] Iniciando para paymentId: ${paymentId}`,
         );
 
-        // ❌ CORRECCIÓN: Se busca el admin para obtener el token, ya que es el que gestiona la preferencia.
         const admin = await this.usersService.findAdminForPayments();
         if (!admin?.mpAccessToken) {
             throw new InternalServerErrorException(
