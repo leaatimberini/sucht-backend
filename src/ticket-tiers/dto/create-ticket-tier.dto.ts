@@ -1,3 +1,4 @@
+// src/ticket-tiers/dto/create-ticket-tier.dto.ts
 import { IsNotEmpty, IsString, IsNumber, Min, IsDateString, IsOptional, IsEnum, IsBoolean } from 'class-validator';
 import { ProductType } from '../ticket-tier.entity';
 

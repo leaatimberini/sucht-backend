@@ -1,3 +1,4 @@
+// src/dashboard/dashboard.controller.ts
 import { Controller, Get, UseGuards, Request, Query, BadRequestException } from '@nestjs/common';
 import { DashboardService } from './dashboard.service';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
