@@ -44,27 +44,74 @@ export class DashboardService {
                     'user.id as "rrppId"',
                     'user.name as "rrppName"',
                     'user.roles as roles'
-                ])
-                .where("user.roles && :roles", { roles: promoterRoles });
+                ]);
 
             query.addSelect(
                 (subQuery) => {
                     subQuery
-                        .select('COALESCE(SUM(CASE WHEN "ticketTier"."isVip" = false THEN "ticket"."quantity" ELSE 0 END), 0)', 'ticketsGenerated')
-                        .addSelect('COALESCE(SUM(CASE WHEN "ticketTier"."isVip" = false THEN "ticket"."redeemedCount" ELSE 0 END), 0)', 'peopleAdmitted')
-                        .addSelect('COALESCE(SUM(CASE WHEN "ticketTier"."isVip" = true THEN "ticket"."quantity" ELSE 0 END), 0)', 'vipTicketsGenerated')
-                        .addSelect('COALESCE(SUM(CASE WHEN "ticketTier"."isVip" = true THEN "ticket"."redeemedCount" ELSE 0 END), 0)', 'vipPeopleAdmitted')
+                        .select('COALESCE(SUM(CASE WHEN ticket.tierId NOT IN (:...vipTierIds) THEN ticket.quantity ELSE 0 END), 0)')
                         .from(Ticket, 'ticket')
-                        .leftJoin(TicketTier, 'ticketTier', 'ticketTier.id = ticket.tierId')
-                        .where('ticket.promoterId = user.id');
+                        .where('ticket.promoterId = user.id')
+                        .setParameter('vipTierIds', vipTierIds);
                     
                     if (eventId) subQuery.andWhere('ticket.eventId = :eventId', { eventId });
                     if (startDate && endDate) subQuery.andWhere('ticket.createdAt BETWEEN :startDate AND :endDate', { startDate, endDate });
                     
                     return subQuery;
-                }
+                },
+                'ticketsGenerated',
+            );
+            
+            query.addSelect(
+                (subQuery) => {
+                    subQuery
+                        .select('COALESCE(SUM(CASE WHEN ticket.tierId NOT IN (:...vipTierIds) THEN ticket.redeemedCount ELSE 0 END), 0)')
+                        .from(Ticket, 'ticket')
+                        .where('ticket.promoterId = user.id')
+                        .setParameter('vipTierIds', vipTierIds);
+                        
+                    if (eventId) subQuery.andWhere('ticket.eventId = :eventId', { eventId });
+                    if (startDate && endDate) subQuery.andWhere('ticket.createdAt BETWEEN :startDate AND :endDate', { startDate, endDate });
+                        
+                    return subQuery;
+                },
+                'peopleAdmitted',
             );
 
+            query.addSelect(
+                (subQuery) => {
+                    subQuery
+                        .select('COALESCE(SUM(CASE WHEN ticket.tierId IN (:...vipTierIds) THEN ticket.quantity ELSE 0 END), 0)')
+                        .from(Ticket, 'ticket')
+                        .where('ticket.promoterId = user.id')
+                        .setParameter('vipTierIds', vipTierIds);
+                    
+                    if (eventId) subQuery.andWhere('ticket.eventId = :eventId', { eventId });
+                    if (startDate && endDate) subQuery.andWhere('ticket.createdAt BETWEEN :startDate AND :endDate', { startDate, endDate });
+                    
+                    return subQuery;
+                },
+                'vipTicketsGenerated',
+            );
+
+            query.addSelect(
+                (subQuery) => {
+                    subQuery
+                        .select('COALESCE(SUM(CASE WHEN ticket.tierId IN (:...vipTierIds) THEN ticket.redeemedCount ELSE 0 END), 0)')
+                        .from(Ticket, 'ticket')
+                        .where('ticket.promoterId = user.id')
+                        .setParameter('vipTierIds', vipTierIds);
+                    
+                    if (eventId) subQuery.andWhere('ticket.eventId = :eventId', { eventId });
+                    if (startDate && endDate) subQuery.andWhere('ticket.createdAt BETWEEN :startDate AND :endDate', { startDate, endDate });
+                    
+                    return subQuery;
+                },
+                'vipPeopleAdmitted',
+            );
+
+
+            query.where("user.roles && :roles", { roles: promoterRoles });
             query.groupBy('user.id, user.name, user.roles');
             query.orderBy('user.name', 'ASC');
             
