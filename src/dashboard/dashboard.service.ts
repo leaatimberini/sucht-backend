@@ -40,8 +40,6 @@ export class DashboardService {
             const vipTierIds = vipTiers.map(tier => tier.id);
 
             const query = this.usersRepository.createQueryBuilder('user')
-                // --- LÍNEA CORREGIDA ---
-                // Volvemos a usar los alias que el frontend espera: rrppId y rrppName
                 .select([
                     'user.id as "rrppId"',
                     'user.name as "rrppName"',
@@ -58,7 +56,9 @@ export class DashboardService {
                     
                     if (eventId) subQuery.andWhere('ticket.eventId = :eventId', { eventId });
                     if (startDate && endDate) subQuery.andWhere('ticket.createdAt BETWEEN :startDate AND :endDate', { startDate, endDate });
-                    subQuery.andWhere('ticket.tierId NOT IN (:...vipTierIds)', { vipTierIds });
+                    if (vipTierIds.length > 0) { // CORRECCIÓN
+                        subQuery.andWhere('ticket.tierId NOT IN (:...vipTierIds)', { vipTierIds });
+                    }
                     
                     return subQuery;
                 },
@@ -74,7 +74,9 @@ export class DashboardService {
                         
                     if (eventId) subQuery.andWhere('ticket.eventId = :eventId', { eventId });
                     if (startDate && endDate) subQuery.andWhere('ticket.createdAt BETWEEN :startDate AND :endDate', { startDate, endDate });
-                    subQuery.andWhere('ticket.tierId NOT IN (:...vipTierIds)', { vipTierIds });
+                    if (vipTierIds.length > 0) { // CORRECCIÓN
+                        subQuery.andWhere('ticket.tierId NOT IN (:...vipTierIds)', { vipTierIds });
+                    }
                         
                     return subQuery;
                 },
@@ -90,7 +92,9 @@ export class DashboardService {
                     
                     if (eventId) subQuery.andWhere('ticket.eventId = :eventId', { eventId });
                     if (startDate && endDate) subQuery.andWhere('ticket.createdAt BETWEEN :startDate AND :endDate', { startDate, endDate });
-                    subQuery.andWhere('ticket.tierId IN (:...vipTierIds)', { vipTierIds });
+                    if (vipTierIds.length > 0) { // CORRECCIÓN
+                        subQuery.andWhere('ticket.tierId IN (:...vipTierIds)', { vipTierIds });
+                    }
                     
                     return subQuery;
                 },
@@ -106,7 +110,9 @@ export class DashboardService {
                     
                     if (eventId) subQuery.andWhere('ticket.eventId = :eventId', { eventId });
                     if (startDate && endDate) subQuery.andWhere('ticket.createdAt BETWEEN :startDate AND :endDate', { startDate, endDate });
-                    subQuery.andWhere('ticket.tierId IN (:...vipTierIds)', { vipTierIds });
+                    if (vipTierIds.length > 0) { // CORRECCIÓN
+                        subQuery.andWhere('ticket.tierId IN (:...vipTierIds)', { vipTierIds });
+                    }
                     
                     return subQuery;
                 },
@@ -119,8 +125,6 @@ export class DashboardService {
             
             const results = await query.getRawMany();
 
-            // --- LÍNEA CORREGIDA ---
-            // Mapeamos los resultados a las propiedades que el frontend espera
             return results.map(r => ({
                 rrppId: r.rrppId,
                 rrppName: r.rrppName,
@@ -143,20 +147,25 @@ export class DashboardService {
         });
         const vipTierIds = vipTiers.map(tier => tier.id);
 
-        const stats = await this.ticketsRepository.createQueryBuilder("ticket")
+        const statsQuery = this.ticketsRepository.createQueryBuilder("ticket")
             .select("SUM(ticket.quantity)", "ticketsGenerated")
             .addSelect("SUM(ticket.redeemedCount)", "peopleAdmitted")
-            .where("ticket.promoterId = :promoterId", { promoterId })
-            .andWhere("ticket.tierId NOT IN (:...vipTierIds)", { vipTierIds })
-            .getRawOne();
+            .where("ticket.promoterId = :promoterId", { promoterId });
+
+        if (vipTierIds.length > 0) { // CORRECCIÓN
+            statsQuery.andWhere("ticket.tierId NOT IN (:...vipTierIds)", { vipTierIds });
+        }
+        const stats = await statsQuery.getRawOne();
         
-        const vipStats = await this.ticketsRepository.createQueryBuilder("ticket")
+        const vipStatsQuery = this.ticketsRepository.createQueryBuilder("ticket")
             .select("SUM(ticket.quantity)", "vipTicketsGenerated")
             .addSelect("SUM(ticket.redeemedCount)", "vipPeopleAdmitted")
-            .where("ticket.promoterId = :promoterId", { promoterId })
-            .andWhere("ticket.tierId IN (:...vipTierIds)", { vipTierIds })
-            .getRawOne();
+            .where("ticket.promoterId = :promoterId", { promoterId });
 
+        if (vipTierIds.length > 0) { // CORRECCIÓN
+            vipStatsQuery.andWhere("ticket.tierId IN (:...vipTierIds)", { vipTierIds });
+        }
+        const vipStats = await vipStatsQuery.getRawOne();
 
         const guestList = await this.ticketsRepository.find({
             where: { promoter: { id: promoterId } },
@@ -191,15 +200,20 @@ export class DashboardService {
         // Sub-consulta para tickets no-VIP
         const generalTicketsQuery = this.ticketsRepository.createQueryBuilder('ticket')
             .select('COALESCE(SUM(ticket.quantity), 0)', 'totalTicketsGenerated')
-            .addSelect('COALESCE(SUM(ticket.redeemedCount), 0)', 'totalPeopleAdmitted')
-            .where('ticket.tierId NOT IN (:...vipTierIds)', { vipTierIds });
+            .addSelect('COALESCE(SUM(ticket.redeemedCount), 0)', 'totalPeopleAdmitted');
+        
+        if (vipTierIds.length > 0) { // CORRECCIÓN
+            generalTicketsQuery.andWhere('ticket.tierId NOT IN (:...vipTierIds)', { vipTierIds });
+        }
 
         // Sub-consulta para tickets VIP
         const vipTicketsQuery = this.ticketsRepository.createQueryBuilder('ticket')
             .select('COALESCE(SUM(ticket.quantity), 0)', 'totalVIPTicketsGenerated')
-            .addSelect('COALESCE(SUM(ticket.redeemedCount), 0)', 'totalVIPPeopleAdmitted')
-            .where('ticket.tierId IN (:...vipTierIds)', { vipTierIds });
+            .addSelect('COALESCE(SUM(ticket.redeemedCount), 0)', 'totalVIPPeopleAdmitted');
 
+        if (vipTierIds.length > 0) { // CORRECCIÓN
+            vipTicketsQuery.andWhere('ticket.tierId IN (:...vipTierIds)', { vipTierIds });
+        }
 
         if (eventId) {
             generalTicketsQuery.andWhere("ticket.eventId = :eventId", { eventId });
@@ -243,8 +257,18 @@ export class DashboardService {
             .addSelect('COALESCE(SUM(CASE WHEN ticket.tierId NOT IN (:...vipTierIds) THEN ticket.quantity ELSE 0 END), 0)', 'ticketsGenerated')
             .addSelect('COALESCE(SUM(CASE WHEN ticket.tierId NOT IN (:...vipTierIds) THEN ticket.redeemedCount ELSE 0 END), 0)', 'peopleAdmitted')
             .addSelect('COALESCE(SUM(CASE WHEN ticket.tierId IN (:...vipTierIds) THEN ticket.quantity ELSE 0 END), 0)', 'vipTicketsGenerated')
-            .addSelect('COALESCE(SUM(CASE WHEN ticket.tierId IN (:...vipTierIds) THEN ticket.redeemedCount ELSE 0 END), 0)', 'vipPeopleAdmitted')
-            .setParameter('vipTierIds', vipTierIds);
+            .addSelect('COALESCE(SUM(CASE WHEN ticket.tierId IN (:...vipTierIds) THEN ticket.redeemedCount ELSE 0 END), 0)', 'vipPeopleAdmitted');
+
+        if (vipTierIds.length > 0) { // CORRECCIÓN
+            query.setParameter('vipTierIds', vipTierIds);
+        } else {
+            // Manejar el caso donde no hay tiers VIP para evitar el error de sintaxis
+            query.addSelect('COALESCE(SUM(ticket.quantity), 0)', 'ticketsGenerated');
+            query.addSelect('COALESCE(SUM(ticket.redeemedCount), 0)', 'peopleAdmitted');
+            query.addSelect('0', 'vipTicketsGenerated');
+            query.addSelect('0', 'vipPeopleAdmitted');
+            query.where('1 = 1'); // Una condición que siempre es verdadera para no romper la query
+        }
         
         if (eventId) {
             query.andWhere("event.id = :eventId", { eventId });
@@ -289,7 +313,6 @@ export class DashboardService {
         const { page, limit } = paginationQuery;
         const skip = (page - 1) * limit;
 
-        // Contamos el total de usuarios que tienen al menos una asistencia para la paginación
         const totalUsersQuery = await this.usersRepository.query(
             `SELECT COUNT(DISTINCT "userId") FROM (
                 SELECT "userId" FROM tickets WHERE "redeemedCount" > 0
@@ -297,7 +320,6 @@ export class DashboardService {
         );
         const total = parseInt(totalUsersQuery[0].count, 10);
 
-        // Obtenemos los datos para la página actual
         const data = await this.usersRepository.query(
             `SELECT 
                 "user"."id" as "userId", 
