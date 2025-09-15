@@ -11,22 +11,22 @@ export class MercadoPagoService {
 
     async createPreference(
         buyer: User,
-        owner: User,
+        admin: User, // ❌ CORRECCIÓN: Se usa el usuario Admin para la preferencia
         items: any[],
         externalReference: string,
         backUrls: any,
         notificationUrl: string,
-        receiverList: any[] // ❌ CORRECCIÓN: Nuevo argumento para el split de pagos
+        receiverList: any[]
     ) {
-        if (!owner.mpAccessToken) {
-            this.logger.error('[MercadoPagoService] ERROR CRÍTICO: La cuenta del dueño no tiene un Access Token de MP configurado.');
-            throw new InternalServerErrorException("La cuenta del dueño para recibir pagos no está configurada.");
+        if (!admin.mpAccessToken) {
+            this.logger.error('[MercadoPagoService] ERROR CRÍTICO: La cuenta del Admin no tiene un Access Token de MP configurado.');
+            throw new InternalServerErrorException("La cuenta del admin para recibir pagos no está configurada.");
         }
 
-        const mpClient = new MercadoPagoConfig({ accessToken: owner.mpAccessToken });
+        // ❌ CORRECCIÓN: Se usa el access token del ADMIN para configurar el cliente de Mercado Pago
+        const mpClient = new MercadoPagoConfig({ accessToken: admin.mpAccessToken });
         const preferenceClient = new Preference(mpClient);
 
-        // ❌ CORRECCIÓN: Se agrega la lógica para el split de pagos en el preference body
         const body: any = {
             items,
             back_urls: backUrls,
@@ -38,7 +38,7 @@ export class MercadoPagoService {
         if (receiverList && receiverList.length > 0) {
             body.split_payment = true;
             body.receivers = receiverList.map(receiver => ({
-                id: receiver.id.toString(), // Convertir el id a string como lo requiere la API de MP
+                id: receiver.id.toString(),
                 amount: receiver.amount,
             }));
         }

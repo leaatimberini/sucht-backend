@@ -93,10 +93,11 @@ export class PaymentsService {
             amountToPay = Number(tier.price) * quantity;
         }
 
-        const paymentOwner = await this.usersService.findOwnerForPayments();
-        if (!paymentOwner) {
+        // ❌ CORRECCIÓN: Ahora buscamos el ADMIN para la preferencia, no el OWNER.
+        const paymentAdmin = await this.usersService.findAdminForPayments();
+        if (!paymentAdmin) {
             throw new InternalServerErrorException(
-                'La cuenta de Dueño para recibir pagos no está configurada.',
+                'La cuenta de Admin para recibir pagos no está configurada.',
             );
         }
 
@@ -135,13 +136,13 @@ export class PaymentsService {
 
         // --- 🔑 INTEGRACIÓN CON TALO ---
         if (paymentMethod === 'talo') {
-            const adminAccount = await this.usersService.findAdminForPayments();
+            const ownerAccount = await this.usersService.findOwnerForPayments();
             const adminFeePercentage = parseFloat((await this.configurationService.get('adminServiceFeePercentage')) || '0');
 
-            if (!adminAccount?.cbu) {
+            if (!paymentAdmin?.cbu) {
                 throw new InternalServerErrorException('La cuenta de Admin no tiene CBU/CVU configurado.');
             }
-            if (!paymentOwner?.cbu) {
+            if (!ownerAccount?.cbu) {
                 throw new InternalServerErrorException('La cuenta de Dueño no tiene CBU/CVU configurado.');
             }
 
@@ -149,8 +150,8 @@ export class PaymentsService {
             let ownerAmount = amountToPay - adminFee;
 
             const split_receivers: { cbu_cvu: string; amount: number }[] = [
-                { cbu_cvu: paymentOwner.cbu, amount: 0 },
-                { cbu_cvu: adminAccount.cbu, amount: adminFee },
+                { cbu_cvu: ownerAccount.cbu, amount: 0 },
+                { cbu_cvu: paymentAdmin.cbu, amount: adminFee },
             ];
 
             const rrppCommissionEnabled = await this.configurationService.get('rrppCommissionEnabled');
@@ -164,10 +165,10 @@ export class PaymentsService {
             }
             split_receivers[0].amount = ownerAmount;
 
-            if (!paymentOwner.taloAccessToken) {
+            if (!ownerAccount.taloAccessToken) {
                 throw new InternalServerErrorException('El Dueño receptor de pagos no ha vinculado su cuenta de Talo.');
             }
-            return this.taloService.createPreference(paymentOwner.taloAccessToken, {
+            return this.taloService.createPreference(ownerAccount.taloAccessToken, {
                 amount: amountToPay,
                 description: `Entrada: ${tier.name} para ${tier.event.title}`,
                 external_reference: externalReference,
@@ -175,34 +176,45 @@ export class PaymentsService {
             });
         }
 
-        // ❌ CORRECCIÓN: LÓGICA DE SPLIT PARA MERCADO PAGO
-        let ownerFee = amountToPay;
-        const receiverList: any[] = [];
-
-        const adminAccount = await this.usersService.findAdminForPayments();
-        if (adminAccount?.mpUserId) {
-            const adminFeePercentage = parseFloat((await this.configurationService.get('adminServiceFeePercentage')) || '0');
-            const adminFee = Math.round(amountToPay * (adminFeePercentage / 100));
-            ownerFee -= adminFee;
-            receiverList.push({ id: adminAccount.mpUserId, amount: adminFee });
+        // --- MERCADO PAGO ---
+        const ownerAccount = await this.usersService.findOwnerForPayments();
+        if (!ownerAccount?.mpUserId) {
+            throw new InternalServerErrorException('La cuenta del dueño para pagos no está configurada.');
         }
 
+        let adminFee = amountToPay;
+        const receiverList: any[] = [];
+        const adminFeePercentage = parseFloat((await this.configurationService.get('adminServiceFeePercentage')) || '0');
+        adminFee = Math.round(amountToPay * (adminFeePercentage / 100));
+
+        let promoterFee = 0;
         const rrppCommissionEnabled = await this.configurationService.get('rrppCommissionEnabled');
         if (promoterUsername && rrppCommissionEnabled === 'true') {
             const promoter = await this.usersService.findOneByUsername(promoterUsername);
             if (promoter?.mpUserId && promoter.rrppCommissionRate) {
-                const promoterFee = Math.round(amountToPay * (promoter.rrppCommissionRate / 100));
-                ownerFee -= promoterFee;
+                promoterFee = Math.round(amountToPay * (promoter.rrppCommissionRate / 100));
+            }
+        }
+        
+        const ownerAmount = amountToPay - adminFee - promoterFee;
+
+        if (paymentAdmin?.mpUserId) {
+            receiverList.push({ id: paymentAdmin.mpUserId, amount: adminFee });
+        }
+        if (promoterUsername && promoterFee > 0) {
+            const promoter = await this.usersService.findOneByUsername(promoterUsername);
+            if (promoter?.mpUserId) {
                 receiverList.push({ id: promoter.mpUserId, amount: promoterFee });
             }
         }
+        if (ownerAccount.mpUserId) {
+            receiverList.push({ id: ownerAccount.mpUserId, amount: ownerAmount });
+        }
 
-        // Establecer el monto final del dueño.
-        receiverList.push({ id: paymentOwner.mpUserId, amount: ownerFee });
-
+        // ❌ CORRECCIÓN: Se pasa el Admin como 'owner' para la preferencia de MP
         return this.mercadoPagoService.createPreference(
             buyer,
-            paymentOwner,
+            paymentAdmin,
             items,
             externalReference,
             backUrls,
@@ -216,14 +228,15 @@ export class PaymentsService {
             `[processApprovedPayment] Iniciando para paymentId: ${paymentId}`,
         );
 
-        const owner = await this.usersService.findOwnerForPayments();
-        if (!owner?.mpAccessToken) {
+        // ❌ CORRECCIÓN: Se busca el admin para obtener el token, ya que es el que gestiona la preferencia.
+        const admin = await this.usersService.findAdminForPayments();
+        if (!admin?.mpAccessToken) {
             throw new InternalServerErrorException(
-                'La cuenta del dueño para recibir pagos no está configurada.',
+                'La cuenta del admin para gestionar pagos no está configurada.',
             );
         }
 
-        const mpClient = new MercadoPagoConfig({ accessToken: owner.mpAccessToken });
+        const mpClient = new MercadoPagoConfig({ accessToken: admin.mpAccessToken });
         const payment = new Payment(mpClient);
         const paymentInfo = await payment.get({ id: paymentId });
 
