@@ -11,6 +11,7 @@ import { CreateOrganizerInvitationDto } from './dto/create-organizer-invitation.
 import { Ticket } from '../tickets/ticket.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { TicketTier, ProductType } from 'src/ticket-tiers/ticket-tier.entity';
 
 @Injectable()
 export class OrganizerService {
@@ -19,6 +20,8 @@ export class OrganizerService {
   constructor(
     @InjectRepository(Ticket)
     private readonly ticketsRepository: Repository<Ticket>,
+    @InjectRepository(TicketTier)
+    private readonly ticketTiersRepository: Repository<TicketTier>,
     private readonly usersService: UsersService,
     private readonly eventsService: EventsService,
     private readonly ticketTiersService: TicketTiersService,
@@ -42,19 +45,30 @@ export class OrganizerService {
     const selectedEvent = await this.eventsService.findOne(eventId);
     if (!selectedEvent) { throw new NotFoundException('El evento especificado no fue encontrado.'); }
 
-    let entryTier;
+    let entryTier: TicketTier;
+
+    // --- LÓGICA VIP DINÁMICA ---
     if (isVipAccess) {
-        const vipTiers = await this.ticketTiersService.findVipTiersForEvent(selectedEvent.id);
-        entryTier = vipTiers.length > 0 ? vipTiers[0] : null;
-        if (!entryTier) {
-            throw new NotFoundException('No se encontró un tipo de entrada VIP para asignar en este evento.');
-        }
+      this.logger.log(`Creando TicketTier VIP dinámico para ${invitedUser.email} (invitado por Organizador)`);
+      const vipInvitationTier = this.ticketTiersRepository.create({
+        event: selectedEvent,
+        name: `Invitación VIP (Org) para ${invitedUser.name || invitedUser.email}`,
+        description: 'Acceso VIP de cortesía. Ingreso preferencial.',
+        price: 0,
+        isFree: true,
+        isVip: true, // ¡La bandera clave!
+        productType: ProductType.TICKET,
+        quantity: (guestCount ?? 0) + 1,
+      });
+      entryTier = await this.ticketTiersRepository.save(vipInvitationTier);
     } else {
-        entryTier = await this.ticketTiersService.findDefaultFreeTierForEvent(selectedEvent.id);
-        if (!entryTier) {
-            throw new NotFoundException('No se encontró un tipo de entrada gratuita para asignar en este evento.');
-        }
+      const defaultTier = await this.ticketTiersService.findDefaultFreeTierForEvent(selectedEvent.id);
+      if (!defaultTier) {
+          throw new NotFoundException('No se encontró un tipo de entrada gratuita para asignar en este evento.');
+      }
+      entryTier = defaultTier;
     }
+    // --- FIN DE LÓGICA VIP DINÁMICA ---
 
     const mainTicket = await this.ticketsService.createTicketInternal(
       invitedUser,
