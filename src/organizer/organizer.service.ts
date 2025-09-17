@@ -1,3 +1,4 @@
+// src/organizer/organizer.service.ts
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { User } from '../users/user.entity';
 import { UsersService } from '../users/users.service';
@@ -17,7 +18,7 @@ export class OrganizerService {
 
   constructor(
     @InjectRepository(Ticket)
-    private readonly ticketsRepository: Repository<Ticket>, // 1. Inyectar el repositorio de Tickets
+    private readonly ticketsRepository: Repository<Ticket>,
     private readonly usersService: UsersService,
     private readonly eventsService: EventsService,
     private readonly ticketTiersService: TicketTiersService,
@@ -28,7 +29,7 @@ export class OrganizerService {
 
   async createInvitation(organizer: User, dto: CreateOrganizerInvitationDto) {
     this.logger.log(`Organizador ${organizer.email} creando invitación para ${dto.email}`);
-    const { email, guestCount, isVipAccess } = dto;
+    const { email, eventId, guestCount, isVipAccess } = dto;
 
     if (typeof guestCount !== 'number') {
         throw new BadRequestException('El número de invitados es requerido.');
@@ -38,16 +39,28 @@ export class OrganizerService {
     if (!fullOrganizer) { throw new NotFoundException('No se encontraron los datos del Organizador.'); }
 
     const invitedUser = await this.usersService.findOrCreateByEmail(email);
-    const upcomingEvent = await this.eventsService.findNextUpcomingEvent();
-    if (!upcomingEvent) { throw new NotFoundException('No hay un evento próximo para la invitación.'); }
+    const selectedEvent = await this.eventsService.findOne(eventId);
+    if (!selectedEvent) { throw new NotFoundException('El evento especificado no fue encontrado.'); }
 
-    const entryTier = await this.ticketTiersService.findDefaultFreeTierForEvent(upcomingEvent.id);
-    if (!entryTier) { throw new NotFoundException('No se encontró un tipo de entrada gratuita para asignar.'); }
+    let entryTier;
+    if (isVipAccess) {
+        const vipTiers = await this.ticketTiersService.findVipTiersForEvent(selectedEvent.id);
+        entryTier = vipTiers.length > 0 ? vipTiers[0] : null;
+        if (!entryTier) {
+            throw new NotFoundException('No se encontró un tipo de entrada VIP para asignar en este evento.');
+        }
+    } else {
+        entryTier = await this.ticketTiersService.findDefaultFreeTierForEvent(selectedEvent.id);
+        if (!entryTier) {
+            throw new NotFoundException('No se encontró un tipo de entrada gratuita para asignar en este evento.');
+        }
+    }
 
     const mainTicket = await this.ticketsService.createTicketInternal(
       invitedUser,
-      { eventId: upcomingEvent.id, ticketTierId: entryTier.id, quantity: (guestCount ?? 0) + 1 },
-      fullOrganizer, 0, null, 'ORGANIZER_INVITATION', isVipAccess ?? false, 'INGRESO PREFERENCIAL'
+      { eventId: selectedEvent.id, ticketTierId: entryTier.id, quantity: (guestCount ?? 0) + 1 },
+      fullOrganizer, 0, null, 'ORGANIZER_INVITATION',
+      'INGRESO PREFERENCIAL'
     );
 
     const finalTicket = await this.ticketsService.findOne(mainTicket.id);
@@ -82,7 +95,7 @@ export class OrganizerService {
                 </div>
                 <div style="padding: 30px;">
                     <h2 style="color: #ffffff; font-size: 24px; margin-top: 0;">Hola ${invitedUser.name || invitedUser.email.split('@')[0]},</h2>
-                    <p style="color: #bbbbbb; font-size: 16px;">Has recibido una invitación de parte de <strong>${fullOrganizer.name}</strong> para el evento <strong>${upcomingEvent.title}</strong>.</p>
+                    <p style="color: #bbbbbb; font-size: 16px;">Has recibido una invitación de parte de <strong>${fullOrganizer.name}</strong> para el evento <strong>${selectedEvent.title}</strong>.</p>
                     ${mainTicketQrHtml}
                     <a href="${actionUrl}" target="_blank" style="display: inline-block; background-color: #D6006D; color: #ffffff; padding: 15px 30px; margin-top: 20px; text-decoration: none; border-radius: 8px; font-weight: bold;">${buttonText}</a>
                 </div>
@@ -99,9 +112,6 @@ export class OrganizerService {
     return { message: `Invitación enviada a ${email}.` };
   }
 
-  /**
-   * NUEVO MÉTODO: Obtiene el historial de invitaciones enviadas por un organizador.
-   */
   async getMySentInvitations(organizerId: string) {
     this.logger.log(`Buscando invitaciones enviadas por el Organizador ID: ${organizerId}`);
     
@@ -110,11 +120,10 @@ export class OrganizerService {
         promoter: { id: organizerId },
         origin: 'ORGANIZER_INVITATION',
       },
-      relations: ['user', 'event'],
+      relations: ['user', 'event', 'tier'],
       order: { createdAt: 'DESC' },
     });
 
-    // Mapeamos los datos a un formato simple para el frontend
     return invitationTickets.map(ticket => ({
       invitedUser: {
         name: ticket.user.name,
@@ -129,7 +138,7 @@ export class OrganizerService {
         isVipAccess: ticket.isVipAccess,
         status: ticket.status,
       },
-      gifts: {} // Los organizadores no envían regalos
+      gifts: {}
     }));
   }
 }

@@ -1,3 +1,4 @@
+// src/tables/tables.service.ts
 import { Injectable, NotFoundException, BadRequestException, Logger, InternalServerErrorException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -106,15 +107,18 @@ export class TablesService {
     if (!table) throw new NotFoundException('La mesa seleccionada no existe o no pertenece a este evento.');
     if (table.status !== TableStatus.AVAILABLE) throw new BadRequestException('La mesa ya no está disponible.');
     
-    const vipTier = await this.ticketTiersService.findVipTierForEvent(eventId);
-    if (!vipTier) throw new NotFoundException('No se ha configurado un producto (TicketTier) de tipo Mesa VIP para este evento.');
+    const vipTiers = await this.ticketTiersService.findVipTiersForEvent(eventId);
+    if (!vipTiers || vipTiers.length === 0) {
+      throw new NotFoundException('No se ha configurado un producto (TicketTier) de tipo Mesa VIP para este evento.');
+    }
+    const vipTier = vipTiers[0];
     
     const clientAsUserObject = { email: clientEmail || `${clientName.replace(/\s+/g, '.')}@manual.sale`, name: clientName } as User;
 
     const ticket = await this.ticketsService.createTicketInternal(
         clientAsUserObject,
         { eventId, ticketTierId: vipTier.id, quantity: guestCount },
-        staffUser, amountPaid, null, 'MANUAL_SALE', true,
+        staffUser, amountPaid, null, 'MANUAL_SALE',
         `Mesa ${table.tableNumber} (${table.category.name})`
     );
 

@@ -1,3 +1,4 @@
+// src/birthday/birthday.service.ts
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { UsersService } from '../users/users.service';
 import { EventsService } from '../events/events.service';
@@ -70,10 +71,6 @@ export class BirthdayService {
       throw new NotFoundException('No hay eventos próximos para asociar el beneficio.');
     }
 
-    // Lógica Refactorizada: Crear un TicketTier dinámico para el cumpleaños.
-    const birthdayTierName = `Beneficio Cumpleaños - ${user.name}`;
-    const birthdayTierDescription = `Ingreso válido hasta las 03:00 hs.`;
-    
     const birthdayTier = this.ticketTiersRepository.create({
         event: upcomingEvent,
         name: `Beneficio Cumpleaños - ${user.name}`,
@@ -93,7 +90,8 @@ export class BirthdayService {
         ticketTierId: savedTier.id,
         quantity: guestLimit + 1,
       },
-      null, 0, null, 'BIRTHDAY', false, savedTier.description
+      null, 0, null, 'BIRTHDAY',
+      savedTier.description
     );
 
     const birthdayRewardId = await this.configurationService.get('birthday_reward_id');
