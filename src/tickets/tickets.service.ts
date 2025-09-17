@@ -1,3 +1,4 @@
+// src/tickets/tickets.service.ts
 import { BadRequestException, Injectable, NotFoundException, InternalServerErrorException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, LessThan, Not, Repository, Between, In, DeleteResult } from 'typeorm';
@@ -40,7 +41,6 @@ export class TicketsService {
     amountPaid: number,
     paymentId: string | null,
     origin: string | null = null,
-    isVipAccess: boolean = false,
     specialInstructions: string | null = null
   ): Promise<Ticket> {
     this.logger.log(`[createTicketInternal] Creando ticket para: ${user.email} | Origen: ${origin}`);
@@ -55,7 +55,6 @@ export class TicketsService {
         throw new BadRequestException('La cantidad de entradas no es válida.');
     }
     
-    // Lógica de stock corregida para invitaciones del dueño
     if (origin !== 'OWNER_INVITATION' && tier.quantity < numericQuantity) {
       throw new BadRequestException(`No quedan suficientes. Disponibles: ${tier.quantity}.`);
     }
@@ -66,10 +65,9 @@ export class TicketsService {
     }
 
     const newTicket = this.ticketsRepository.create({ 
-      user, event, tier, quantity: numericQuantity, promoter, amountPaid, status, paymentId, origin, isVipAccess, specialInstructions,
+      user, event, tier, quantity: numericQuantity, promoter, amountPaid, status, paymentId, origin, specialInstructions,
     });
     
-    // Solo se descuenta stock si no es una invitación del dueño
     if (origin !== 'OWNER_INVITATION') {
       tier.quantity = Number(tier.quantity) - numericQuantity;
       await this.ticketTiersRepository.save(tier);
@@ -87,13 +85,12 @@ export class TicketsService {
     amountPaid: number,
     paymentId: string | null,
     origin: string | null = null,
-    isVipAccess: boolean = false,
     specialInstructions: string | null = null
   ): Promise<Ticket> {
     
-    const savedTicket = await this.createTicketInternal(user, data, promoter, amountPaid, paymentId, origin, isVipAccess, specialInstructions);
+    const savedTicket = await this.createTicketInternal(user, data, promoter, amountPaid, paymentId, origin, specialInstructions);
     const fullTicket = await this.findOne(savedTicket.id);
-    const { event, tier, quantity } = fullTicket;
+    const { event, tier, quantity, isVipAccess } = fullTicket;
     
     const frontendUrl = await this.configurationService.get('FRONTEND_URL') || 'https://sucht.com.ar';
     let actionUrl = `${frontendUrl}/mi-cuenta`;

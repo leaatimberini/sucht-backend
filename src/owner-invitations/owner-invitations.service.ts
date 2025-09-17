@@ -1,4 +1,4 @@
-// backend/src/owner-invitations/owner-invitation.service.ts
+// src/owner-invitations/owner-invitations.service.ts
 
 import {
   Injectable,
@@ -7,7 +7,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { User } from '../users/user.entity';
-import { CreateInvitationDto } from './dto/create-invitation.dto'; // <-- Este DTO debe ser actualizado para incluir eventId
+import { CreateInvitationDto } from './dto/create-invitation.dto';
 import { UsersService } from '../users/users.service';
 import { EventsService } from '../events/events.service';
 import { TicketTiersService } from '../ticket-tiers/ticket-tiers.service';
@@ -43,7 +43,6 @@ export class OwnerInvitationService {
       `Dueño ${owner.email} creando invitación/regalo para ${dto.email}`,
     );
     
-    // --- CAMBIO 1: Desestructuramos eventId desde el DTO ---
     const { email, eventId, guestCount, isVipAccess, giftedProducts } = dto;
 
     const isGiftingEntry = typeof guestCount === 'number';
@@ -65,8 +64,6 @@ export class OwnerInvitationService {
 
     const invitedUser = await this.usersService.findOrCreateByEmail(email);
 
-    // --- CAMBIO 2: Ya no buscamos el "próximo" evento, usamos el ID proporcionado ---
-    // La lógica de `findNextUpcomingEvent` se reemplaza por una búsqueda directa.
     const selectedEvent = await this.eventsService.findOne(eventId);
     if (!selectedEvent) {
       throw new NotFoundException(
@@ -76,19 +73,27 @@ export class OwnerInvitationService {
 
     let mainTicket: Ticket | null = null;
     if (isGiftingEntry) {
-      const entryTier = await this.ticketTiersService.findDefaultFreeTierForEvent(
-        selectedEvent.id, // Usamos el ID del evento seleccionado
-      );
-      if (!entryTier) {
-        throw new NotFoundException(
-          'No se encontró un tipo de entrada gratuita para asignar en este evento.',
-        );
+      // Para las invitaciones VIP, buscamos un tier que esté marcado como VIP.
+      // Si no, buscamos uno gratuito por defecto.
+      let entryTier;
+      if (isVipAccess) {
+        const vipTiers = await this.ticketTiersService.findVipTiersForEvent(selectedEvent.id);
+        // Usamos el primer tier VIP que se encuentre como base para la invitación.
+        entryTier = vipTiers.length > 0 ? vipTiers[0] : null;
+        if (!entryTier) {
+            throw new NotFoundException('No se encontró un tipo de entrada VIP para asignar en este evento.');
+        }
+      } else {
+        entryTier = await this.ticketTiersService.findDefaultFreeTierForEvent(selectedEvent.id);
+        if (!entryTier) {
+            throw new NotFoundException('No se encontró un tipo de entrada gratuita para asignar en este evento.');
+        }
       }
 
       mainTicket = await this.ticketsService.createTicketInternal(
         invitedUser,
         {
-          eventId: selectedEvent.id, // Usamos el ID del evento seleccionado
+          eventId: selectedEvent.id,
           ticketTierId: entryTier.id,
           quantity: (guestCount ?? 0) + 1,
         },
@@ -96,7 +101,7 @@ export class OwnerInvitationService {
         0,
         null,
         'OWNER_INVITATION',
-        isVipAccess ?? false,
+        // FIX: Se elimina el parámetro isVipAccess. La lógica ahora es automática.
         'INGRESO SIN FILA',
       );
     }
@@ -108,7 +113,7 @@ export class OwnerInvitationService {
           const purchase = await this.storeService.createFreePurchase(
             invitedUser,
             product.productId,
-            selectedEvent.id, // Usamos el ID del evento seleccionado
+            selectedEvent.id,
             1,
             'OWNER_GIFT',
           );
@@ -174,7 +179,6 @@ export class OwnerInvitationService {
       `
         : '';
 
-    // --- CAMBIO 3: Usamos el título del evento seleccionado en el email ---
     const emailHtml = `
       <div style="background-color: #121212; color: #ffffff; font-family: Arial, sans-serif; padding: 40px; text-align: center;">
         <div style="max-width: 600px; margin: auto; background-color: #1e1e1e; border-radius: 12px; overflow: hidden; border: 1px solid #333;">
@@ -245,7 +249,7 @@ export class OwnerInvitationService {
           id: ticket.id,
           quantity: ticket.quantity,
           redeemedCount: ticket.redeemedCount,
-          isVipAccess: ticket.isVipAccess,
+          isVipAccess: ticket.isVipAccess, // Esto ahora funcionará gracias a la propiedad virtual
           status: ticket.status,
         },
         gifts: giftsForThisInvitation.reduce(

@@ -1,6 +1,6 @@
 // src/ticket-tiers/dto/create-ticket-tier.dto.ts
 
-import { IsNotEmpty, IsString, IsNumber, Min, IsDateString, IsOptional, IsEnum, IsBoolean, IsInt, MaxLength } from 'class-validator';
+import { IsNotEmpty, IsString, IsNumber, Min, IsDateString, IsOptional, IsEnum, IsBoolean, IsInt, MaxLength, IsUUID } from 'class-validator';
 import { ProductType } from '../ticket-tier.entity';
 
 export class CreateTicketTierDto {
@@ -8,17 +8,13 @@ export class CreateTicketTierDto {
   @IsString()
   name: string;
 
-  @IsOptional()
-  @IsString()
-  description?: string;
-
   @IsNotEmpty()
   @IsNumber()
   @Min(0)
   price: number;
 
   @IsNotEmpty()
-  @IsNumber()
+  @IsInt()
   @Min(1)
   quantity: number;
 
@@ -34,7 +30,37 @@ export class CreateTicketTierDto {
   @IsBoolean()
   isFree: boolean;
 
-  // --- CAMPOS AÑADIDOS AL DTO PARA MESAS VIP ---
+  @IsOptional()
+  @IsBoolean()
+  allowPartialPayment?: boolean;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  partialPaymentPrice?: number;
+  
+  @IsOptional()
+  @IsBoolean()
+  isBirthdayDefault?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isBirthdayVipOffer?: boolean;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  consumptionCredit?: number;
+
+  // --- CAMPOS SINCRONIZADOS Y AÑADIDOS AL DTO ---
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isVip?: boolean;
+
   @IsOptional()
   @IsInt()
   @Min(1)
@@ -49,35 +75,9 @@ export class CreateTicketTierDto {
   @IsString()
   @MaxLength(100)
   location?: string;
-  // --- FIN DE CAMPOS AÑADIDOS ---
 
-  @IsOptional()
-  @IsBoolean()
-  allowPartialPayment?: boolean;
-
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  partialPaymentPrice?: number;
-
-  @IsOptional()
-  @IsBoolean()
-  isBirthdayDefault?: boolean;
-
-  @IsOptional()
-  @IsBoolean()
-  isBirthdayVipOffer?: boolean;
-
-  @IsOptional()
-  @IsBoolean()
-  isVip?: boolean; // Campo añadido para reflejar la entidad
-
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  consumptionCredit?: number;
-
+  @IsUUID()
   @IsNotEmpty()
-  @IsString() // Asumimos que el eventId vendrá en el body
   eventId: string;
+  // --- FIN DE CAMPOS ---
 }

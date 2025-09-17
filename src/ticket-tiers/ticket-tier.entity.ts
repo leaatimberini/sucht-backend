@@ -7,7 +7,7 @@ import {
   ManyToOne,
   CreateDateColumn,
   UpdateDateColumn,
-  JoinColumn, // Importante añadir JoinColumn para ser explícitos
+  JoinColumn,
 } from 'typeorm';
 import { Event } from '../events/event.entity';
 
@@ -23,13 +23,13 @@ export class TicketTier {
   id: string;
 
   @Column()
-  eventId: string; // Es buena práctica tener el ID de la relación explícito
+  eventId: string; // ID explícito para la relación
 
   @ManyToOne(() => Event, (event) => event.ticketTiers, {
     onDelete: 'CASCADE',
-    nullable: false, // Una entrada siempre debe pertenecer a un evento
+    nullable: false,
   })
-  @JoinColumn({ name: 'eventId' }) // Le decimos a TypeORM dónde está la clave foránea
+  @JoinColumn({ name: 'eventId' }) // Define la columna de la clave foránea
   event: Event;
 
   @Column()
@@ -56,16 +56,16 @@ export class TicketTier {
     default: ProductType.TICKET,
   })
   productType: ProductType;
-
+  
   // --- CAMPOS AÑADIDOS PARA GESTIÓN DE MESAS VIP ---
   @Column({ type: 'integer', nullable: true })
-  tableNumber: number | null; // El número que aparece en tu mapa (1, 2, 3...)
+  tableNumber: number | null; // El número que aparece en tu mapa
 
   @Column({ type: 'integer', nullable: true })
   capacity: number | null; // Cantidad de personas que incluye la mesa
 
   @Column({ type: 'varchar', length: 100, nullable: true })
-  location: string | null; // Ej: "Sector VIP", "Cabina", "Mesas Pista"
+  location: string | null; // Ej: "Sector VIP", "Cabina"
   // --- FIN DE CAMPOS AÑADIDOS ---
 
   @Column({ default: false })
@@ -81,7 +81,7 @@ export class TicketTier {
   isBirthdayVipOffer: boolean;
 
   @Column({ default: false })
-  isVip: boolean;
+  isVip: boolean; // Columna para identificar entradas VIP
 
   @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
   consumptionCredit: number | null;

@@ -7,8 +7,6 @@ import {
     UpdateDateColumn,
     ManyToOne,
     AfterLoad,
-    BeforeInsert,
-    BeforeUpdate,
     Relation,
 } from 'typeorm';
 import { User } from '../users/user.entity';
@@ -62,10 +60,6 @@ export class Ticket {
     @Column({ type: 'varchar', nullable: true, unique: true })
     paymentId: string | null;
 
-    // ❌ CORRECCIÓN: Eliminamos la columna isVipAccess
-    // @Column({ type: 'boolean', default: false })
-    // isVipAccess: boolean;
-
     @Column({ type: 'varchar', nullable: true })
     specialInstructions: string | null;
 
@@ -84,11 +78,16 @@ export class Ticket {
     @UpdateDateColumn({ type: 'timestamp' })
     updatedAt: Date;
 
-    // ❌ CORRECCIÓN: Añadimos una propiedad virtual para mantener la funcionalidad
-    // Esto se ejecutará cada vez que se cargue un ticket de la base de datos
+    // --- VIP ACCESS LOGIC ---
+    // Esta propiedad no existe en la base de datos, es un campo "virtual".
     isVipAccess: boolean;
+    
+    // Este decorador se ejecuta automáticamente cada vez que se carga un Ticket desde la BD.
+    // Su función es leer si el "tier" asociado es VIP y asignar el valor a la
+    // propiedad virtual isVipAccess.
     @AfterLoad()
     setVipAccess() {
         this.isVipAccess = this.tier?.isVip ?? false;
     }
+    // --- FIN DE VIP ACCESS LOGIC ---
 }

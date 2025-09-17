@@ -1,7 +1,8 @@
 // src/ticket-tiers/ticket-tiers.service.ts
+
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource, Not } from 'typeorm';
+import { Repository, DataSource, Not, QueryRunner } from 'typeorm';
 import { TicketTier, ProductType } from './ticket-tier.entity';
 import { EventsService } from 'src/events/events.service';
 import { CreateTicketTierDto } from './dto/create-ticket-tier.dto';
@@ -16,11 +17,11 @@ export class TicketTiersService {
     private dataSource: DataSource,
   ) {}
 
-  async create(eventId: string, createTicketTierDto: CreateTicketTierDto): Promise<TicketTier> {
+  // REFACTOR: La firma del método ahora solo acepta el DTO.
+  async create(createTicketTierDto: CreateTicketTierDto): Promise<TicketTier> {
+    const { eventId } = createTicketTierDto;
     const event = await this.eventsService.findOne(eventId);
-    if (!event) {
-      throw new NotFoundException(`Event with ID "${eventId}" not found`);
-    }
+    // La validación de Not Found ya la hace el eventsService, así que no es necesario duplicarla.
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -28,18 +29,10 @@ export class TicketTiersService {
 
     try {
       if (createTicketTierDto.isBirthdayDefault) {
-        await queryRunner.manager.update(
-          TicketTier,
-          { event: { id: eventId } },
-          { isBirthdayDefault: false },
-        );
+        await this._ensureUniqueFlag(queryRunner, eventId, 'isBirthdayDefault');
       }
       if (createTicketTierDto.isBirthdayVipOffer) {
-        await queryRunner.manager.update(
-          TicketTier,
-          { event: { id: eventId } },
-          { isBirthdayVipOffer: false },
-        );
+        await this._ensureUniqueFlag(queryRunner, eventId, 'isBirthdayVipOffer');
       }
 
       const ticketTier = queryRunner.manager.create(TicketTier, {
@@ -61,7 +54,7 @@ export class TicketTiersService {
   async findByEvent(eventId: string): Promise<TicketTier[]> {
     return this.ticketTiersRepository.find({
       where: { event: { id: eventId } },
-      order: { createdAt: 'ASC' },
+      order: { price: 'ASC', createdAt: 'ASC' },
     });
   }
 
@@ -84,21 +77,13 @@ export class TicketTiersService {
       const eventId = tierToUpdate.event.id;
 
       if (updateTicketTierDto.isBirthdayDefault) {
-        await queryRunner.manager.update(
-            TicketTier,
-            { event: { id: eventId }, id: Not(tierId) },
-            { isBirthdayDefault: false }
-        );
+        await this._ensureUniqueFlag(queryRunner, eventId, 'isBirthdayDefault', tierId);
       }
-
       if (updateTicketTierDto.isBirthdayVipOffer) {
-        await queryRunner.manager.update(
-            TicketTier,
-            { event: { id: eventId }, id: Not(tierId) },
-            { isBirthdayVipOffer: false }
-        );
+        await this._ensureUniqueFlag(queryRunner, eventId, 'isBirthdayVipOffer', tierId);
       }
 
+      // Usamos preload para cargar la entidad y aplicar los cambios del DTO
       const updatedTier = await queryRunner.manager.preload(TicketTier, {
         id: tierId,
         ...updateTicketTierDto,
@@ -146,14 +131,17 @@ export class TicketTiersService {
     });
   }
 
-  // **NUEVO MÉTODO:** Encuentra un ticket tier de tipo MESA VIP para un evento.
-  async findVipTierForEvent(eventId: string): Promise<TicketTier | null> {
-      return this.ticketTiersRepository.findOne({
-          where: {
-              event: { id: eventId },
-              productType: ProductType.VIP_TABLE,
-          },
-      });
+  // FIX: El método ahora devuelve un array de mesas y tiene un nombre en plural.
+  async findVipTiersForEvent(eventId: string): Promise<TicketTier[]> {
+    return this.ticketTiersRepository.find({
+      where: {
+        event: { id: eventId },
+        productType: ProductType.VIP_TABLE,
+      },
+      order: {
+        tableNumber: 'ASC', // Ordenamos por número de mesa
+      }
+    });
   }
 
   async findGiftableProducts(): Promise<TicketTier[]> {
@@ -174,20 +162,30 @@ export class TicketTiersService {
     });
   }
 
-  /**
-   * NUEVO MÉTODO DE APOYO: Busca un tier gratuito genérico para un evento.
-   * Usado por el OwnerInvitationService para encontrar una entrada base para las invitaciones.
-   */
   async findDefaultFreeTierForEvent(eventId: string): Promise<TicketTier | null> {
     return this.ticketTiersRepository.findOne({
       where: {
         event: { id: eventId },
         isFree: true,
-        productType: ProductType.TICKET, // Nos aseguramos de que sea una entrada, no un voucher
+        productType: ProductType.TICKET,
       },
       order: {
-        createdAt: 'ASC', // Tomamos el primero que se haya creado
+        createdAt: 'ASC',
       }
     });
+  }
+  
+  // REFACTOR: Nuevo método privado para no repetir la lógica de los flags de cumpleaños.
+  private async _ensureUniqueFlag(queryRunner: QueryRunner, eventId: string, flag: 'isBirthdayDefault' | 'isBirthdayVipOffer', excludeTierId?: string): Promise<void> {
+    const conditions: any = { event: { id: eventId } };
+    if (excludeTierId) {
+      conditions.id = Not(excludeTierId);
+    }
+
+    await queryRunner.manager.update(
+      TicketTier,
+      conditions,
+      { [flag]: false },
+    );
   }
 }
