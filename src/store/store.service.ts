@@ -1,3 +1,5 @@
+// src/store/store.service.ts
+
 import { Injectable, NotFoundException, BadRequestException, InternalServerErrorException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository, DataSource, Not, IsNull } from 'typeorm';
@@ -26,6 +28,7 @@ interface PreferenceItem {
 @Injectable()
 export class StoreService {
   private readonly logger = new Logger(StoreService.name);
+  private mpClient: MercadoPagoConfig;
 
   constructor(
     @InjectRepository(Product)
@@ -37,7 +40,14 @@ export class StoreService {
     private pointTransactionsService: PointTransactionsService,
     private dataSource: DataSource,
     private eventsService: EventsService,
-  ) {}
+  ) {
+    const accessToken = this.configService.get<string>('MERCADO_PAGO_ACCESS_TOKEN');
+    if (!accessToken) {
+      this.logger.error('[Constructor] MERCADO_PAGO_ACCESS_TOKEN no está configurado en .env para el StoreService.');
+      throw new InternalServerErrorException('La integración con Mercado Pago no está configurada en la tienda.');
+    }
+    this.mpClient = new MercadoPagoConfig({ accessToken });
+  }
 
   // --- Gestión de Productos (Admin) ---
 
@@ -196,18 +206,16 @@ export class StoreService {
         currency_id: 'ARS',
       });
     }
-
-    const owner = await this.usersService.findOwnerForPayments();
-    if (!owner || !owner.mpAccessToken) {
-      throw new InternalServerErrorException("La cuenta del dueño no tiene un Access Token de MP configurado.");
-    }
-
-    const mpClient = new MercadoPagoConfig({ accessToken: owner.mpAccessToken });
-    const preferenceClient = new Preference(mpClient);
+    
+    const preferenceClient = new Preference(this.mpClient);
 
     const preference = await preferenceClient.create({
       body: {
         items: preferenceItems,
+        payer: {
+          email: buyer.email,
+          name: buyer.name || undefined, // ✅ CORREGIDO: Convierte null a undefined
+        },
         back_urls: {
           success: `${this.configService.get('FRONTEND_URL')}/payment/success`,
           failure: `${this.configService.get('FRONTEND_URL')}/payment/failure`,
