@@ -1,5 +1,4 @@
 // src/ticket-tiers/ticket-tiers.service.ts
-
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, Not, QueryRunner } from 'typeorm';
@@ -17,11 +16,9 @@ export class TicketTiersService {
     private dataSource: DataSource,
   ) {}
 
-  // REFACTOR: La firma del método ahora solo acepta el DTO.
   async create(createTicketTierDto: CreateTicketTierDto): Promise<TicketTier> {
     const { eventId } = createTicketTierDto;
     const event = await this.eventsService.findOne(eventId);
-    // La validación de Not Found ya la hace el eventsService, así que no es necesario duplicarla.
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -53,7 +50,10 @@ export class TicketTiersService {
 
   async findByEvent(eventId: string): Promise<TicketTier[]> {
     return this.ticketTiersRepository.find({
-      where: { event: { id: eventId } },
+      where: { 
+        event: { id: eventId },
+        isPubliclyListed: true, // ¡FILTRO IMPORTANTE!
+      },
       order: { price: 'ASC', createdAt: 'ASC' },
     });
   }
@@ -83,7 +83,6 @@ export class TicketTiersService {
         await this._ensureUniqueFlag(queryRunner, eventId, 'isBirthdayVipOffer', tierId);
       }
 
-      // Usamos preload para cargar la entidad y aplicar los cambios del DTO
       const updatedTier = await queryRunner.manager.preload(TicketTier, {
         id: tierId,
         ...updateTicketTierDto,
@@ -131,7 +130,6 @@ export class TicketTiersService {
     });
   }
 
-  // FIX: El método ahora devuelve un array de mesas y tiene un nombre en plural.
   async findVipTiersForEvent(eventId: string): Promise<TicketTier[]> {
     return this.ticketTiersRepository.find({
       where: {
@@ -139,7 +137,7 @@ export class TicketTiersService {
         productType: ProductType.VIP_TABLE,
       },
       order: {
-        tableNumber: 'ASC', // Ordenamos por número de mesa
+        tableNumber: 'ASC',
       }
     });
   }
@@ -168,6 +166,7 @@ export class TicketTiersService {
         event: { id: eventId },
         isFree: true,
         productType: ProductType.TICKET,
+        isPubliclyListed: true, // Buscamos un tier público gratuito como base
       },
       order: {
         createdAt: 'ASC',
@@ -175,7 +174,6 @@ export class TicketTiersService {
     });
   }
   
-  // REFACTOR: Nuevo método privado para no repetir la lógica de los flags de cumpleaños.
   private async _ensureUniqueFlag(queryRunner: QueryRunner, eventId: string, flag: 'isBirthdayDefault' | 'isBirthdayVipOffer', excludeTierId?: string): Promise<void> {
     const conditions: any = { event: { id: eventId } };
     if (excludeTierId) {

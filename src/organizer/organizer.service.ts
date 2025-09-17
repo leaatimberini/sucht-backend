@@ -59,6 +59,7 @@ export class OrganizerService {
         isVip: true, // ¡La bandera clave!
         productType: ProductType.TICKET,
         quantity: (guestCount ?? 0) + 1,
+        isPubliclyListed: false, // ¡IMPORTANTE! Para que no aparezca en la lista pública
       });
       entryTier = await this.ticketTiersRepository.save(vipInvitationTier);
     } else {

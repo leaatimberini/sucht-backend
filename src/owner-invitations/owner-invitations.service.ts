@@ -87,9 +87,10 @@ import {
             description: 'Acceso VIP de cortesía. Ingreso preferencial.',
             price: 0,
             isFree: true,
-            isVip: true, // ¡Esta es la bandera clave!
+            isVip: true, // La bandera clave para que el ticket sea VIP
             productType: ProductType.TICKET,
             quantity: (guestCount ?? 0) + 1, // Cantidad exacta para este ticket
+            isPubliclyListed: false, // ¡IMPORTANTE! Para que no aparezca en la lista pública
           });
           entryTier = await this.ticketTiersRepository.save(vipInvitationTier);
         } else {

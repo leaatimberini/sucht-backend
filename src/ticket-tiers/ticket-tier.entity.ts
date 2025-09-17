@@ -19,17 +19,18 @@ export enum ProductType {
 
 @Entity('ticket_tiers')
 export class TicketTier {
+  // ... (todas las demás columnas como id, eventId, name, price, etc.)
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
   @Column()
-  eventId: string; // ID explícito para la relación
+  eventId: string;
 
   @ManyToOne(() => Event, (event) => event.ticketTiers, {
     onDelete: 'CASCADE',
     nullable: false,
   })
-  @JoinColumn({ name: 'eventId' }) // Define la columna de la clave foránea
+  @JoinColumn({ name: 'eventId' })
   event: Event;
 
   @Column()
@@ -56,17 +57,15 @@ export class TicketTier {
     default: ProductType.TICKET,
   })
   productType: ProductType;
-  
-  // --- CAMPOS AÑADIDOS PARA GESTIÓN DE MESAS VIP ---
-  @Column({ type: 'integer', nullable: true })
-  tableNumber: number | null; // El número que aparece en tu mapa
 
   @Column({ type: 'integer', nullable: true })
-  capacity: number | null; // Cantidad de personas que incluye la mesa
+  tableNumber: number | null;
+
+  @Column({ type: 'integer', nullable: true })
+  capacity: number | null;
 
   @Column({ type: 'varchar', length: 100, nullable: true })
-  location: string | null; // Ej: "Sector VIP", "Cabina"
-  // --- FIN DE CAMPOS AÑADIDOS ---
+  location: string | null;
 
   @Column({ default: false })
   allowPartialPayment: boolean;
@@ -81,10 +80,15 @@ export class TicketTier {
   isBirthdayVipOffer: boolean;
 
   @Column({ default: false })
-  isVip: boolean; // Columna para identificar entradas VIP
+  isVip: boolean;
 
   @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
   consumptionCredit: number | null;
+
+  // --- NUEVA COLUMNA AÑADIDA ---
+  @Column({ type: 'boolean', default: true })
+  isPubliclyListed: boolean;
+  // --- FIN DE NUEVA COLUMNA ---
 
   @CreateDateColumn({ type: 'timestamp' })
   createdAt: Date;
