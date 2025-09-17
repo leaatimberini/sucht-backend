@@ -22,7 +22,12 @@
     "typeorm": "ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js -d ./src/data-source.ts",
     "migration:generate": "npm run typeorm -- migration:generate ./src/database/migrations/%npm_config_name%",
     "migration:run": "npm run typeorm -- migration:run",
-    "migration:revert": "npm run typeorm -- migration:revert"
+    "migration:revert": "npm run typeorm -- migration:revert",
+
+    "// --- NUEVOS SCRIPTS PARA PRODUCCIÓN ---": "",
+    "typeorm:prod": "node -r tsconfig-paths/register ./node_modules/typeorm/cli.js -d ./dist/data-source.js",
+    "migration:run:prod": "npm run typeorm:prod -- migration:run"
+
   },
   "dependencies": {
     "@date-fns/tz": "^1.4.1",
