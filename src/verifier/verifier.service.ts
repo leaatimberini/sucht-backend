@@ -1,3 +1,4 @@
+// src/verifier/verifier.service.ts
 import { Injectable, NotFoundException, ForbiddenException, Logger, BadRequestException } from '@nestjs/common';
 import { TicketsService } from '../tickets/tickets.service';
 import { StoreService } from '../store/store.service';
