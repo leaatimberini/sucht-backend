@@ -1,11 +1,16 @@
 // src/ticket-tiers/dto/create-ticket-tier.dto.ts
-import { IsNotEmpty, IsString, IsNumber, Min, IsDateString, IsOptional, IsEnum, IsBoolean } from 'class-validator';
+
+import { IsNotEmpty, IsString, IsNumber, Min, IsDateString, IsOptional, IsEnum, IsBoolean, IsInt, MaxLength } from 'class-validator';
 import { ProductType } from '../ticket-tier.entity';
 
 export class CreateTicketTierDto {
   @IsNotEmpty()
   @IsString()
   name: string;
+
+  @IsOptional()
+  @IsString()
+  description?: string;
 
   @IsNotEmpty()
   @IsNumber()
@@ -29,6 +34,23 @@ export class CreateTicketTierDto {
   @IsBoolean()
   isFree: boolean;
 
+  // --- CAMPOS AÑADIDOS AL DTO PARA MESAS VIP ---
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  tableNumber?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  capacity?: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  location?: string;
+  // --- FIN DE CAMPOS AÑADIDOS ---
+
   @IsOptional()
   @IsBoolean()
   allowPartialPayment?: boolean;
@@ -37,8 +59,6 @@ export class CreateTicketTierDto {
   @IsNumber()
   @Min(0)
   partialPaymentPrice?: number;
-
-  // --- NUEVOS CAMPOS AÑADIDOS AL DTO ---
 
   @IsOptional()
   @IsBoolean()
@@ -49,7 +69,15 @@ export class CreateTicketTierDto {
   isBirthdayVipOffer?: boolean;
 
   @IsOptional()
+  @IsBoolean()
+  isVip?: boolean; // Campo añadido para reflejar la entidad
+
+  @IsOptional()
   @IsNumber()
   @Min(0)
   consumptionCredit?: number;
+
+  @IsNotEmpty()
+  @IsString() // Asumimos que el eventId vendrá en el body
+  eventId: string;
 }
