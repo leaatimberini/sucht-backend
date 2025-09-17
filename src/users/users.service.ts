@@ -9,13 +9,12 @@ import {
     UnauthorizedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, ArrayContains, MoreThan } from 'typeorm';
+import { Repository, ArrayContains, MoreThan, Between } from 'typeorm';
 import { User, UserRole } from './user.entity';
 import { RegisterAuthDto } from 'src/auth/dto/register-auth.dto';
 import { randomBytes } from 'crypto';
 import { InviteStaffDto } from './dto/invite-staff.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
-import { ConfigurationService } from 'src/configuration/configuration.service';
 import { NotificationsService } from 'src/notifications/notifications.service';
 import { startOfWeek, endOfWeek, isWithinInterval } from 'date-fns';
 import { CompleteInvitationDto } from './dto/complete-invitation.dto';
@@ -41,55 +40,25 @@ export class UsersService {
         private readonly notificationsService: NotificationsService,
     ) {}
     
-    // ❌ CORRECCIÓN: Agregar un método para hashear la contraseña
     private async hashPassword(password: string): Promise<string> {
-        return await bcrypt.hash(password, 10);
+        return bcrypt.hash(password, 10);
     }
 
     private async calculateLoyaltyTier(userPoints: number) {
-        const silverMin = parseInt(
-            (await this.configService.get('loyalty_tier_silver_points')) || '1000',
-            10,
-        );
-        const goldMin = parseInt(
-            (await this.configService.get('loyalty_tier_gold_points')) || '5000',
-            10,
-        );
-        const platinoMin = parseInt(
-            (await this.configService.get('loyalty_tier_platino_points')) || '15000',
-            10,
-        );
-
-        const loyaltyTiers = [
-            { level: 'Bronce', minPoints: 0 },
-            { level: 'Plata', minPoints: silverMin },
-            { level: 'Oro', minPoints: goldMin },
-            { level: 'Platino', minPoints: platinoMin },
-        ];
-
-        const sortedTiers = [...loyaltyTiers].sort(
-            (a, b) => b.minPoints - a.minPoints,
-        );
-        const currentTier =
-            sortedTiers.find((tier) => userPoints >= tier.minPoints) ||
-            loyaltyTiers[0];
-        const nextTierIndex =
-            loyaltyTiers.findIndex((tier) => tier.level === currentTier.level) + 1;
+        const silverMin = parseInt(this.configService.get<string>('LOYALTY_TIER_SILVER_POINTS', '1000'), 10);
+        const goldMin = parseInt(this.configService.get<string>('LOYALTY_TIER_GOLD_POINTS', '5000'), 10);
+        const platinoMin = parseInt(this.configService.get<string>('LOYALTY_TIER_PLATINO_POINTS', '15000'), 10);
+        const loyaltyTiers = [ { level: 'Bronce', minPoints: 0 }, { level: 'Plata', minPoints: silverMin }, { level: 'Oro', minPoints: goldMin }, { level: 'Platino', minPoints: platinoMin }, ];
+        const sortedTiers = [...loyaltyTiers].sort((a, b) => b.minPoints - a.minPoints,);
+        const currentTier = sortedTiers.find((tier) => userPoints >= tier.minPoints) || loyaltyTiers[0];
+        const nextTierIndex = loyaltyTiers.findIndex((tier) => tier.level === currentTier.level) + 1;
         const nextTier = loyaltyTiers[nextTierIndex];
-
         let progress = 0;
         if (nextTier) {
             const pointsInCurrentTier = userPoints - currentTier.minPoints;
-            const pointsNeededForNext =
-                nextTier.minPoints - currentTier.minPoints;
-            progress = Math.min(
-                100,
-                (pointsInCurrentTier / pointsNeededForNext) * 100,
-            );
-        } else {
-            progress = 100;
-        }
-
+            const pointsNeededForNext = nextTier.minPoints - currentTier.minPoints;
+            progress = Math.min(100, (pointsInCurrentTier / pointsNeededForNext) * 100,);
+        } else { progress = 100; }
         return {
             currentLevel: currentTier.level,
             nextLevel: nextTier ? nextTier.level : null,
@@ -103,20 +72,14 @@ export class UsersService {
         const now = new Date();
         const birthdayThisYear = new Date(dateOfBirth);
         birthdayThisYear.setFullYear(now.getFullYear());
-        const startOfBirthdayWeek = startOfWeek(birthdayThisYear, {
-            weekStartsOn: 0,
-        });
+        const startOfBirthdayWeek = startOfWeek(birthdayThisYear, { weekStartsOn: 0, });
         const endOfBirthdayWeek = endOfWeek(birthdayThisYear, { weekStartsOn: 0 });
-        return isWithinInterval(now, {
-            start: startOfBirthdayWeek,
-            end: endOfBirthdayWeek,
-        });
+        return isWithinInterval(now, { start: startOfBirthdayWeek, end: endOfBirthdayWeek, });
     }
 
     async getProfile(userId: string) {
         const user = await this.findOneById(userId);
-        const isPushSubscribed =
-            await this.notificationsService.isUserSubscribed(userId);
+        const isPushSubscribed = await this.notificationsService.isUserSubscribed(userId);
         const loyaltyInfo = await this.calculateLoyaltyTier(user.points);
         const { password, invitationToken, mpAccessToken, ...profileData } = user;
         return {
@@ -140,7 +103,7 @@ export class UsersService {
         return this.usersRepository
             .createQueryBuilder('user')
             .where('user.email = :email', { email: email.toLowerCase() })
-            .addSelect(['user.password', 'user.invitationToken'])
+            .addSelect(['user.password', 'user.invitationToken', 'user.passwordResetToken', 'user.passwordResetExpires'])
             .getOne();
     }
 
@@ -156,17 +119,15 @@ export class UsersService {
             throw new ConflictException('Email already registered');
         }
         
-        // ❌ CORRECCIÓN: Hashing the password before creating the user
-        const hashedPassword = await this.hashPassword(password);
-        
         const newUser = this.usersRepository.create({
             email: lowerCaseEmail,
             name,
-            password: hashedPassword,
+            password,
             dateOfBirth: new Date(dateOfBirth),
             roles: [UserRole.CLIENT],
         });
         try {
+            // El hook @BeforeInsert en la entidad se encarga de hashear la contraseña aquí
             return await this.usersRepository.save(newUser);
         } catch {
             throw new InternalServerErrorException(
@@ -199,7 +160,9 @@ export class UsersService {
                 throw new ConflictException('El nombre de usuario ya está en uso.');
             }
         }
-
+        
+        // FIX: Se utiliza directamente el DTO, que no contiene campos sensibles.
+        // Esto corrige el error de TypeScript y es seguro.
         Object.assign(userToUpdate, updateProfileDto);
         return this.usersRepository.save(userToUpdate);
     }
@@ -207,8 +170,7 @@ export class UsersService {
     async changePassword(userId: string, changePasswordDto: ChangePasswordDto): Promise<void> {
         const { currentPassword, newPassword } = changePasswordDto;
         
-        const user = await this.findOneById(userId);
-        const userWithPassword = await this.findOneByEmail(user.email);
+        const userWithPassword = await this.findOneByEmail((await this.findOneById(userId)).email);
 
         if (!userWithPassword?.password) {
             throw new BadRequestException('No se pudo verificar la contraseña actual. Es posible que hayas sido invitado y necesites establecer una contraseña primero.');
@@ -219,9 +181,8 @@ export class UsersService {
             throw new UnauthorizedException('La contraseña actual es incorrecta.');
         }
         
-        // ❌ CORRECCIÓN: Hashing the new password before saving
-        user.password = await this.hashPassword(newPassword);
-        await this.usersRepository.save(user);
+        userWithPassword.password = await this.hashPassword(newPassword);
+        await this.usersRepository.save(userWithPassword);
     }
 
     async findOrCreateByEmail(email: string): Promise<User> {
@@ -229,9 +190,6 @@ export class UsersService {
         let user = await this.findOneByEmail(lowerCaseEmail);
 
         if (user) {
-            if (user.invitationToken) {
-                return user;
-            }
             return user;
         }
 
@@ -267,10 +225,18 @@ export class UsersService {
 
         user.name = name;
         user.dateOfBirth = new Date(dateOfBirth);
-        // ❌ CORRECCIÓN: Hashing the password before saving
         user.password = await this.hashPassword(password);
         user.invitationToken = null;
 
+        return this.usersRepository.save(user);
+    }
+
+    // --- NUEVO MÉTODO SEGURO PARA EL FLUJO DE "OLVIDÉ MI CONTRASEÑA" ---
+    async resetUserPassword(userId: string, newPassword: string): Promise<User> {
+        const user = await this.findOneById(userId);
+        user.password = await this.hashPassword(newPassword);
+        user.passwordResetToken = null;
+        user.passwordResetExpires = null;
         return this.usersRepository.save(user);
     }
 
@@ -362,7 +328,7 @@ export class UsersService {
         serviceFee: number;
         accessToken: string | null;
     }> {
-        const serviceFeeStr = await this.configService.get('adminServiceFee');
+        const serviceFeeStr = this.configService.get<string>('ADMIN_SERVICE_FEE');
         const adminUser = await this.findAdminForPayments();
         return {
             serviceFee: serviceFeeStr ? parseFloat(serviceFeeStr) : 0,
@@ -372,9 +338,7 @@ export class UsersService {
 
     async findAdminForPayments(): Promise<User | null> {
         const adminEmail = process.env.MP_ADMIN_EMAIL;
-        if (!adminEmail) {
-            throw new InternalServerErrorException('El email del admin para comisiones no está configurado.');
-        }
+        if (!adminEmail) { throw new InternalServerErrorException('El email del admin para comisiones no está configurado.');}
         return this.usersRepository
             .createQueryBuilder('user')
             .addSelect('user.mpAccessToken')
@@ -384,9 +348,7 @@ export class UsersService {
 
     async findOwnerForPayments(): Promise<User | null> {
         const ownerEmail = process.env.MP_OWNER_EMAIL;
-        if (!ownerEmail) {
-            throw new InternalServerErrorException('El email del dueño para pagos no está configurado.');
-        }
+        if (!ownerEmail) { throw new InternalServerErrorException('El email del dueño para pagos no está configurado.');}
         return this.usersRepository
             .createQueryBuilder('user')
             .addSelect('user.mpAccessToken')
@@ -443,9 +405,7 @@ export class UsersService {
         accessToken: string | null,
         mpUserId: string | number | null,
     ): Promise<void> {
-        if (!userId) {
-            throw new NotFoundException('Se requiere un ID de usuario.');
-        }
+        if (!userId) { throw new NotFoundException('Se requiere un ID de usuario.');}
         const updatePayload = {
             mpAccessToken: accessToken,
             mpUserId: mpUserId ? Number(mpUserId) : null,
@@ -458,9 +418,7 @@ export class UsersService {
         refreshToken: string | null,
         taloUserId: string | null,
     ): Promise<void> {
-        if (!userId) {
-            throw new NotFoundException('Se requiere un ID de usuario.');
-        }
+        if (!userId) { throw new NotFoundException('Se requiere un ID de usuario.');}
         const updatePayload = {
             taloAccessToken: accessToken,
             taloRefreshToken: refreshToken,
@@ -470,7 +428,6 @@ export class UsersService {
     }
 
 }
-
 
 const formatDateToInput = (date?: Date | string | null): string => {
     if (!date) return '';
