@@ -1,6 +1,6 @@
 // src/owner-invitations/owner-invitations.module.ts
 
-import { Module, forwardRef } from '@nestjs/common'; // 1. Importar forwardRef
+import { Module, forwardRef } from '@nestjs/common';
 import { OwnerInvitationService } from './owner-invitations.service';
 import { OwnerInvitationsController } from './owner-invitations.controller';
 import { UsersModule } from '../users/users.module';
@@ -13,16 +13,16 @@ import { StoreModule } from '../store/store.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Ticket } from '../tickets/ticket.entity';
 import { ProductPurchase } from '../store/product-purchase.entity';
+import { TicketTier } from 'src/ticket-tiers/ticket-tier.entity'; // 1. Importar TicketTier
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Ticket, ProductPurchase]),
+    // 2. Añadir TicketTier a la lista de entidades que este módulo puede manejar.
+    TypeOrmModule.forFeature([Ticket, ProductPurchase, TicketTier]),
 
-    // 2. Aplicamos forwardRef a los módulos que son parte del ciclo
     forwardRef(() => UsersModule),
     forwardRef(() => TicketsModule),
 
-    // El resto de módulos no parecen ser parte del ciclo
     EventsModule,
     TicketTiersModule,
     StoreModule,
