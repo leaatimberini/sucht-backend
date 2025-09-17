@@ -3,11 +3,11 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Event } from 'src/events/event.entity';
 import { Ticket, TicketStatus } from 'src/tickets/ticket.entity';
 import { User, UserRole } from 'src/users/user.entity';
-import { Between, In, LessThan, Repository, ArrayContains } from 'typeorm';
+import { Between, In, LessThan, Repository } from 'typeorm';
 import { DashboardQueryDto } from './dto/dashboard-query.dto';
 import { TicketsService } from 'src/tickets/tickets.service';
 import { PaginationQueryDto } from 'src/common/dto/pagination-query.dto';
-import { TicketTier } from 'src/ticket-tiers/ticket-tier.entity';
+import { ProductType, TicketTier } from 'src/ticket-tiers/ticket-tier.entity';
 
 @Injectable()
 export class DashboardService {
@@ -142,41 +142,61 @@ export class DashboardService {
         };
     }
 
+    // --- ESTE ES EL MÉTODO ACTUALIZADO ---
     async getEventPerformance(queryDto: DashboardQueryDto) {
-        const { eventId, startDate, endDate } = queryDto;
-
-        const query = this.eventsRepository.createQueryBuilder('event')
-            .leftJoin('event.tickets', 'ticket')
-            .leftJoin('ticket.tier', 'tier')
-            .select([
-                'event.id AS id',
-                'event.title AS title',
-                'event.startDate AS startDate',
-                'COALESCE(SUM(CASE WHEN "tier"."isVip" = false THEN "ticket"."quantity" ELSE 0 END), 0) AS "ticketsGenerated"',
-                'COALESCE(SUM(CASE WHEN "tier"."isVip" = false THEN "ticket"."redeemedCount" ELSE 0 END), 0) AS "peopleAdmitted"',
-                'COALESCE(SUM(CASE WHEN "tier"."isVip" = true THEN "ticket"."quantity" ELSE 0 END), 0) AS "vipTicketsGenerated"',
-                'COALESCE(SUM(CASE WHEN "tier"."isVip" = true THEN "ticket"."redeemedCount" ELSE 0 END), 0) AS "vipPeopleAdmitted"',
-            ]);
-
-        if (eventId) {
-            query.andWhere("event.id = :eventId", { eventId });
-        }
-        if (startDate && endDate) {
-            query.andWhere("event.startDate BETWEEN :startDate AND :endDate", { startDate, endDate });
+        const { eventId } = queryDto;
+        
+        if (!eventId) {
+            throw new InternalServerErrorException('Se requiere un ID de evento para calcular el rendimiento.');
         }
 
-        query.groupBy('event.id, event.title, event.startDate');
-        query.orderBy('event.startDate', 'DESC');
+        const tickets = await this.ticketsRepository.find({
+            where: { event: { id: eventId } },
+            relations: ['tier'],
+        });
 
-        const results = await query.getRawMany();
+        let generatedGeneral = 0;
+        let generatedVip = 0;
+        let generatedTables = 0;
+        
+        let redeemedGeneral = 0;
+        let redeemedVip = 0;
+        let redeemedTables = 0;
 
-        return results.map(r => ({
-            ...r,
-            ticketsGenerated: parseInt(r.ticketsGenerated, 10),
-            peopleAdmitted: parseInt(r.peopleAdmitted, 10),
-            vipTicketsGenerated: parseInt(r.vipTicketsGenerated, 10),
-            vipPeopleAdmitted: parseInt(r.vipPeopleAdmitted, 10),
-        }));
+        for (const ticket of tickets) {
+            if (ticket.tier.productType === ProductType.VIP_TABLE) {
+                generatedTables += ticket.quantity;
+                redeemedTables += ticket.redeemedCount;
+            } 
+            else if (ticket.tier.isVip) {
+                generatedVip += ticket.quantity;
+                redeemedVip += ticket.redeemedCount;
+            } 
+            else {
+                generatedGeneral += ticket.quantity;
+                redeemedGeneral += ticket.redeemedCount;
+            }
+        }
+        
+        const totalGenerated = generatedGeneral + generatedVip + generatedTables;
+        const totalRedeemed = redeemedGeneral + redeemedVip + redeemedTables;
+        const attendanceRate = totalGenerated > 0 ? (totalRedeemed / totalGenerated) * 100 : 0;
+
+        return {
+            generatedTickets: {
+                general: generatedGeneral,
+                vip: generatedVip,
+                tables: generatedTables,
+                total: totalGenerated,
+            },
+            realAdmissions: {
+                general: redeemedGeneral,
+                vip: redeemedVip,
+                tables: redeemedTables,
+                total: totalRedeemed,
+            },
+            attendanceRate: attendanceRate.toFixed(2),
+        };
     }
 
     async getNoShows(): Promise<Ticket[]> {
