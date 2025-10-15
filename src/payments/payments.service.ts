@@ -1,5 +1,3 @@
-// src/payments/payments.service.ts
-
 import {
   BadRequestException,
   Injectable,
@@ -18,7 +16,7 @@ import { AcquireTicketDto } from 'src/tickets/dto/acquire-ticket.dto';
 import { ConfigurationService } from 'src/configuration/configuration.service';
 import { StoreService } from 'src/store/store.service';
 import { UsersService } from 'src/users/users.service';
-import axios from 'axios'; // Importamos axios para la llamada OAuth
+import axios from 'axios';
 
 @Injectable()
 export class PaymentsService {
@@ -68,9 +66,6 @@ export class PaymentsService {
       'paymentsEnabled',
     );
     if (tier.isFree || paymentsEnabled !== 'true') {
-      this.logger.log(
-        '[createPreference] Tier es gratuito o pagos desactivados. Creando ticket sin costo.',
-      );
       const ticket = await this.ticketsService.acquireForClient(
         buyer,
         data,
@@ -85,56 +80,58 @@ export class PaymentsService {
       };
     }
 
-    let amountToPay: number;
+    let unitPrice: number;
     if (
       paymentType === 'partial' &&
       tier.allowPartialPayment &&
       tier.partialPaymentPrice
     ) {
-      amountToPay = Number(tier.partialPaymentPrice) * quantity;
+      unitPrice = Number(tier.partialPaymentPrice);
     } else {
-      amountToPay = Number(tier.price) * quantity;
+      unitPrice = Number(tier.price);
+    }
+
+    if (isNaN(unitPrice) || unitPrice <= 0) {
+      this.logger.error(`[createPreference] Intento de crear preferencia con precio unitario inválido: ${unitPrice}`);
+      throw new BadRequestException('El precio del producto es inválido.');
     }
 
     const externalReference = JSON.stringify({
       type: 'TICKET_PURCHASE',
       buyerId: buyer.id,
-      eventId: tier.event.id,
       ticketTierId,
       quantity,
-      promoterUsername,
-      amountPaid: amountToPay,
       paymentType,
+      promoterUsername,
     });
-
-    const backUrls = {
-      success: `${await this.configurationService.get('FRONTEND_URL')}/payment/success`,
-      failure: `${await this.configurationService.get('FRONTEND_URL')}/payment/failure`,
-    };
-    const notificationUrl = `${await this.configurationService.get('BACKEND_URL')}/payments/webhook`;
-
+    
+    // ✅ CORRECCIÓN FINAL Y DEFINITIVA: Se arma el cuerpo de la preferencia
+    // de forma idéntica al `store.service.ts` que sí funciona.
     const preferenceBody: any = {
       items: [
         {
           id: tier.id,
-          title: `${tier.name} x ${quantity}`,
-          quantity: 1,
-          unit_price: amountToPay,
+          title: tier.name,
+          quantity: quantity,
+          unit_price: unitPrice,
           currency_id: 'ARS',
         },
       ],
       payer: {
         email: buyer.email,
-        name: buyer.name,
-        surname: '',
+        name: buyer.name || undefined,
       },
-      back_urls: backUrls,
-      notification_url: notificationUrl,
+      back_urls: {
+        success: `${await this.configurationService.get('FRONTEND_URL')}/payment/success`,
+        failure: `${await this.configurationService.get('FRONTEND_URL')}/payment/failure`,
+      },
+      notification_url: `${await this.configurationService.get('BACKEND_URL')}/payments/webhook`,
       external_reference: externalReference,
+      auto_return: 'approved',
     };
 
     try {
-      this.logger.log(`[createPreference] Creando preferencia de pago estándar.`);
+      this.logger.log(`[createPreference] Creando preferencia con cuerpo: ${JSON.stringify(preferenceBody)}`);
       const preference = new Preference(this.mpClient);
       const result = await preference.create({ body: preferenceBody });
 
@@ -145,7 +142,7 @@ export class PaymentsService {
     } catch (error) {
       this.logger.error(
         'Error al crear la preferencia de pago en Mercado Pago',
-        error.response?.data || error.message,
+        error.cause?.message || error.message,
       );
       throw new InternalServerErrorException(
         'No se pudo generar el link de pago.',
@@ -203,11 +200,18 @@ export class PaymentsService {
         return { type: 'ticket', data: existingTicket };
       }
       this.logger.log(`Procesando pago de TICKET para ${paymentId}`);
+      
+      const amountPaid = paymentInfo.transaction_amount;
+
       const ticket = await this.ticketsService.acquireForClient(
         buyer,
-        data,
+        {
+            ticketTierId: data.ticketTierId,
+            quantity: data.quantity,
+            paymentType: data.paymentType
+        },
         data.promoterUsername,
-        data.amountPaid,
+        amountPaid,
         paymentId,
       );
       return { type: 'ticket', data: ticket };
@@ -246,7 +250,6 @@ export class PaymentsService {
   getMercadoPagoAuthUrl(userId: string): string {
     const clientId = this.configService.get('MP_CLIENT_ID');
     const redirectUri = this.configService.get('MP_REDIRECT_URI');
-    // Usamos el userId en el `state` para saber a quién asignarle las credenciales en el callback
     const state = Buffer.from(JSON.stringify({ userId })).toString('base64');
     return `https://auth.mercadopago.com.ar/authorization?client_id=${clientId}&response_type=code&platform_id=mp&redirect_uri=${redirectUri}&state=${state}`;
   }
