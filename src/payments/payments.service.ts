@@ -25,11 +25,11 @@ export class PaymentsService {
 
   constructor(
     private readonly configService: ConfigService,
+    private readonly configurationService: ConfigurationService,
     private readonly usersService: UsersService,
     @Inject(forwardRef(() => TicketsService))
     private readonly ticketsService: TicketsService,
     private readonly ticketTiersService: TicketTiersService,
-    private readonly configurationService: ConfigurationService,
     private readonly storeService: StoreService,
   ) {
     const accessToken = this.configService.get<string>(
@@ -105,8 +105,9 @@ export class PaymentsService {
       promoterUsername,
     });
     
-    // ✅ CORRECCIÓN FINAL Y DEFINITIVA: Se arma el cuerpo de la preferencia
-    // de forma idéntica al `store.service.ts` que sí funciona.
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL');
+    const backendUrl = this.configService.get<string>('BACKEND_URL');
+
     const preferenceBody: any = {
       items: [
         {
@@ -122,10 +123,10 @@ export class PaymentsService {
         name: buyer.name || undefined,
       },
       back_urls: {
-        success: `${await this.configurationService.get('FRONTEND_URL')}/payment/success`,
-        failure: `${await this.configurationService.get('FRONTEND_URL')}/payment/failure`,
+        success: `${frontendUrl}/payment/success`,
+        failure: `${frontendUrl}/payment/failure`,
       },
-      notification_url: `${await this.configurationService.get('BACKEND_URL')}/payments/webhook`,
+      notification_url: `${backendUrl}/payments/webhook`,
       external_reference: externalReference,
       auto_return: 'approved',
     };

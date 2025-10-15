@@ -1,5 +1,3 @@
-// src/store/store.service.ts
-
 import { Injectable, NotFoundException, BadRequestException, InternalServerErrorException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository, DataSource, Not, IsNull } from 'typeorm';
@@ -11,24 +9,15 @@ import { CreatePurchaseDto } from './dto/create-purchase.dto';
 import { User } from 'src/users/user.entity';
 import { UsersService } from 'src/users/users.service';
 import { ConfigService } from '@nestjs/config';
-import { MercadoPagoConfig, Preference } from 'mercadopago';
 import { PointTransactionsService } from 'src/point-transactions/point-transactions.service';
 import { PointTransactionReason } from 'src/point-transactions/point-transaction.entity';
 import { GiftProductDto } from './dto/gift-product.dto';
 import { EventsService } from 'src/events/events.service';
-
-interface PreferenceItem {
-  id: string;
-  title: string;
-  quantity: number;
-  unit_price: number;
-  currency_id: string;
-}
+import { MercadoPagoService } from 'src/payments/mercadopago.service';
 
 @Injectable()
 export class StoreService {
   private readonly logger = new Logger(StoreService.name);
-  private mpClient: MercadoPagoConfig;
 
   constructor(
     @InjectRepository(Product)
@@ -40,14 +29,8 @@ export class StoreService {
     private pointTransactionsService: PointTransactionsService,
     private dataSource: DataSource,
     private eventsService: EventsService,
-  ) {
-    const accessToken = this.configService.get<string>('MERCADO_PAGO_ACCESS_TOKEN');
-    if (!accessToken) {
-      this.logger.error('[Constructor] MERCADO_PAGO_ACCESS_TOKEN no está configurado en .env para el StoreService.');
-      throw new InternalServerErrorException('La integración con Mercado Pago no está configurada en la tienda.');
-    }
-    this.mpClient = new MercadoPagoConfig({ accessToken });
-  }
+    private mercadoPagoService: MercadoPagoService,
+  ) {}
 
   // --- Gestión de Productos (Admin) ---
 
@@ -179,7 +162,6 @@ export class StoreService {
   async createPurchasePreference(dto: CreatePurchaseDto, buyer: User) {
     this.logger.log(`[createPurchasePreference] Usuario ${buyer.email} quiere comprar ${dto.items.length} tipo(s) de producto(s)`);
     const { items, eventId } = dto;
-
     const productIds = items.map(item => item.productId);
     const productsInDb = await this.productsRepository.findBy({ id: In(productIds) });
 
@@ -188,8 +170,7 @@ export class StoreService {
     }
 
     let totalAmount = 0;
-    const preferenceItems: PreferenceItem[] = [];
-
+    const preferenceItems: any[] = [];
     for (const item of items) {
       const product = productsInDb.find(p => p.id === item.productId);
       if (!product) continue;
@@ -206,34 +187,29 @@ export class StoreService {
         currency_id: 'ARS',
       });
     }
-    
-    const preferenceClient = new Preference(this.mpClient);
 
-    const preference = await preferenceClient.create({
-      body: {
-        items: preferenceItems,
-        payer: {
-          email: buyer.email,
-          name: buyer.name || undefined, // ✅ CORREGIDO: Convierte null a undefined
-        },
-        back_urls: {
-          success: `${this.configService.get('FRONTEND_URL')}/payment/success`,
-          failure: `${this.configService.get('FRONTEND_URL')}/payment/failure`,
-        },
-        notification_url: `${this.configService.get('BACKEND_URL')}/payments/webhook`,
-        auto_return: 'approved',
-        external_reference: JSON.stringify({
-          type: 'PRODUCT_PURCHASE',
-          buyerId: buyer.id,
-          eventId,
-          items,
-          amountPaid: totalAmount,
-        }),
-      },
+    const payer = {
+      email: buyer.email,
+      name: buyer.name || undefined,
+    };
+
+    const externalReference = JSON.stringify({
+      type: 'PRODUCT_PURCHASE',
+      buyerId: buyer.id,
+      eventId,
+      items,
+      amountPaid: totalAmount,
     });
+    
+    const frontendUrl = this.configService.get('FRONTEND_URL');
+    const backUrls = {
+      success: `${frontendUrl}/payment/success`,
+      failure: `${frontendUrl}/payment/failure`,
+      pending: `${frontendUrl}/payment/pending`,
+    };
+    const notificationUrl = `${this.configService.get('BACKEND_URL')}/payments/webhook`;
 
-    this.logger.log(`[createPurchasePreference] Preferencia creada con ID: ${preference.id}`);
-    return { preferenceId: preference.id };
+    return this.mercadoPagoService.createPreference(preferenceItems, payer, externalReference, backUrls, notificationUrl);
   }
 
   async finalizePurchase(data: any): Promise<ProductPurchase[]> {

@@ -1,53 +1,47 @@
+// src/payments/mercadopago.service.ts
+
 import { Injectable, Logger, InternalServerErrorException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { MercadoPagoConfig, Preference } from 'mercadopago';
-import { User } from 'src/users/user.entity';
 
 @Injectable()
 export class MercadoPagoService {
     private readonly logger = new Logger(MercadoPagoService.name);
+    private mpClient: MercadoPagoConfig;
 
-    constructor(private readonly configService: ConfigService) {}
+    constructor(private readonly configService: ConfigService) {
+        const accessToken = this.configService.get<string>('MERCADO_PAGO_ACCESS_TOKEN');
+        if (!accessToken) {
+            this.logger.error('MERCADO_PAGO_ACCESS_TOKEN no está configurado en .env');
+            throw new InternalServerErrorException('La integración con Mercado Pago no está configurada.');
+        }
+        this.mpClient = new MercadoPagoConfig({ accessToken });
+    }
 
     async createPreference(
-        buyer: User,
-        admin: User, // ❌ CORRECCIÓN: Se usa el usuario Admin para la preferencia
         items: any[],
+        payer: { email: string; name?: string },
         externalReference: string,
-        backUrls: any,
+        backUrls: { success: string; failure: string; pending: string },
         notificationUrl: string,
-        receiverList: any[]
     ) {
-        if (!admin.mpAccessToken) {
-            this.logger.error('[MercadoPagoService] ERROR CRÍTICO: La cuenta del Admin no tiene un Access Token de MP configurado.');
-            throw new InternalServerErrorException("La cuenta del admin para recibir pagos no está configurada.");
-        }
-
-        // ❌ CORRECCIÓN: Se usa el access token del ADMIN para configurar el cliente de Mercado Pago
-        const mpClient = new MercadoPagoConfig({ accessToken: admin.mpAccessToken });
-        const preferenceClient = new Preference(mpClient);
-
-        const body: any = {
+        const preferenceBody = {
             items,
+            payer,
             back_urls: backUrls,
             notification_url: notificationUrl,
-            auto_return: 'approved',
             external_reference: externalReference,
+            auto_return: 'approved',
         };
 
-        if (receiverList && receiverList.length > 0) {
-            body.split_payment = true;
-            body.receivers = receiverList.map(receiver => ({
-                id: receiver.id.toString(),
-                amount: receiver.amount,
-            }));
+        try {
+            this.logger.log(`Creando preferencia con cuerpo: ${JSON.stringify(preferenceBody)}`);
+            const preference = new Preference(this.mpClient);
+            const result = await preference.create({ body: preferenceBody });
+            return { preferenceId: result.id };
+        } catch (error) {
+            this.logger.error('Error al crear la preferencia de pago en Mercado Pago', error.cause?.message || error.message);
+            throw new InternalServerErrorException('No se pudo generar el link de pago.');
         }
-
-        const preference = await preferenceClient.create({
-            body: body,
-        });
-
-        this.logger.log(`[MercadoPagoService] Preferencia de MP creada con ID: ${preference.id}`);
-        return { preferenceId: preference.id, init_point: preference.init_point };
     }
 }
