@@ -54,11 +54,16 @@ export class PaymentsService {
       `[createPreference] Iniciando para comprador: ${buyer.email} | Tier: ${data.ticketTierId}`,
     );
 
-    const { ticketTierId, quantity, promoterUsername, paymentType = 'full' } =
+    // ✅ CORRECCIÓN 1: Capturamos el eventId que viene del frontend.
+    const { eventId, ticketTierId, quantity, promoterUsername, paymentType = 'full' } =
       data;
 
     const tier = await this.ticketTiersService.findOne(ticketTierId);
     if (!tier) throw new NotFoundException('Tipo de entrada no encontrado.');
+    // Verificación de seguridad: nos aseguramos que la entrada pertenezca al evento
+    if (tier.eventId !== eventId) {
+        throw new BadRequestException('Esta entrada no pertenece al evento seleccionado.');
+    }
     if (tier.quantity < quantity)
       throw new BadRequestException('No quedan suficientes entradas.');
 
@@ -96,9 +101,11 @@ export class PaymentsService {
       throw new BadRequestException('El precio del producto es inválido.');
     }
 
+    // ✅ CORRECCIÓN 2: Guardamos el eventId en la referencia externa.
     const externalReference = JSON.stringify({
       type: 'TICKET_PURCHASE',
       buyerId: buyer.id,
+      eventId: eventId, // Esta línea es la que soluciona el problema.
       ticketTierId,
       quantity,
       paymentType,
@@ -204,9 +211,11 @@ export class PaymentsService {
       
       const amountPaid = paymentInfo.transaction_amount;
 
+      // Al leer `data`, ahora contendrá el `eventId` correcto que guardamos antes.
       const ticket = await this.ticketsService.acquireForClient(
         buyer,
         {
+            eventId: data.eventId, // Se usa el eventId recuperado
             ticketTierId: data.ticketTierId,
             quantity: data.quantity,
             paymentType: data.paymentType
