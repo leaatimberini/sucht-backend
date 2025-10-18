@@ -54,13 +54,11 @@ export class PaymentsService {
       `[createPreference] Iniciando para comprador: ${buyer.email} | Tier: ${data.ticketTierId}`,
     );
 
-    // ✅ CORRECCIÓN 1: Capturamos el eventId que viene del frontend.
     const { eventId, ticketTierId, quantity, promoterUsername, paymentType = 'full' } =
       data;
 
     const tier = await this.ticketTiersService.findOne(ticketTierId);
     if (!tier) throw new NotFoundException('Tipo de entrada no encontrado.');
-    // Verificación de seguridad: nos aseguramos que la entrada pertenezca al evento
     if (tier.eventId !== eventId) {
         throw new BadRequestException('Esta entrada no pertenece al evento seleccionado.');
     }
@@ -101,11 +99,10 @@ export class PaymentsService {
       throw new BadRequestException('El precio del producto es inválido.');
     }
 
-    // ✅ CORRECCIÓN 2: Guardamos el eventId en la referencia externa.
     const externalReference = JSON.stringify({
       type: 'TICKET_PURCHASE',
       buyerId: buyer.id,
-      eventId: eventId, // Esta línea es la que soluciona el problema.
+      eventId: eventId,
       ticketTierId,
       quantity,
       paymentType,
@@ -209,7 +206,12 @@ export class PaymentsService {
       }
       this.logger.log(`Procesando pago de TICKET para ${paymentId}`);
       
-      const amountPaid = paymentInfo.transaction_amount;
+      // ✅ CORRECCIÓN: Aseguramos que amountPaid sea siempre un número.
+      // Usamos el operador '??' (nullish coalescing) para asignar 0 si transaction_amount es null o undefined.
+      const amountPaid = paymentInfo.transaction_amount ?? 0;
+      if (paymentInfo.transaction_amount === undefined || paymentInfo.transaction_amount === null) {
+          this.logger.warn(`[processApprovedPayment] transaction_amount vino nulo o undefined para paymentId: ${paymentId}. Usando 0.`);
+      }
 
       // Al leer `data`, ahora contendrá el `eventId` correcto que guardamos antes.
       const ticket = await this.ticketsService.acquireForClient(
@@ -221,7 +223,7 @@ export class PaymentsService {
             paymentType: data.paymentType
         },
         data.promoterUsername,
-        amountPaid,
+        amountPaid, // Ahora siempre será un número.
         paymentId,
       );
       return { type: 'ticket', data: ticket };
@@ -252,7 +254,7 @@ export class PaymentsService {
     } catch (error) {
       this.logger.error(
         `Error procesando webhook para paymentId: ${paymentId}`,
-        error,
+        error.message || error,
       );
     }
   }
@@ -308,7 +310,7 @@ export class PaymentsService {
     } catch (error) {
       this.logger.error(
         'Error intercambiando el código por el access token:',
-        error.response?.data,
+        error.response?.data || error.message,
       );
       throw new InternalServerErrorException(
         'Error al vincular la cuenta de Mercado Pago.',
