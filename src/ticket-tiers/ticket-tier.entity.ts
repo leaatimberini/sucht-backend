@@ -10,6 +10,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { Event } from '../events/event.entity';
+import { Reward } from '../rewards/reward.entity';
 
 export enum ProductType {
   TICKET = 'ticket',
@@ -88,6 +89,23 @@ export class TicketTier {
   // --- NUEVA COLUMNA AÑADIDA ---
   @Column({ type: 'boolean', default: true })
   isPubliclyListed: boolean;
+
+  // --- RELACIÓN CON PRODUCTO/PREMIO ---
+  @Column({ nullable: true })
+  linkedRewardId: string | null;
+
+  @ManyToOne(() => Reward, { nullable: true, eager: true })
+  @JoinColumn({ name: 'linkedRewardId' })
+  linkedReward: Reward | null;
+
+  @Column({ nullable: true })
+  tableCategoryId: string | null;
+
+  @ManyToOne('TableCategory', { nullable: true }) // Using string to avoid circular dependency import issues if any
+  @JoinColumn({ name: 'tableCategoryId' })
+  tableCategory: any | null; // Typed as any to avoid import for now, or import properly if possible. Checks imports.
+
+  // --- FIN RELACIÓN ---
   // --- FIN DE NUEVA COLUMNA ---
 
   @CreateDateColumn({ type: 'timestamp' })

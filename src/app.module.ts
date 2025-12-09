@@ -1,5 +1,5 @@
 // src/app.module.ts
-import { Module } from '@nestjs/common';
+import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { UsersModule } from './users/users.module';
@@ -23,7 +23,9 @@ import { OwnerInvitationModule } from './owner-invitations/owner-invitations.mod
 import { RaffleModule } from './raffles/raffle.module';
 import { OrganizerModule } from './organizer/organizer.module';
 import { TablesModule } from './tables/tables.module';
-import { VerifierModule } from './verifier/verifier.module'; // 1. Importar
+import { VerifierModule } from './verifier/verifier.module';
+import { PartnersModule } from './partners/partners.module';
+import { BenefitsModule } from './benefits/benefits.module';
 
 @Module({
   imports: [
@@ -41,8 +43,14 @@ import { VerifierModule } from './verifier/verifier.module'; // 1. Importar
       database: process.env.DB_DATABASE,
       autoLoadEntities: true,
       synchronize: false,
+      extra: {
+        max: 20,
+        connectionTimeoutMillis: 2000,
+        idleTimeoutMillis: 30000,
+        keepAlive: true,
+      },
     }),
-    
+
     // Módulos de la Aplicación
     UsersModule,
     AuthModule,
@@ -64,9 +72,26 @@ import { VerifierModule } from './verifier/verifier.module'; // 1. Importar
     RaffleModule,
     OrganizerModule,
     TablesModule,
-    VerifierModule, // 2. Añadir a la lista
+    VerifierModule,
+    PartnersModule,
+    BenefitsModule,
   ],
   controllers: [],
   providers: [],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer
+      .apply((req, res, next) => {
+        console.log(`[Request] ${req.method} ${req.url}`);
+        console.log('Headers:', JSON.stringify(req.headers));
+        // Body might be parsed or not depending on parser order, but for multipart it might show raw or parsed if multer runs later.
+        // Actually multer runs in interceptor, so body here might be empty for multipart until body-parser/multer runs.
+        // But body-parser for json/url-encoded runs earlier.
+        // For multipart, we can't easily see body here without consuming stream.
+        // But headers are crucial.
+        next();
+      })
+      .forRoutes('*');
+  }
+}

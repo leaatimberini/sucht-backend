@@ -3,7 +3,7 @@ import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { join } from 'path';
 import { NestExpressApplication } from '@nestjs/platform-express';
-
+import { HttpExceptionFilter } from './common/http-exception.filter';
 async function bootstrap() {
   console.log('--- EXECUTING LATEST CODE VERSION: V5 ---');
 
@@ -13,7 +13,7 @@ async function bootstrap() {
   app.useStaticAssets(join(__dirname, '..', 'uploads'), {
     prefix: '/uploads/',
   });
-  
+
   app.setGlobalPrefix('api');
 
   app.enableCors({
@@ -36,6 +36,9 @@ async function bootstrap() {
       enableImplicitConversion: true,
     },
   }));
+
+  // Uso del filtro global para logging
+  app.useGlobalFilters(new HttpExceptionFilter());
 
   const port = process.env.APP_PORT || 5000;
   await app.listen(port);

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, UseGuards, ParseUUIDPipe, Patch, Req } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, UseGuards, ParseUUIDPipe, Patch, Req, Delete } from '@nestjs/common';
 import { TablesService } from './tables.service';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
@@ -9,17 +9,25 @@ import { CreateTableDto } from './dto/create-table.dto';
 import { UpdateTablePositionDto } from './dto/update-table-position.dto';
 import { UpdateTableStatusDto } from './dto/update-table-status.dto';
 import { CreateManualReservationDto } from './dto/create-manual-reservation.dto';
+import { SetCategoryPriceDto } from './dto/set-category-price.dto';
 
 @Controller('tables')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class TablesController {
-  constructor(private readonly tablesService: TablesService) {}
+  constructor(private readonly tablesService: TablesService) { }
 
   @Post('categories')
   @Roles(UserRole.ADMIN)
   createCategory(@Body() createCategoryDto: CreateCategoryDto) {
     return this.tablesService.createCategory(createCategoryDto.name);
   }
+
+  @Post('category/price')
+  @Roles(UserRole.ADMIN, UserRole.OWNER, UserRole.ORGANIZER)
+  setCategoryPrice(@Body() dto: SetCategoryPriceDto) {
+    return this.tablesService.setCategoryPrice(dto.eventId, dto.categoryId, dto.price, dto.capacity, dto.depositPrice);
+  }
+
 
   @Get('categories')
   @Roles(UserRole.ADMIN, UserRole.OWNER, UserRole.ORGANIZER)
@@ -48,31 +56,37 @@ export class TablesController {
   getReservationsForEvent(@Param('eventId', ParseUUIDPipe) eventId: string) {
     return this.tablesService.getReservationsForEvent(eventId);
   }
-  
+
   @Patch(':id/position')
   @Roles(UserRole.ADMIN)
   updateTablePosition(
-      @Param('id', ParseUUIDPipe) id: string,
-      @Body() updatePositionDto: UpdateTablePositionDto
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() updatePositionDto: UpdateTablePositionDto
   ) {
-      return this.tablesService.updateTablePosition(id, updatePositionDto.positionX, updatePositionDto.positionY);
+    return this.tablesService.updateTablePosition(id, updatePositionDto.positionX, updatePositionDto.positionY);
   }
 
   @Patch(':id/status')
   @Roles(UserRole.ADMIN, UserRole.OWNER, UserRole.ORGANIZER)
   updateTableStatus(
-      @Param('id', ParseUUIDPipe) id: string,
-      @Body() updateStatusDto: UpdateTableStatusDto
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() updateStatusDto: UpdateTableStatusDto
   ) {
-      return this.tablesService.updateTableStatus(id, updateStatusDto.status);
+    return this.tablesService.updateTableStatus(id, updateStatusDto.status);
   }
 
   @Post('reservations/manual')
   @Roles(UserRole.ADMIN, UserRole.OWNER, UserRole.ORGANIZER)
   reserveTableManually(
-      @Req() req: { user: User },
-      @Body() createManualReservationDto: CreateManualReservationDto
+    @Req() req: { user: User },
+    @Body() createManualReservationDto: CreateManualReservationDto
   ) {
-      return this.tablesService.reserveTableManually(req.user, createManualReservationDto);
+    return this.tablesService.reserveTableManually(req.user, createManualReservationDto);
+  }
+
+  @Delete('reservations/:id')
+  @Roles(UserRole.ADMIN, UserRole.OWNER)
+  deleteReservation(@Param('id', ParseUUIDPipe) id: string) {
+    return this.tablesService.deleteReservation(id);
   }
 }

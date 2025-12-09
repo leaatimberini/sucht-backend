@@ -8,10 +8,12 @@ import {
     ManyToOne,
     AfterLoad,
     Relation,
+    OneToMany,
 } from 'typeorm';
 import { User } from '../users/user.entity';
 import { Event } from '../events/event.entity';
 import { TicketTier } from 'src/ticket-tiers/ticket-tier.entity';
+import { UserReward } from 'src/rewards/user-reward.entity';
 
 export enum TicketStatus {
     VALID = 'valid',
@@ -35,6 +37,9 @@ export class Ticket {
 
     @ManyToOne(() => TicketTier, { eager: true })
     tier: Relation<TicketTier>;
+
+    @OneToMany(() => UserReward, (userReward) => userReward.ticket, { eager: true })
+    userRewards: UserReward[];
 
     @ManyToOne(() => User, (user) => user.promotedTickets, {
         nullable: true,
@@ -81,7 +86,7 @@ export class Ticket {
     // --- VIP ACCESS LOGIC ---
     // Esta propiedad no existe en la base de datos, es un campo "virtual".
     isVipAccess: boolean;
-    
+
     // Este decorador se ejecuta automáticamente cada vez que se carga un Ticket desde la BD.
     // Su función es leer si el "tier" asociado es VIP y asignar el valor a la
     // propiedad virtual isVipAccess.

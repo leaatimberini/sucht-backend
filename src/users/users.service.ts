@@ -39,8 +39,8 @@ export class UsersService {
         private readonly configService: ConfigService,
         @Inject(forwardRef(() => NotificationsService))
         private readonly notificationsService: NotificationsService,
-    ) {}
-    
+    ) { }
+
     private async hashPassword(password: string): Promise<string> {
         return bcrypt.hash(password, 10);
     }
@@ -49,7 +49,7 @@ export class UsersService {
         const silverMin = parseInt(this.configService.get<string>('LOYALTY_TIER_SILVER_POINTS', '1000'), 10);
         const goldMin = parseInt(this.configService.get<string>('LOYALTY_TIER_GOLD_POINTS', '5000'), 10);
         const platinoMin = parseInt(this.configService.get<string>('LOYALTY_TIER_PLATINO_POINTS', '15000'), 10);
-        const loyaltyTiers = [ { level: 'Bronce', minPoints: 0 }, { level: 'Plata', minPoints: silverMin }, { level: 'Oro', minPoints: goldMin }, { level: 'Platino', minPoints: platinoMin }, ];
+        const loyaltyTiers = [{ level: 'Bronce', minPoints: 0 }, { level: 'Plata', minPoints: silverMin }, { level: 'Oro', minPoints: goldMin }, { level: 'Platino', minPoints: platinoMin },];
         const sortedTiers = [...loyaltyTiers].sort((a, b) => b.minPoints - a.minPoints,);
         const currentTier = sortedTiers.find((tier) => userPoints >= tier.minPoints) || loyaltyTiers[0];
         const nextTierIndex = loyaltyTiers.findIndex((tier) => tier.level === currentTier.level) + 1;
@@ -119,7 +119,7 @@ export class UsersService {
         if (existingUser) {
             throw new ConflictException('Email already registered');
         }
-        
+
         const newUser = this.usersRepository.create({
             email: lowerCaseEmail,
             name,
@@ -161,27 +161,27 @@ export class UsersService {
                 throw new ConflictException('El nombre de usuario ya está en uso.');
             }
         }
-        
+
         // FIX: Se utiliza directamente el DTO, que no contiene campos sensibles.
         // Esto corrige el error de TypeScript y es seguro.
         Object.assign(userToUpdate, updateProfileDto);
         return this.usersRepository.save(userToUpdate);
     }
-    
+
     async changePassword(userId: string, changePasswordDto: ChangePasswordDto): Promise<void> {
         const { currentPassword, newPassword } = changePasswordDto;
-        
+
         const userWithPassword = await this.findOneByEmail((await this.findOneById(userId)).email);
 
         if (!userWithPassword?.password) {
             throw new BadRequestException('No se pudo verificar la contraseña actual. Es posible que hayas sido invitado y necesites establecer una contraseña primero.');
         }
-        
+
         const isPasswordMatching = await bcrypt.compare(currentPassword, userWithPassword.password);
         if (!isPasswordMatching) {
             throw new UnauthorizedException('La contraseña actual es incorrecta.');
         }
-        
+
         userWithPassword.password = await this.hashPassword(newPassword);
         await this.usersRepository.save(userWithPassword);
     }
@@ -217,7 +217,7 @@ export class UsersService {
             .createQueryBuilder('user')
             .where('user.invitationToken = :token', { token })
             .getOne();
-            
+
         if (!user) {
             throw new BadRequestException(
                 'El token de invitación no es válido o ha expirado.',
@@ -265,7 +265,24 @@ export class UsersService {
             console.log(
                 `INVITATION TOKEN for ${lowerCaseEmail}: ${invitationToken}`,
             );
-            return this.usersRepository.save(newUser);
+            const savedUser = await this.usersRepository.save(newUser);
+
+            // Send Invitation Email
+            const inviteLink = `${this.configService.get('FRONTEND_URL')}/invitation?token=${invitationToken}`;
+            try {
+                await this.notificationsService.sendEmail(
+                    lowerCaseEmail,
+                    'Invitación a Sucht Club',
+                    `<p>Has sido invitado a unirte al staff de Sucht Club.</p>
+                     <p>Para completar tu registro, haz clic en el siguiente enlace:</p>
+                     <a href="${inviteLink}">${inviteLink}</a>`
+                );
+            } catch (e) {
+                console.error("Error sending invitation email", e);
+                // Non-blocking error for now
+            }
+
+            return savedUser;
         }
     }
 
@@ -291,7 +308,7 @@ export class UsersService {
         const skip = (page - 1) * limit;
 
         const staffRoles = [UserRole.ADMIN, UserRole.OWNER, UserRole.ORGANIZER, UserRole.RRPP, UserRole.VERIFIER, UserRole.BARRA];
-        
+
         const queryBuilder = this.usersRepository.createQueryBuilder("user")
             .where("user.roles && :roles", { roles: staffRoles });
 
@@ -339,7 +356,7 @@ export class UsersService {
 
     async findAdminForPayments(): Promise<User | null> {
         const adminEmail = process.env.MP_ADMIN_EMAIL;
-        if (!adminEmail) { throw new InternalServerErrorException('El email del admin para comisiones no está configurado.');}
+        if (!adminEmail) { throw new InternalServerErrorException('El email del admin para comisiones no está configurado.'); }
         return this.usersRepository
             .createQueryBuilder('user')
             .addSelect('user.mpAccessToken')
@@ -349,7 +366,7 @@ export class UsersService {
 
     async findOwnerForPayments(): Promise<User | null> {
         const ownerEmail = process.env.MP_OWNER_EMAIL;
-        if (!ownerEmail) { throw new InternalServerErrorException('El email del dueño para pagos no está configurado.');}
+        if (!ownerEmail) { throw new InternalServerErrorException('El email del dueño para pagos no está configurado.'); }
         return this.usersRepository
             .createQueryBuilder('user')
             .addSelect('user.mpAccessToken')
@@ -387,7 +404,7 @@ export class UsersService {
             .orderBy(`to_char("dateOfBirth", 'MM-DD')`)
             .getMany();
     }
-    
+
     async save(user: User): Promise<User> {
         return this.usersRepository.save(user);
     }
@@ -406,7 +423,7 @@ export class UsersService {
         accessToken: string | null,
         mpUserId: string | number | null,
     ): Promise<void> {
-        if (!userId) { throw new NotFoundException('Se requiere un ID de usuario.');}
+        if (!userId) { throw new NotFoundException('Se requiere un ID de usuario.'); }
         const updatePayload = {
             mpAccessToken: accessToken,
             mpUserId: mpUserId ? Number(mpUserId) : null,
@@ -419,7 +436,7 @@ export class UsersService {
         refreshToken: string | null,
         taloUserId: string | null,
     ): Promise<void> {
-        if (!userId) { throw new NotFoundException('Se requiere un ID de usuario.');}
+        if (!userId) { throw new NotFoundException('Se requiere un ID de usuario.'); }
         const updatePayload = {
             taloAccessToken: accessToken,
             taloRefreshToken: refreshToken,
@@ -428,6 +445,52 @@ export class UsersService {
         await this.usersRepository.update(userId, updatePayload);
     }
 
+    // --- MÉTODOS DE ADMINISTRACIÓN DE USUARIOS ---
+
+    async adminUpdateProfile(userId: string, updateData: Partial<User>): Promise<User> {
+        const user = await this.findOneById(userId);
+
+        // Validar si el email o username ya existen si se estÃ¡n cambiando
+        if (updateData.email && updateData.email !== user.email) {
+            const existing = await this.findOneByEmail(updateData.email);
+            if (existing) throw new ConflictException('El email ya estÃ¡ en uso.');
+        }
+
+        if (updateData.username && updateData.username !== user.username) {
+            const existing = await this.findOneByUsername(updateData.username);
+            if (existing && existing.id !== userId) throw new ConflictException('El usuario ya estÃ¡ en uso.');
+        }
+
+        Object.assign(user, updateData);
+        // Date of birth conversion if string
+        if (updateData.dateOfBirth) {
+            user.dateOfBirth = new Date(updateData.dateOfBirth);
+        }
+
+        return this.usersRepository.save(user);
+    }
+
+    async adminForcePasswordChange(userId: string, newPassword: string): Promise<void> {
+        const user = await this.findOneById(userId);
+        user.password = await this.hashPassword(newPassword);
+        // Limpiamos tokens de reset si existen para evitar conflictos
+        user.passwordResetToken = null;
+        user.passwordResetExpires = null;
+        await this.usersRepository.save(user);
+    }
+
+    async deleteUser(userId: string): Promise<void> {
+        const user = await this.findOneById(userId);
+        try {
+            await this.usersRepository.delete(userId);
+        } catch (error) {
+            // Postgres error code 23503 is foreign_key_violation
+            if (error.code === '23503') {
+                throw new BadRequestException('No se puede eliminar el usuario porque tiene datos asociados (entradas, compras, etc.).');
+            }
+            throw new InternalServerErrorException('Error al eliminarr el usuario.');
+        }
+    }
 }
 
 const formatDateToInput = (date?: Date | string | null): string => {

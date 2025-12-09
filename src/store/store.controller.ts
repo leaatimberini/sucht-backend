@@ -15,7 +15,7 @@ import { GiftProductDto } from './dto/gift-product.dto';
 
 @Controller('store')
 export class StoreController {
-    constructor(private readonly storeService: StoreService) {}
+    constructor(private readonly storeService: StoreService) { }
 
     // --- Endpoints de Gestión para Admin y Dueño ---
 
@@ -30,6 +30,7 @@ export class StoreController {
     @UseGuards(JwtAuthGuard, RolesGuard)
     @Roles(UserRole.ADMIN, UserRole.OWNER)
     updateProduct(@Param('id') id: string, @Body() updateProductDto: UpdateProductDto) {
+        console.log(`[UpdateProduct] ID: ${id}, Payload:`, updateProductDto);
         return this.storeService.updateProduct(id, updateProductDto);
     }
 
@@ -45,7 +46,14 @@ export class StoreController {
     @UseGuards(JwtAuthGuard, RolesGuard)
     @Roles(UserRole.ADMIN)
     giftProductByAdmin(@Body() giftProductDto: GiftProductDto) {
-      return this.storeService.giftProductByAdmin(giftProductDto);
+        return this.storeService.giftProductByAdmin(giftProductDto);
+    }
+
+    @Get('admin/products')
+    @UseGuards(JwtAuthGuard, RolesGuard)
+    @Roles(UserRole.ADMIN, UserRole.OWNER)
+    findAllProductsForAdmin() {
+        return this.storeService.findAllProductsForAdmin();
     }
 
     // --- Endpoints para Clientes y Usos Generales ---
@@ -60,7 +68,7 @@ export class StoreController {
     @UseGuards(JwtAuthGuard, RolesGuard)
     @Roles(UserRole.ADMIN, UserRole.OWNER)
     findGiftable() {
-      return this.storeService.findAllProducts();
+        return this.storeService.findAllProducts();
     }
 
     @Public()
@@ -77,27 +85,27 @@ export class StoreController {
     ) {
         return this.storeService.createPurchasePreference(createPurchaseDto, req.user);
     }
-    
+
     @Get('purchase/my-products')
     @UseGuards(JwtAuthGuard)
     async getMyProducts(@Request() req: AuthenticatedRequest): Promise<ProductPurchase[]> {
         return this.storeService.findProductsByUserId(req.user.id);
     }
-    
+
     @Get('purchase/history')
     @UseGuards(JwtAuthGuard, RolesGuard)
     @Roles(UserRole.ADMIN)
     getFullPurchaseHistory() {
-      return this.storeService.getFullPurchaseHistory();
+        return this.storeService.getFullPurchaseHistory();
     }
 
     @Get('purchase/redeemed-history')
     @UseGuards(JwtAuthGuard, RolesGuard)
     @Roles(UserRole.ADMIN, UserRole.BARRA, UserRole.VERIFIER)
     getRedeemedPurchaseHistory() {
-      return this.storeService.getRedeemedPurchaseHistory();
+        return this.storeService.getRedeemedPurchaseHistory();
     }
-    
+
     @Post('purchase/validate/:id')
     @UseGuards(JwtAuthGuard, RolesGuard)
     @Roles(UserRole.VERIFIER, UserRole.ADMIN, UserRole.OWNER, UserRole.BARRA)

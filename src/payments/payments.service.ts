@@ -60,7 +60,7 @@ export class PaymentsService {
     const tier = await this.ticketTiersService.findOne(ticketTierId);
     if (!tier) throw new NotFoundException('Tipo de entrada no encontrado.');
     if (tier.eventId !== eventId) {
-        throw new BadRequestException('Esta entrada no pertenece al evento seleccionado.');
+      throw new BadRequestException('Esta entrada no pertenece al evento seleccionado.');
     }
     if (tier.quantity < quantity)
       throw new BadRequestException('No quedan suficientes entradas.');
@@ -108,7 +108,7 @@ export class PaymentsService {
       paymentType,
       promoterUsername,
     });
-    
+
     const frontendUrl = this.configService.get<string>('FRONTEND_URL');
     const backendUrl = this.configService.get<string>('BACKEND_URL');
 
@@ -143,6 +143,7 @@ export class PaymentsService {
       return {
         type: 'payment',
         preferenceId: result.id,
+        init_point: result.init_point,
       };
     } catch (error) {
       this.logger.error(
@@ -205,22 +206,22 @@ export class PaymentsService {
         return { type: 'ticket', data: existingTicket };
       }
       this.logger.log(`Procesando pago de TICKET para ${paymentId}`);
-      
+
       // ✅ CORRECCIÓN: Aseguramos que amountPaid sea siempre un número.
       // Usamos el operador '??' (nullish coalescing) para asignar 0 si transaction_amount es null o undefined.
       const amountPaid = paymentInfo.transaction_amount ?? 0;
       if (paymentInfo.transaction_amount === undefined || paymentInfo.transaction_amount === null) {
-          this.logger.warn(`[processApprovedPayment] transaction_amount vino nulo o undefined para paymentId: ${paymentId}. Usando 0.`);
+        this.logger.warn(`[processApprovedPayment] transaction_amount vino nulo o undefined para paymentId: ${paymentId}. Usando 0.`);
       }
 
       // Al leer `data`, ahora contendrá el `eventId` correcto que guardamos antes.
       const ticket = await this.ticketsService.acquireForClient(
         buyer,
         {
-            eventId: data.eventId, // Se usa el eventId recuperado
-            ticketTierId: data.ticketTierId,
-            quantity: data.quantity,
-            paymentType: data.paymentType
+          eventId: data.eventId, // Se usa el eventId recuperado
+          ticketTierId: data.ticketTierId,
+          quantity: data.quantity,
+          paymentType: data.paymentType
         },
         data.promoterUsername,
         amountPaid, // Ahora siempre será un número.

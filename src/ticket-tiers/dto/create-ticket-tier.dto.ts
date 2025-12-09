@@ -38,7 +38,7 @@ export class CreateTicketTierDto {
   @IsNumber()
   @Min(0)
   partialPaymentPrice?: number;
-  
+
   @IsOptional()
   @IsBoolean()
   isBirthdayDefault?: boolean;
@@ -79,5 +79,13 @@ export class CreateTicketTierDto {
   @IsUUID()
   @IsNotEmpty()
   eventId: string;
+
+  @IsOptional()
+  @IsUUID('4')
+  linkedRewardId?: string;
+
+  @IsOptional()
+  @IsUUID('4')
+  tableCategoryId?: string;
   // --- FIN DE CAMPOS ---
 }

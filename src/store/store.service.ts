@@ -30,7 +30,7 @@ export class StoreService {
     private dataSource: DataSource,
     private eventsService: EventsService,
     private mercadoPagoService: MercadoPagoService,
-  ) {}
+  ) { }
 
   // --- Gestión de Productos (Admin) ---
 
@@ -61,6 +61,12 @@ export class StoreService {
     });
   }
 
+  async findAllProductsForAdmin(): Promise<Product[]> {
+    return this.productsRepository.find({
+      order: { name: 'ASC' },
+    });
+  }
+
   async findOneProduct(id: string): Promise<Product> {
     const product = await this.productsRepository.findOneBy({ id });
     if (!product) {
@@ -68,7 +74,7 @@ export class StoreService {
     }
     return product;
   }
-  
+
   async findProductsByUserId(userId: string): Promise<ProductPurchase[]> {
     return this.purchasesRepository.find({
       where: { userId },
@@ -76,14 +82,14 @@ export class StoreService {
       order: { createdAt: 'DESC' },
     });
   }
-  
+
   async findPurchaseById(purchaseId: string): Promise<ProductPurchase> {
     const purchase = await this.purchasesRepository.findOne({
-        where: { id: purchaseId },
-        relations: ['product', 'user', 'event'],
+      where: { id: purchaseId },
+      relations: ['product', 'user', 'event'],
     });
-    if(!purchase) {
-        throw new NotFoundException(`Compra de producto con ID "${purchaseId}" no encontrada.`)
+    if (!purchase) {
+      throw new NotFoundException(`Compra de producto con ID "${purchaseId}" no encontrada.`)
     }
     return purchase;
   }
@@ -124,7 +130,7 @@ export class StoreService {
       });
 
       const savedPurchase = await queryRunner.manager.save(purchase);
-      
+
       await queryRunner.commitTransaction();
       this.logger.log(`[createFreePurchase] Compra gratuita ${savedPurchase.id} creada exitosamente.`);
       return savedPurchase;
@@ -145,13 +151,13 @@ export class StoreService {
     const user = await this.usersService.findOrCreateByEmail(email);
     const event = await this.eventsService.findOne(eventId);
     if (!event) {
-        throw new NotFoundException(`Evento con ID "${eventId}" no encontrado.`);
+      throw new NotFoundException(`Evento con ID "${eventId}" no encontrado.`);
     }
 
     const purchases: ProductPurchase[] = [];
     for (let i = 0; i < quantity; i++) {
-        const purchase = await this.createFreePurchase(user, productId, eventId, 1, 'ADMIN_GIFT');
-        purchases.push(purchase);
+      const purchase = await this.createFreePurchase(user, productId, eventId, 1, 'ADMIN_GIFT');
+      purchases.push(purchase);
     }
 
     return purchases;
@@ -200,7 +206,7 @@ export class StoreService {
       items,
       amountPaid: totalAmount,
     });
-    
+
     const frontendUrl = this.configService.get('FRONTEND_URL');
     const backUrls = {
       success: `${frontendUrl}/payment/success`,
@@ -215,81 +221,81 @@ export class StoreService {
   async finalizePurchase(data: any): Promise<ProductPurchase[]> {
     const { buyerId, eventId, items, amountPaid, paymentId } = data;
     this.logger.log(`[finalizePurchase] Finalizando compra de ${items.length} productos para usuario ${buyerId}`);
-    
+
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
     try {
-        const purchases: ProductPurchase[] = [];
-        for (const item of items) {
-            const product = await queryRunner.manager.findOneBy(Product, { id: item.productId });
-            if (!product) throw new NotFoundException(`Producto con ID "${item.productId}" no encontrado.`);
-            if (product.stock !== null && product.stock < item.quantity) {
-                throw new BadRequestException(`No hay stock para ${product.name}.`);
-            }
-
-            if (product.stock !== null) {
-                product.stock -= item.quantity;
-                await queryRunner.manager.save(product);
-            }
-            
-            const purchase = queryRunner.manager.create(ProductPurchase, {
-                userId: buyerId,
-                productId: item.productId,
-                eventId,
-                quantity: item.quantity,
-                amountPaid: amountPaid,
-                paymentId,
-                origin: 'PURCHASE',
-            });
-            purchases.push(await queryRunner.manager.save(purchase));
-        }
-        
-        await queryRunner.commitTransaction();
-
-        try {
-            const buyer = await this.usersService.findOneById(buyerId);
-            const pointsConfig = await this.configService.get('points_store_purchase');
-            const pointsToAward = pointsConfig ? parseInt(pointsConfig, 10) : 50;
-
-            if (buyer && pointsToAward > 0) {
-                await this.pointTransactionsService.createTransaction(
-                buyer, pointsToAward, PointTransactionReason.STORE_PURCHASE,
-                `Compra en la tienda por un total de $${amountPaid}`, paymentId
-                );
-            }
-        } catch (error) {
-            this.logger.error(`[finalizePurchase] No se pudieron otorgar puntos por la compra con paymentId ${paymentId}`, error);
+      const purchases: ProductPurchase[] = [];
+      for (const item of items) {
+        const product = await queryRunner.manager.findOneBy(Product, { id: item.productId });
+        if (!product) throw new NotFoundException(`Producto con ID "${item.productId}" no encontrado.`);
+        if (product.stock !== null && product.stock < item.quantity) {
+          throw new BadRequestException(`No hay stock para ${product.name}.`);
         }
 
-        return purchases;
+        if (product.stock !== null) {
+          product.stock -= item.quantity;
+          await queryRunner.manager.save(product);
+        }
 
-    } catch (error) {
-        await queryRunner.rollbackTransaction();
-        this.logger.error(`[finalizePurchase] Falló la finalización de la compra para paymentId ${paymentId}`, error);
-        throw error;
-    } finally {
-        await queryRunner.release();
-    }
-  }
-    
-  async validatePurchase(purchaseId: string) {
-      const purchase = await this.findPurchaseById(purchaseId);
-
-      if (purchase.redeemedAt) {
-          throw new BadRequestException(`El producto ya fue canjeado por ${purchase.user.name} el ${purchase.redeemedAt.toLocaleString()}.`);
+        const purchase = queryRunner.manager.create(ProductPurchase, {
+          userId: buyerId,
+          productId: item.productId,
+          eventId,
+          quantity: item.quantity,
+          amountPaid: amountPaid,
+          paymentId,
+          origin: 'PURCHASE',
+        });
+        purchases.push(await queryRunner.manager.save(purchase));
       }
 
-      purchase.redeemedAt = new Date();
-      await this.purchasesRepository.save(purchase);
+      await queryRunner.commitTransaction();
 
-      return {
-        message: 'Producto canjeado con éxito.',
-        userName: purchase.user.name,
-        productName: purchase.product.name,
-        redeemedAt: purchase.redeemedAt,
-      };
+      try {
+        const buyer = await this.usersService.findOneById(buyerId);
+        const pointsConfig = await this.configService.get('points_store_purchase');
+        const pointsToAward = pointsConfig ? parseInt(pointsConfig, 10) : 50;
+
+        if (buyer && pointsToAward > 0) {
+          await this.pointTransactionsService.createTransaction(
+            buyer, pointsToAward, PointTransactionReason.STORE_PURCHASE,
+            `Compra en la tienda por un total de $${amountPaid}`, paymentId
+          );
+        }
+      } catch (error) {
+        this.logger.error(`[finalizePurchase] No se pudieron otorgar puntos por la compra con paymentId ${paymentId}`, error);
+      }
+
+      return purchases;
+
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      this.logger.error(`[finalizePurchase] Falló la finalización de la compra para paymentId ${paymentId}`, error);
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  async validatePurchase(purchaseId: string) {
+    const purchase = await this.findPurchaseById(purchaseId);
+
+    if (purchase.redeemedAt) {
+      throw new BadRequestException(`El producto ya fue canjeado por ${purchase.user.name} el ${purchase.redeemedAt.toLocaleString()}.`);
+    }
+
+    purchase.redeemedAt = new Date();
+    await this.purchasesRepository.save(purchase);
+
+    return {
+      message: 'Producto canjeado con éxito.',
+      userName: purchase.user.name,
+      productName: purchase.product.name,
+      redeemedAt: purchase.redeemedAt,
+    };
   }
 
   async getFullPurchaseHistory(): Promise<ProductPurchase[]> {
@@ -303,11 +309,11 @@ export class StoreService {
   async getRedeemedPurchaseHistory(): Promise<ProductPurchase[]> {
     this.logger.log(`[getRedeemedPurchaseHistory] Obteniendo historial de productos canjeados.`);
     return this.purchasesRepository.find({
-        where: {
-            redeemedAt: Not(IsNull())
-        },
-        relations: ['user', 'product', 'event'],
-        order: { redeemedAt: 'DESC' },
+      where: {
+        redeemedAt: Not(IsNull())
+      },
+      relations: ['user', 'product', 'event'],
+      order: { redeemedAt: 'DESC' },
     });
   }
 }

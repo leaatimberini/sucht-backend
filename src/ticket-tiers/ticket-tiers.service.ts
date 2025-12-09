@@ -14,7 +14,7 @@ export class TicketTiersService {
     private ticketTiersRepository: Repository<TicketTier>,
     private eventsService: EventsService,
     private dataSource: DataSource,
-  ) {}
+  ) { }
 
   async create(createTicketTierDto: CreateTicketTierDto): Promise<TicketTier> {
     const { eventId } = createTicketTierDto;
@@ -50,7 +50,7 @@ export class TicketTiersService {
 
   async findByEvent(eventId: string): Promise<TicketTier[]> {
     return this.ticketTiersRepository.find({
-      where: { 
+      where: {
         event: { id: eventId },
         isPubliclyListed: true, // ¡FILTRO IMPORTANTE!
       },
@@ -173,7 +173,7 @@ export class TicketTiersService {
       }
     });
   }
-  
+
   private async _ensureUniqueFlag(queryRunner: QueryRunner, eventId: string, flag: 'isBirthdayDefault' | 'isBirthdayVipOffer', excludeTierId?: string): Promise<void> {
     const conditions: any = { event: { id: eventId } };
     if (excludeTierId) {
@@ -185,5 +185,36 @@ export class TicketTiersService {
       conditions,
       { [flag]: false },
     );
+  }
+
+  // --- NUEVO MÉTODO PARA PRECIOS POR SECTOR ---
+  async ensureTierForCategory(eventId: string, tableCategoryId: string, price: number, categoryName: string, capacity?: number, depositPrice?: number): Promise<TicketTier> {
+    let tier = await this.ticketTiersRepository.findOne({ where: { eventId, tableCategoryId } });
+
+    const payload = {
+      eventId,
+      tableCategoryId,
+      price,
+      name: `Sector ${categoryName}`,
+      productType: ProductType.VIP_TABLE,
+      isPubliclyListed: true, // Visible for purchase
+      quantity: 100, // Arbitrary high number, capacity handled by table count usually
+      capacity: capacity || undefined,
+      allowPartialPayment: (depositPrice !== undefined && depositPrice > 0),
+      partialPaymentPrice: depositPrice || null,
+    };
+
+    if (tier) {
+      if (
+        Number(tier.price) !== Number(price) ||
+        tier.capacity !== capacity ||
+        Number(tier.partialPaymentPrice) !== Number(depositPrice)
+      ) {
+        tier = await this.ticketTiersRepository.save({ ...tier, ...payload });
+      }
+    } else {
+      tier = await this.ticketTiersRepository.save(this.ticketTiersRepository.create(payload));
+    }
+    return tier;
   }
 }

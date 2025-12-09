@@ -19,6 +19,10 @@ export class CreateManualReservationDto {
   @IsOptional()
   clientEmail?: string;
 
+  @IsOptional()
+  @IsUUID('4')
+  ticketTierId?: string;
+
   @IsEnum(PaymentType)
   @IsNotEmpty()
   paymentType: PaymentType;

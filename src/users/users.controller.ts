@@ -12,8 +12,8 @@ import {
   UploadedFile,
   Request,
   Query,
-  HttpCode, 
-  HttpStatus, 
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
@@ -35,7 +35,7 @@ export class UsersController {
   constructor(
     private readonly usersService: UsersService,
     private readonly cloudinaryService: CloudinaryService,
-  ) {}
+  ) { }
 
   @Public()
   @Post('complete-invitation')
@@ -76,7 +76,7 @@ export class UsersController {
     const { password, invitationToken, ...result } = updatedUser;
     return result;
   }
-  
+
   @Patch('profile/change-password')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.NO_CONTENT) // Devuelve 204 si es exitoso
@@ -168,5 +168,77 @@ export class UsersController {
       return result;
     });
     return { results, ...pagination };
+  }
+
+  // --- ADMIN USER MANAGEMENT ---
+
+  @Patch(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async adminUpdateUser(
+    @Param('id') id: string,
+    @Body() updateData: Partial<any>, // Usamos Partial<any> o un DTO específico si fuera necesario
+  ) {
+    // Filtramos campos sensibles por seguridad
+    const allowedUpdates = {
+      name: updateData.name,
+      email: updateData.email,
+      username: updateData.username,
+      dateOfBirth: updateData.dateOfBirth,
+    };
+
+    const user = await this.usersService.adminUpdateProfile(id, allowedUpdates);
+    const { password, ...result } = user;
+    return result;
+  }
+
+  @Patch(':id/force-password')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async adminForcePasswordChange(
+    @Param('id') id: string,
+    @Body('password') password: string,
+  ) {
+    if (!password || password.length < 6) {
+      throw new NotFoundException('La contraseña debe tener al menos 6 caracteres.');
+    }
+    await this.usersService.adminForcePasswordChange(id, password);
+  }
+
+  @Post(':id/delete') // Usando POST con sufijo o DELETE method
+  // NestJS standard is DELETE method
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteUser(@Param('id') id: string) {
+    await this.usersService.deleteUser(id);
+  }
+
+  // Also register standard DELETE method
+  @Get(':id/delete') // Fallback GET for simple calls if needed, but standard is DELETE
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async deleteUserGet(@Param('id') id: string) {
+    await this.usersService.deleteUser(id);
+    return { message: 'Usuario eliminado' };
+  }
+
+  // Standard REST Delete
+  @Patch(':id/delete') // Some proxies block DELETE
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async deleteUserPatch(@Param('id') id: string) {
+    await this.usersService.deleteUser(id);
+    return { message: 'Usuario eliminado' };
+  }
+
+  // REAL DELETE
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Post(':id/remove')
+  async removeUser(@Param('id') id: string) {
+    await this.usersService.deleteUser(id);
   }
 }

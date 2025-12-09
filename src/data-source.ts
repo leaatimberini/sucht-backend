@@ -11,12 +11,12 @@ export const dataSourceOptions: DataSourceOptions = {
   username: process.env.DB_USERNAME,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_DATABASE,
-  
+
   // FIX: Apuntamos a los archivos .js compilados en la carpeta 'dist'.
   // Esta es la configuración correcta para un entorno de producción/staging.
   entities: ['dist/**/*.entity.js'],
-  migrations: ['dist/database/migrations/*.js'],
-  
+  migrations: ['dist/**/migrations/*.js'],
+
   synchronize: false,
 };
 

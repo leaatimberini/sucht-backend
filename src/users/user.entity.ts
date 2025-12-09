@@ -15,6 +15,7 @@ export enum UserRole {
   VERIFIER = 'verifier',
   BARRA = 'barra',
   CLIENT = 'client',
+  PARTNER = 'partner',
 }
 
 @Entity('users')
@@ -54,7 +55,7 @@ export class User {
 
   @Column({ type: 'integer', nullable: true })
   mpUserId?: number | null;
- 
+
   @Column({ type: 'varchar', nullable: true, select: false })
   taloAccessToken?: string | null;
 

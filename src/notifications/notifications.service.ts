@@ -7,6 +7,8 @@ import { User } from 'src/users/user.entity';
 import { Notification } from './entities/notification.entity';
 import { UsersService } from 'src/users/users.service';
 
+import { MailService } from 'src/mail/mail.service';
+
 @Injectable()
 export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
@@ -18,6 +20,7 @@ export class NotificationsService {
     private readonly notificationRepository: Repository<Notification>,
     @Inject(forwardRef(() => UsersService))
     private readonly usersService: UsersService,
+    private readonly mailService: MailService,
   ) {
     if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
       webPush.setVapidDetails(
@@ -72,8 +75,18 @@ export class NotificationsService {
     const allUsers = await this.usersService.findAllWithoutPagination();
     this.logger.log(`Creando notificaciones para ${allUsers.length} usuarios.`);
 
-    for (const user of allUsers) {
-      await this.createNotification(user, payload.title, payload.body);
+    // Batch insert notifications
+    const notificationsToInsert = allUsers.map(user => this.notificationRepository.create({
+      user,
+      title: payload.title,
+      body: payload.body,
+    }));
+
+    // Process in chunks of 500 to avoid memory/query limits
+    const chunkSize = 500;
+    for (let i = 0; i < notificationsToInsert.length; i += chunkSize) {
+      const chunk = notificationsToInsert.slice(i, i + chunkSize);
+      await this.notificationRepository.insert(chunk);
     }
 
     const allSubscriptions = await this.subscriptionRepository.find();
@@ -168,5 +181,9 @@ export class NotificationsService {
       },
       take: 100
     });
+  }
+
+  async sendEmail(to: string, subject: string, html: string) {
+    return this.mailService.sendMail(to, subject, html);
   }
 }

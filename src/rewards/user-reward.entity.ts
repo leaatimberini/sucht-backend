@@ -9,6 +9,7 @@ import {
 } from 'typeorm';
 import { User } from '../users/user.entity';
 import { Reward } from './reward.entity';
+import { Ticket } from '../tickets/ticket.entity';
 
 @Entity('user_rewards')
 export class UserReward {
@@ -26,6 +27,14 @@ export class UserReward {
 
   @Column()
   rewardId: string;
+
+  // --- RELACIÓN CON TICKET (OPCIONAL) ---
+  @ManyToOne(() => Ticket, (ticket) => ticket.userRewards, { nullable: true })
+  ticket: Ticket | null;
+
+  @Column({ nullable: true })
+  ticketId: string | null;
+  // --- FIN RELACIÓN ---
 
   @Column({ type: 'timestamp', nullable: true })
   redeemedAt: Date | null;

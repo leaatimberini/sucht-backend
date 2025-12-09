@@ -21,7 +21,7 @@ export class RewardsService {
     private userRewardsRepository: Repository<UserReward>,
     private pointTransactionsService: PointTransactionsService,
     private dataSource: DataSource,
-  ) {}
+  ) { }
 
   async create(createRewardDto: CreateRewardDto): Promise<Reward> {
     const newReward = this.rewardsRepository.create(createRewardDto);
@@ -53,9 +53,9 @@ export class RewardsService {
     }
   }
 
-  async assignFreeReward(user: User, rewardId: string, origin: string): Promise<UserReward> {
-    this.logger.log(`[assignFreeReward] Asignando premio gratuito ${rewardId} a ${user.email} con origen ${origin}`);
-    
+  async assignFreeReward(user: User, rewardId: string, origin: string, ticketId?: string): Promise<UserReward> {
+    this.logger.log(`[assignFreeReward] Asignando premio gratuito ${rewardId} a ${user.email} con origen ${origin} (Ticket: ${ticketId})`);
+
     const reward = await this.findOne(rewardId);
     if (!reward) {
       throw new NotFoundException('La plantilla del premio no fue encontrada.');
@@ -70,11 +70,12 @@ export class RewardsService {
       reward,
       rewardId: reward.id,
       origin,
+      ticketId: ticketId || null,
     });
 
     const savedUserReward = await this.userRewardsRepository.save(userReward);
     this.logger.log(`[assignFreeReward] Premio gratuito asignado. UserReward ID: ${savedUserReward.id}`);
-    
+
     return savedUserReward;
   }
 
@@ -82,7 +83,7 @@ export class RewardsService {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
-    
+
     this.logger.log(`[redeem] Usuario ${user.email} intentando canjear premio ${rewardId}`);
 
     try {
@@ -99,7 +100,7 @@ export class RewardsService {
         reward.stock -= 1;
         await queryRunner.manager.save(reward);
       }
-      
+
       const newTotalPoints = currentUserState.points - reward.pointsCost;
       await queryRunner.manager.update(User, user.id, { points: newTotalPoints });
 
@@ -186,14 +187,14 @@ export class RewardsService {
       order: { redeemedAt: 'DESC' },
     });
   }
-  
+
   async findBirthdayRewardForUser(userId: string, eventId: string): Promise<UserReward | null> {
     return this.userRewardsRepository.findOne({
-        where: {
-            userId,
-            origin: 'BIRTHDAY'
-        },
-        relations: ['reward']
+      where: {
+        userId,
+        origin: 'BIRTHDAY'
+      },
+      relations: ['reward']
     });
   }
 }

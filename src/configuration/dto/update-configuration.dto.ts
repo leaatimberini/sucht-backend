@@ -10,7 +10,7 @@ export class UpdateConfigurationDto {
     @IsOptional()
     @IsString()
     birthday_reward_id?: string;
-    
+
     // --- Nuevos campos para Pagos ---
     @IsOptional()
     @Transform(({ value }) => value === 'true' || value === true)
@@ -43,7 +43,7 @@ export class UpdateConfigurationDto {
     @Transform(({ value }) => value === 'true' || value === true)
     @IsBoolean()
     notifications_birthday_enabled?: boolean;
-    
+
     @IsOptional()
     @Transform(({ value }) => value === 'true' || value === true)
     @IsBoolean()
@@ -53,4 +53,20 @@ export class UpdateConfigurationDto {
     @Transform(({ value }) => value === 'true' || value === true)
     @IsBoolean()
     notifications_newEvent_enabled?: boolean;
+
+    // --- Campos para Sistema de Puntos ---
+    @IsOptional()
+    @IsNumber()
+    @Min(0)
+    points_attendance?: number;
+
+    @IsOptional()
+    @IsNumber()
+    @Min(0)
+    points_successful_referral?: number;
+
+    @IsOptional()
+    @IsNumber()
+    @Min(0)
+    points_social_share?: number;
 }
