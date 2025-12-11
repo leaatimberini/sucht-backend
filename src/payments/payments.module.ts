@@ -9,6 +9,7 @@ import { TicketTiersModule } from 'src/ticket-tiers/ticket-tiers.module';
 import { ConfigurationModule } from 'src/configuration/configuration.module';
 import { StoreModule } from 'src/store/store.module';
 import { MercadoPagoModule } from './mercadopago.module';
+import { MarketingModule } from '../marketing/marketing.module';
 
 @Module({
   imports: [
@@ -18,9 +19,10 @@ import { MercadoPagoModule } from './mercadopago.module';
     forwardRef(() => TicketTiersModule),
     ConfigurationModule,
     forwardRef(() => StoreModule),
+    MarketingModule,
   ],
   controllers: [PaymentsController],
   providers: [PaymentsService],
   exports: [PaymentsService],
 })
-export class PaymentsModule {}
+export class PaymentsModule { }

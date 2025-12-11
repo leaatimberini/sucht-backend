@@ -14,7 +14,7 @@ export class AuthService {
         private jwtService: JwtService,
         private mailService: MailService,
         private configurationService: ConfigurationService,
-    ) {}
+    ) { }
 
     async validateUser(email: string, pass: string): Promise<any> {
         const user = await this.usersService.findOneByEmail(email);
@@ -37,10 +37,10 @@ export class AuthService {
             return [];
         };
 
-        const payload = { 
-            email: user.email, 
-            sub: user.id, 
-            roles: cleanRoles(user.roles) 
+        const payload = {
+            email: user.email,
+            sub: user.id,
+            roles: cleanRoles(user.roles)
         };
 
         const accessToken = this.jwtService.sign(payload);
@@ -58,14 +58,17 @@ export class AuthService {
             }
         };
     }
-    
+
     async sendWelcomeEmail(user: User) {
         if (!user.email) return;
 
-        await this.mailService.sendMail(
+        await this.mailService.sendStyledMail(
             user.email,
             '🎉 ¡Bienvenido a SUCHT!',
-            `<h1>Hola ${user.name || ''} 👋</h1><p>Gracias por registrarte en <strong>SUCHT</strong>.</p><p>Desde ahora vas a poder acceder a eventos, entradas, promociones y más 🎶🍸</p>`
+            `Hola ${user.name || ''} 👋`,
+            `<p>Gracias por registrarte en <strong>SUCHT</strong>.</p>
+             <p>Desde ahora vas a poder acceder a eventos, entradas, promociones y más 🎶🍸</p>`,
+            { text: 'Ir a mi cuenta', url: 'https://sucht.com.ar/mi-cuenta' }
         );
     }
 
@@ -87,13 +90,14 @@ export class AuthService {
         const frontendUrl = await this.configurationService.get('FRONTEND_URL') || 'https://sucht.com.ar';
         const resetUrl = `${frontendUrl}/auth/reset-password?token=${resetToken}`;
 
-        await this.mailService.sendMail(
+        await this.mailService.sendStyledMail(
             user.email,
             'Recuperación de Contraseña - SUCHT',
-            `<h1>Recuperación de Contraseña</h1>
-            <p>Recibimos una solicitud para restablecer tu contraseña. Haz clic en el siguiente enlace para continuar:</p>
-            <a href="${resetUrl}" target="_blank">Restablecer mi Contraseña</a>
-            <p>Si no solicitaste esto, puedes ignorar este correo. El enlace expirará en 1 hora.</p>`
+            'Recuperación de Contraseña',
+            `<p>Recibimos una solicitud para restablecer tu contraseña.</p>
+             <p>Haz clic en el botón de abajo para continuar:</p>
+             <p style="font-size: 12px; margin-top: 20px; color: #666;">Si no solicitaste esto, puedes ignorar este correo. El enlace expirará en 1 hora.</p>`,
+            { text: 'Restablecer mi Contraseña', url: resetUrl }
         );
 
         return { message: 'Si el email está registrado, recibirás un enlace de recuperación.' };
@@ -111,7 +115,7 @@ export class AuthService {
         user.password = await bcrypt.hash(newPassword, 10);
         user.passwordResetToken = null;
         user.passwordResetExpires = null;
-        
+
         return this.usersService.save(user);
     }
 }

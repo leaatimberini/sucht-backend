@@ -11,6 +11,10 @@ export class UpdateConfigurationDto {
     @IsString()
     birthday_reward_id?: string;
 
+    @IsOptional()
+    @IsString()
+    google_review_reward_id?: string;
+
     // --- Nuevos campos para Pagos ---
     @IsOptional()
     @Transform(({ value }) => value === 'true' || value === true)

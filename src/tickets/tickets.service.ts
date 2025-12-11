@@ -1,5 +1,5 @@
 // src/tickets/tickets.service.ts
-import { BadRequestException, Injectable, NotFoundException, InternalServerErrorException, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, InternalServerErrorException, Logger, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, LessThan, Not, Repository, Between, In, DeleteResult } from 'typeorm';
 import { Ticket, TicketStatus } from './ticket.entity';
@@ -29,6 +29,7 @@ export class TicketsService {
     private ticketsRepository: Repository<Ticket>,
     @InjectRepository(TicketTier)
     private ticketTiersRepository: Repository<TicketTier>,
+    @Inject(forwardRef(() => UsersService))
     private usersService: UsersService,
     private eventsService: EventsService,
     private mailService: MailService,
@@ -373,7 +374,7 @@ export class TicketsService {
     };
   }
 
-  @Cron(CronExpression.EVERY_MINUTE)
+  @Cron(CronExpression.EVERY_5_MINUTES)
   async handleUnconfirmedTickets() {
     this.logger.log('[CronJob] Ejecutando handleUnconfirmedTickets...');
     const now = new TZDate(new Date(), this.timeZone);

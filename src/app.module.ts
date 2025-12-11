@@ -1,6 +1,6 @@
 // src/app.module.ts
 import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
@@ -26,29 +26,38 @@ import { TablesModule } from './tables/tables.module';
 import { VerifierModule } from './verifier/verifier.module';
 import { PartnersModule } from './partners/partners.module';
 import { BenefitsModule } from './benefits/benefits.module';
+import { JobApplicationsModule } from './job-applications/job-applications.module';
+import { MarketingModule } from './marketing/marketing.module'; // Added MarketingModule import
+import { CerebroModule } from './cerebro/cerebro.module';
+import { ScratchModule } from './scratch/scratch.module';
 
 @Module({
   imports: [
-    ScheduleModule.forRoot(),
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
     }),
-    TypeOrmModule.forRoot({
-      type: 'postgres',
-      host: process.env.DB_HOST,
-      port: parseInt(process.env.DB_PORT ?? '5432', 10),
-      username: process.env.DB_USERNAME,
-      password: process.env.DB_PASSWORD,
-      database: process.env.DB_DATABASE,
-      autoLoadEntities: true,
-      synchronize: false,
-      extra: {
-        max: 20,
-        connectionTimeoutMillis: 2000,
-        idleTimeoutMillis: 30000,
-        keepAlive: true,
-      },
+    ScheduleModule.forRoot(),
+    TypeOrmModule.forRootAsync({
+      imports: [ConfigModule],
+      useFactory: (configService: ConfigService) => ({
+        type: 'postgres',
+        host: configService.get<string>('DB_HOST'),
+        port: configService.get<number>('DB_PORT'),
+        username: configService.get<string>('DB_USERNAME'),
+        password: configService.get<string>('DB_PASSWORD'),
+        database: configService.get<string>('DB_DATABASE'), // Changed from DB_NAME to DB_DATABASE to match original
+        autoLoadEntities: true, // Kept from original
+        synchronize: false,
+        logging: ['error', 'warn'], // Reduced logging
+        extra: { // Kept from original
+          max: 20,
+          connectionTimeoutMillis: 2000,
+          idleTimeoutMillis: 30000,
+          keepAlive: true,
+        },
+      }),
+      inject: [ConfigService],
     }),
 
     // Módulos de la Aplicación
@@ -75,23 +84,12 @@ import { BenefitsModule } from './benefits/benefits.module';
     VerifierModule,
     PartnersModule,
     BenefitsModule,
+    JobApplicationsModule,
+    MarketingModule,
+    CerebroModule,
+    ScratchModule,
   ],
   controllers: [],
   providers: [],
 })
-export class AppModule implements NestModule {
-  configure(consumer: MiddlewareConsumer) {
-    consumer
-      .apply((req, res, next) => {
-        console.log(`[Request] ${req.method} ${req.url}`);
-        console.log('Headers:', JSON.stringify(req.headers));
-        // Body might be parsed or not depending on parser order, but for multipart it might show raw or parsed if multer runs later.
-        // Actually multer runs in interceptor, so body here might be empty for multipart until body-parser/multer runs.
-        // But body-parser for json/url-encoded runs earlier.
-        // For multipart, we can't easily see body here without consuming stream.
-        // But headers are crucial.
-        next();
-      })
-      .forRoutes('*');
-  }
-}
+export class AppModule { }

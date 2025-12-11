@@ -78,6 +78,14 @@ export class TablesService {
     });
   }
 
+  async findPublicTablesForEvent(eventId: string): Promise<Table[]> {
+    return this.tableRepository.find({
+      where: { eventId },
+      relations: ['category'], // Exclude ticket/user info for privacy
+      order: { tableNumber: 'ASC' },
+    });
+  }
+
   async updateTablePosition(tableId: string, positionX: number, positionY: number): Promise<Table> {
     const table = await this.tableRepository.findOneBy({ id: tableId });
     if (!table) throw new NotFoundException('Mesa no encontrada.');

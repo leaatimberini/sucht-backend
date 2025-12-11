@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Inject, forwardRef, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Partner, PartnerStatus } from './partner.entity';
@@ -9,13 +9,17 @@ import { User, UserRole } from 'src/users/user.entity';
 import { MailService } from 'src/mail/mail.service';
 import { DataSource } from 'typeorm';
 
+import { TelegramService } from 'src/notifications/telegram.service';
+
 @Injectable()
-export class PartnersService {
+export class PartnersService implements OnModuleInit {
     constructor(
         @InjectRepository(Partner)
         private partnersRepository: Repository<Partner>,
         private dataSource: DataSource,
         private mailService: MailService,
+        @Inject(forwardRef(() => TelegramService))
+        private telegramService: TelegramService,
     ) { }
 
     async create(createPartnerDto: CreatePartnerDto, user: User): Promise<Partner> {
@@ -67,10 +71,39 @@ export class PartnersService {
         return this.partnersRepository.save(partner);
     }
 
-    async findAll(): Promise<Partner[]> {
-        return this.partnersRepository.find({
-            relations: ['user'],
-        });
+    async findAll(category?: string): Promise<Partner[]> {
+        const query = this.partnersRepository.createQueryBuilder('partner')
+            .leftJoinAndSelect('partner.user', 'user')
+            .where('partner.status = :status', { status: PartnerStatus.APPROVED })
+            .andWhere('partner.isActive = :isActive', { isActive: true });
+
+        if (category) {
+            query.andWhere('partner.category = :category', { category });
+        }
+
+        return query.getMany();
+    }
+
+    async findAllCategories(): Promise<string[]> {
+        const result = await this.partnersRepository.createQueryBuilder('partner')
+            .select('DISTINCT partner.category', 'category')
+            .where('partner.status = :status', { status: PartnerStatus.APPROVED })
+            .andWhere('partner.isActive = :isActive', { isActive: true })
+            .andWhere('partner.category IS NOT NULL')
+            .getRawMany();
+
+        return result.map(r => r.category);
+    }
+
+    async findForBanner(): Promise<Partner[]> {
+        return this.partnersRepository.createQueryBuilder('partner')
+            .select(['partner.id', 'partner.name', 'partner.logoUrl', 'partner.category'])
+            .where('partner.status = :status', { status: PartnerStatus.APPROVED })
+            .andWhere('partner.isActive = :isActive', { isActive: true })
+            .andWhere('partner.logoUrl IS NOT NULL')
+            .orderBy('RANDOM()')
+            .limit(10)
+            .getMany();
     }
 
     async findOne(id: string): Promise<Partner> {
@@ -161,7 +194,11 @@ export class PartnersService {
 
     // --- Admin ---
     async getAllPartnersWithStats() {
-        const partners = await this.findAll();
+        // Fetch ALL partners (including PENDING/REJECTED) for Admin Dashboard
+        const partners = await this.partnersRepository.find({
+            relations: ['user'],
+            order: { createdAt: 'DESC' }
+        });
         // This could be N+1 but for MVP admin panel with few partners it's acceptable.
         // Optimize with a single complex query if partners grow to > 100.
         const stats = await Promise.all(partners.map(async (p) => {
@@ -172,5 +209,40 @@ export class PartnersService {
             };
         }));
         return stats;
+    }
+
+    // --- TELEGRAM LOGIC ---
+    async onModuleInit() {
+        this.telegramService.registerMessageHandler(async (text, ctx) => {
+            if (text === '👥 Partners Pendientes') {
+                const pendingPartners = await this.partnersRepository.find({
+                    where: { status: PartnerStatus.PENDING },
+                    relations: ['user']
+                });
+                await this.telegramService.sendPendingPartnersList(pendingPartners);
+                return true;
+            }
+            return false;
+        });
+
+        this.telegramService.registerActionHandler(async (action, partnerId) => {
+            if (action !== 'approve_partner' && action !== 'reject_partner') {
+                return false;
+            }
+            try {
+                if (action === 'approve_partner') {
+                    await this.approve(partnerId);
+                    await this.telegramService.sendNotification(`✅ Partner aprobado: ${partnerId}`);
+                } else if (action === 'reject_partner') {
+                    await this.reject(partnerId);
+                    await this.telegramService.sendNotification(`❌ Partner rechazado: ${partnerId}`);
+                }
+                return true;
+            } catch (error) {
+                console.error('Error handling Telegram action for partner:', error);
+                await this.telegramService.sendNotification(`⚠️ Error accion partner: ${error.message}`);
+                return true;
+            }
+        });
     }
 }

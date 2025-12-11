@@ -197,4 +197,26 @@ export class RewardsService {
       relations: ['reward']
     });
   }
+
+  async assignRewardToUser(userId: string, rewardId: string, origin: string = 'ADMIN'): Promise<UserReward> {
+    const reward = await this.findOne(rewardId);
+    const userReward = this.userRewardsRepository.create({
+      userId,
+      rewardId,
+      origin,
+      redeemedAt: null
+    });
+    return this.userRewardsRepository.save(userReward);
+  }
+
+  async deleteScratchRewardsForUser(userId: string): Promise<void> {
+    await this.userRewardsRepository.delete({ userId, origin: 'SCRATCH' });
+  }
+
+  async findUserRewardByOrigin(userId: string, origin: string): Promise<UserReward | null> {
+    return this.userRewardsRepository.findOne({
+      where: { userId, origin },
+      relations: ['reward']
+    });
+  }
 }

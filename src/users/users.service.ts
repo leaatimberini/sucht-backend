@@ -8,10 +8,11 @@ import {
     Inject,
     forwardRef,
     UnauthorizedException,
+    Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, ArrayContains, MoreThan, Between } from 'typeorm';
-import { User, UserRole } from './user.entity';
+import { User, UserRole, GoogleReviewStatus } from './user.entity';
 import { RegisterAuthDto } from 'src/auth/dto/register-auth.dto';
 import { randomBytes } from 'crypto';
 import { InviteStaffDto } from './dto/invite-staff.dto';
@@ -23,6 +24,7 @@ import * as bcrypt from 'bcrypt';
 import { PaginationQueryDto } from 'src/common/dto/pagination-query.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { ConfigService } from '@nestjs/config';
+import { UserReward } from 'src/rewards/user-reward.entity';
 
 export interface PaginatedUsers {
     data: User[];
@@ -31,14 +33,24 @@ export interface PaginatedUsers {
     limit: number;
 }
 
+import { RewardsService } from 'src/rewards/rewards.service';
+import { TelegramService } from 'src/notifications/telegram.service';
+import { ConfigurationService } from '../configuration/configuration.service';
+
 @Injectable()
 export class UsersService {
+    private readonly logger = new Logger(UsersService.name);
+
     constructor(
         @InjectRepository(User)
         private usersRepository: Repository<User>,
         private readonly configService: ConfigService,
         @Inject(forwardRef(() => NotificationsService))
         private readonly notificationsService: NotificationsService,
+        @Inject(forwardRef(() => RewardsService))
+        private readonly rewardsService: RewardsService,
+        private readonly telegramService: TelegramService,
+        private readonly configurationService: ConfigurationService,
     ) { }
 
     private async hashPassword(password: string): Promise<string> {
@@ -445,6 +457,15 @@ export class UsersService {
         await this.usersRepository.update(userId, updatePayload);
     }
 
+    async getHighValueUsers(minPoints: number = 500): Promise<User[]> {
+        return this.usersRepository.find({
+            where: {
+                points: MoreThan(minPoints),
+            },
+            select: ['id', 'email', 'name', 'whatsappNumber', 'points'] // Select relevant fields for audience matching
+        });
+    }
+
     // --- MÉTODOS DE ADMINISTRACIÓN DE USUARIOS ---
 
     async adminUpdateProfile(userId: string, updateData: Partial<User>): Promise<User> {
@@ -490,6 +511,168 @@ export class UsersService {
             }
             throw new InternalServerErrorException('Error al eliminarr el usuario.');
         }
+    }
+
+    // --- GOOGLE REVIEWS LOGIC ---
+
+    async onModuleInit() {
+        // Registrar handlers de acciones de Telegram
+        // Registrar handlers de acciones de Telegram
+        this.telegramService.registerActionHandler(async (action, proposalId) => {
+            if (action !== 'approve_review' && action !== 'reject_review') {
+                return false;
+            }
+            // proposalId aquí será el userId ya que usaremos ese ID en los botones
+            try {
+                if (action === 'approve_review') {
+                    await this.approveGoogleReview(proposalId);
+                    await this.telegramService.sendNotification(`✅ Reseña aprobada para el usuario ${proposalId}`);
+                } else if (action === 'reject_review') {
+                    await this.rejectGoogleReview(proposalId);
+                    await this.telegramService.sendNotification(`❌ Reseña rechazada para el usuario ${proposalId}`);
+                }
+                return true;
+            } catch (error) {
+                console.error('Error handling Telegram action for review:', error);
+                await this.telegramService.sendNotification(`⚠️ Error procesando acción: ${error.message}`);
+                return true; // Asumimos que intentamos manejarlo pero falló
+            }
+        });
+    }
+
+    async getGoogleReviewStatus(userId: string) {
+        const user = await this.usersRepository.findOne({
+            where: { id: userId },
+            relations: ['rewards', 'rewards.reward'] // Cargar rewards para ver cual es de google
+        });
+
+        if (!user) {
+            throw new NotFoundException('Usuario no encontrado');
+        }
+
+        let reward: UserReward | null = null;
+        if (user.googleReviewStatus === GoogleReviewStatus.APPROVED) {
+            // Buscar el reward asignado por google review. 
+            // Por simplicidad, buscamos el ultimo asignado o uno especifico si guardaramos el ID.
+            // Como approveGoogleReview asigna uno nuevo, tomamos el mas reciente de tipo 'google' o asumimos el ultimo.
+            // MEJORA: Podriamos filtrar por el rewardId especifico si lo guardamos, pero por ahora devolvemos el ultimo userReward asociado.
+            // O mejor, buscamos userRewards que coincidan con la fecha de aprovacion +- instantes, o simplemente devolvemos el ultimo.
+            // Para ser mas robustos en el futuro, podriamos guardar reviewRewardId en user.
+
+            // Hack actual: devolver el último reward.
+            if (user.rewards && user.rewards.length > 0) {
+                // Ordenar por fecha desc
+                user.rewards.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+                reward = user.rewards[0];
+            }
+        }
+
+        return {
+            status: user.googleReviewStatus,
+            reward: reward
+        };
+    }
+
+    async findGoogleReviewRequests(status?: GoogleReviewStatus) {
+        const query = this.usersRepository.createQueryBuilder('user')
+            .select(['user.id', 'user.name', 'user.email', 'user.googleReviewStatus', 'user.updatedAt']);
+
+        if (status) {
+            query.where('user.googleReviewStatus = :status', { status });
+        } else {
+            // Si no hay status, mostrar todos los que no sean NONE (o todos)
+            query.where('user.googleReviewStatus != :none', { none: GoogleReviewStatus.NONE });
+        }
+
+        query.orderBy('user.updatedAt', 'DESC');
+
+        return query.getMany();
+    }
+
+    async requestGoogleReviewValidation(userId: string) {
+        const user = await this.findOneById(userId);
+
+        if (user.googleReviewStatus === GoogleReviewStatus.APPROVED) {
+            throw new BadRequestException('Ya has completado tu reseña y recibido tu premio.');
+        }
+
+        if (user.googleReviewStatus === GoogleReviewStatus.PENDING_VALIDATION) {
+            return { message: 'Tu reseña ya está en proceso de validación.' };
+        }
+
+        user.googleReviewStatus = GoogleReviewStatus.PENDING_VALIDATION;
+        await this.usersRepository.save(user);
+
+        // Notificar al Staff vía Telegram
+        const message = `🌟 *Nueva Reseña de Google por Validar*\n\nUsuario: ${user.name} (${user.email})\nID: \`${user.id}\`\n\nEl usuario indica que ha dejado una reseña en Google. Por favor verifica en Google Maps si existe una reseña reciente de este usuario.`;
+
+        // Usamos un método especial en TelegramService para enviar botones personalizados
+        // Si no existe, usamos sendProposal o lo creamos. 
+        // Para simplificar, asumimos que sendProposal funciona con custom keys o añadiremos soporte.
+        // HACK: Usamos sendProposal adaptando los IDs de acción.
+        // La acción será 'approve_review' y 'reject_review'.
+
+        await this.telegramService.sendReviewValidationRequest(user.name || 'Usuario', user.email || '', user.id);
+
+        return { status: GoogleReviewStatus.PENDING_VALIDATION, message: 'Solicitud enviada' };
+    }
+
+    async approveGoogleReview(userId: string, rewardId?: string): Promise<User> {
+        const user = await this.usersRepository.findOne({ where: { id: userId } });
+        if (!user) throw new NotFoundException('Usuario no encontrado');
+
+        user.googleReviewStatus = GoogleReviewStatus.APPROVED;
+
+        // Lógica de asignación de premio
+        let rewardToGive: any = null;
+
+        // 1. Si viene rewardId explícito, usarlo
+        if (rewardId) {
+            rewardToGive = await this.rewardsService.findOne(rewardId);
+        }
+        // 2. Si no, buscar si hay uno configurado globalmente en DB
+        else {
+            const configRewardId = await this.configurationService.get('google_review_reward_id');
+            if (configRewardId) {
+                this.logger.log(`Usando premio configurado globalmente: ${configRewardId}`);
+                rewardToGive = await this.rewardsService.findOne(configRewardId);
+            }
+        }
+
+        // 3. Fallback: Buscar "Google" o costo 0
+        if (!rewardToGive) {
+            this.logger.log('Fallback: Buscando premio automático por nombre/costo');
+            const allRewards = await this.rewardsService.findAll(); // Optimizable
+            rewardToGive = allRewards.find(r =>
+                (r.name.toLowerCase().includes('google') || r.name.toLowerCase().includes('reseña')) && r.isActive
+            );
+
+            if (!rewardToGive) {
+                rewardToGive = allRewards.find(r => r.pointsCost === 0 && r.isActive);
+            }
+        }
+
+        if (rewardToGive) {
+            // Check if user already obtained a reward for Google Review to prevent duplicates on re-approval
+            const existingReward = await this.rewardsService.findUserRewardByOrigin(user.id, 'GOOGLE_REVIEW');
+
+            if (!existingReward) {
+                await this.rewardsService.assignRewardToUser(user.id, rewardToGive.id, 'GOOGLE_REVIEW');
+                this.logger.log(`Premio asignado a user ${user.id}: ${rewardToGive.name}`);
+            } else {
+                this.logger.log(`Usuario ${user.id} ya tiene premio por Google Review (ID: ${existingReward.id}), no se asigna otro.`);
+            }
+        } else {
+            this.logger.warn(`No se encontró premio para asignar a la reseña de user ${user.id}`);
+        }
+
+        return this.usersRepository.save(user);
+    }
+
+    async rejectGoogleReview(userId: string) {
+        const user = await this.findOneById(userId);
+        user.googleReviewStatus = GoogleReviewStatus.REJECTED;
+        await this.usersRepository.save(user);
     }
 }
 

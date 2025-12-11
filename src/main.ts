@@ -7,7 +7,7 @@ import { HttpExceptionFilter } from './common/http-exception.filter';
 async function bootstrap() {
   console.log('--- EXECUTING LATEST CODE VERSION: V5 ---');
 
-  process.env.TZ = 'America/Argentina/Buenos_Aires';
+  process.env.TZ = 'UTC'; // Enforce UTC for consistent DB timestamp parsing
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   app.useStaticAssets(join(__dirname, '..', 'uploads'), {

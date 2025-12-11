@@ -158,7 +158,48 @@ export class UsersController {
     });
   }
 
-  @Get()
+  // --- GOOGLE REVIEW ENDPOINTS ---
+
+  @Post('request-google-review-validation')
+  @UseGuards(JwtAuthGuard)
+  async requestGoogleReviewValidation(@Request() req) {
+    return this.usersService.requestGoogleReviewValidation(req.user.id);
+  }
+
+  @Get('google-review-status')
+  @UseGuards(JwtAuthGuard)
+  async getGoogleReviewStatus(@Request() req) {
+    return this.usersService.getGoogleReviewStatus(req.user.id);
+  }
+
+  // --- ADMIN GOOGLE REVIEW MANAGEMENT ---
+
+  @Get('google-reviews')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async getGoogleReviews(@Query('status') status?: any) {
+    // Cast string to Enum if present
+    // Importante: status viene como string en query param
+    return this.usersService.findGoogleReviewRequests(status);
+  }
+
+  @Post(':id/approve-google-review')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async approveGoogleReviewEndpoint(@Param('id') id: string, @Body('rewardId') rewardId?: string) {
+    await this.usersService.approveGoogleReview(id, rewardId);
+    return { message: 'Reseña aprobada y premio enviado.' };
+  }
+
+  @Post(':id/reject-google-review')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async rejectGoogleReviewEndpoint(@Param('id') id: string) {
+    await this.usersService.rejectGoogleReview(id);
+    return { message: 'Reseña rechazada.' };
+  }
+
+  // --- STANDARD USER MANAGEMENT ---
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN) // Solo el ADMIN puede ver todos los usuarios
   async findAll(@Query() paginationQuery: PaginationQueryDto) {

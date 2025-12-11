@@ -36,6 +36,9 @@ export class Partner {
     @Column({ type: 'varchar', nullable: true })
     whatsapp: string | null;
 
+    @Column({ type: 'varchar', nullable: true })
+    category: string | null; // e.g., 'Gastronomía', 'Indumentaria'
+
     @Column({ type: 'boolean', default: true })
     isActive: boolean;
 

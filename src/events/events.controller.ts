@@ -1,5 +1,5 @@
 // src/events/events.controller.ts
-import { Controller, Get, Post, Body, Param, Delete, UseGuards, UseInterceptors, UploadedFile, Patch, NotFoundException } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Delete, UseGuards, UseInterceptors, UploadedFile, Patch, NotFoundException, BadRequestException } from '@nestjs/common';
 import { EventsService } from './events.service';
 import { CreateEventDto } from './dto/create-event.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
@@ -17,7 +17,7 @@ export class EventsController {
   constructor(
     private readonly eventsService: EventsService,
     private readonly cloudinaryService: CloudinaryService,
-  ) {}
+  ) { }
 
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -46,8 +46,17 @@ export class EventsController {
   ) {
     let flyerImageUrl: string | undefined;
     if (flyerImage) {
-      const uploadResult = await this.cloudinaryService.uploadImage(flyerImage, 'sucht/events');
-      flyerImageUrl = uploadResult.secure_url;
+      try {
+        const uploadResult = await this.cloudinaryService.uploadImage(flyerImage, 'sucht/events');
+        flyerImageUrl = uploadResult.secure_url;
+      } catch (error) {
+        // Si es error de Cloudinary (ej: File size too large), lanzamos BadRequest
+        if (error.message && error.message.includes('File size too large')) {
+          throw new BadRequestException('El archivo es demasiado grande. El límite es 10MB.');
+        }
+        throw error;
+      }
+
       try {
         await unlink(flyerImage.path);
       } catch (err) {
@@ -64,12 +73,19 @@ export class EventsController {
     return this.eventsService.requestConfirmation(id);
   }
 
+  @Post(':id/generate-description')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.OWNER)
+  async generateDescription(@Param('id') id: string, @Body() body: { context?: string }) {
+    return this.eventsService.generateDescription(id, body.context);
+  }
+
   @Public()
   @Get()
-  findAll() { 
-    return this.eventsService.findAll(); 
+  findAll() {
+    return this.eventsService.findAll();
   }
-  
+
   /**
    * NUEVO ENDPOINT: Devuelve todos los eventos (publicados o no) para el panel de admin.
    */
@@ -77,25 +93,25 @@ export class EventsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.OWNER)
   findAllForAdmin() {
-      return this.eventsService.findAllForAdmin();
+    return this.eventsService.findAllForAdmin();
   }
 
   @Public()
-  @Get('list/for-select')
+  @Get('select')
   findAllForSelect() {
     return this.eventsService.findAllForSelect();
   }
 
   @Public()
   @Get(':id')
-  findOne(@Param('id') id: string) { 
-    return this.eventsService.findOne(id); 
+  findOne(@Param('id') id: string) {
+    return this.eventsService.findOne(id);
   }
 
   @Delete(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
-  remove(@Param('id') id: string) { 
-    return this.eventsService.remove(id); 
+  remove(@Param('id') id: string) {
+    return this.eventsService.remove(id);
   }
 }

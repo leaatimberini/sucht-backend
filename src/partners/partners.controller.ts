@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Request, UseInterceptors, UploadedFiles } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Request, UseInterceptors, UploadedFiles, Query } from '@nestjs/common';
 import { PartnersService } from './partners.service';
 import { CreatePartnerDto } from './dto/create-partner.dto';
 import { UpdatePartnerDto } from './dto/update-partner.dto';
@@ -22,8 +22,20 @@ export class PartnersController {
     // --- Public: List all partners ---
     @Public()
     @Get()
-    findAll() {
-        return this.partnersService.findAll();
+    findAll(@Query('category') category?: string) {
+        return this.partnersService.findAll(category);
+    }
+
+    @Public()
+    @Get('categories')
+    findAllCategories() {
+        return this.partnersService.findAllCategories();
+    }
+
+    @Public()
+    @Get('banner')
+    findForBanner() {
+        return this.partnersService.findForBanner();
     }
 
     // --- Public: Get Partner Profile ---

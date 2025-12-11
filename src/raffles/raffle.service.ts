@@ -35,7 +35,7 @@ export class RaffleService {
     private readonly mailService: MailService,
     private readonly configurationService: ConfigurationService,
     private readonly dataSource: DataSource,
-  ) {}
+  ) { }
 
   async createOrUpdateRaffle(eventId: string, dto: ConfigureRaffleDto): Promise<Raffle> {
     const queryRunner = this.dataSource.createQueryRunner();
@@ -43,58 +43,58 @@ export class RaffleService {
     await queryRunner.startTransaction();
 
     try {
-        const event = await this.eventsService.findOne(eventId);
-        if (!event) throw new NotFoundException('Evento no encontrado.');
+      const event = await this.eventsService.findOne(eventId);
+      if (!event) throw new NotFoundException('Evento no encontrado.');
 
-        let raffle = await this.raffleRepository.findOne({ where: { eventId } });
+      let raffle = await this.raffleRepository.findOne({ where: { eventId } });
 
-        if (raffle) {
-            await queryRunner.manager.delete(RafflePrize, { raffleId: raffle.id });
-            raffle.drawDate = new TZDate(dto.drawDate, 'America/Argentina/Buenos_Aires');
-            raffle.numberOfWinners = dto.numberOfWinners;
-            raffle.status = RaffleStatus.PENDING;
-        } else {
-            raffle = this.raffleRepository.create({
-                event,
-                eventId,
-                drawDate: new TZDate(dto.drawDate, 'America/Argentina/Buenos_Aires'),
-                numberOfWinners: dto.numberOfWinners,
-                status: RaffleStatus.PENDING,
-            });
-        }
-        
-        const savedRaffle = await queryRunner.manager.save(raffle);
-
-        const newPrizes = dto.prizes.map(p => {
-            return this.rafflePrizeRepository.create({
-                raffleId: savedRaffle.id,
-                productId: p.productId,
-                prizeRank: p.prizeRank,
-            });
+      if (raffle) {
+        await queryRunner.manager.delete(RafflePrize, { raffleId: raffle.id });
+        raffle.drawDate = new TZDate(dto.drawDate, 'America/Argentina/Buenos_Aires');
+        raffle.numberOfWinners = dto.numberOfWinners;
+        raffle.status = RaffleStatus.PENDING;
+      } else {
+        raffle = this.raffleRepository.create({
+          event,
+          eventId,
+          drawDate: new TZDate(dto.drawDate, 'America/Argentina/Buenos_Aires'),
+          numberOfWinners: dto.numberOfWinners,
+          status: RaffleStatus.PENDING,
         });
-        
-        await queryRunner.manager.save(newPrizes);
-        
-        await queryRunner.commitTransaction();
+      }
 
-        // --- CORRECCIÓN ---
-        // Devolvemos el objeto que acabamos de guardar, que sabemos que no es nulo.
-        return savedRaffle;
+      const savedRaffle = await queryRunner.manager.save(raffle);
+
+      const newPrizes = dto.prizes.map(p => {
+        return this.rafflePrizeRepository.create({
+          raffleId: savedRaffle.id,
+          productId: p.productId,
+          prizeRank: p.prizeRank,
+        });
+      });
+
+      await queryRunner.manager.save(newPrizes);
+
+      await queryRunner.commitTransaction();
+
+      // --- CORRECCIÓN ---
+      // Devolvemos el objeto que acabamos de guardar, que sabemos que no es nulo.
+      return savedRaffle;
 
     } catch (error) {
-        await queryRunner.rollbackTransaction();
-        this.logger.error('Error al configurar el sorteo:', error);
-        throw new InternalServerErrorException('No se pudo guardar la configuración del sorteo.');
+      await queryRunner.rollbackTransaction();
+      this.logger.error('Error al configurar el sorteo:', error);
+      throw new InternalServerErrorException('No se pudo guardar la configuración del sorteo.');
     } finally {
-        await queryRunner.release();
+      await queryRunner.release();
     }
   }
 
-  @Cron(CronExpression.EVERY_MINUTE)
+  @Cron(CronExpression.EVERY_5_MINUTES)
   async handleScheduledDraws() {
     this.logger.log('Revisando sorteos programados...');
     const now = new TZDate(new Date(), 'America/Argentina/Buenos_Aires');
-    
+
     const rafflesToRun = await this.raffleRepository
       .createQueryBuilder('raffle')
       .leftJoinAndSelect('raffle.event', 'event')
@@ -136,7 +136,7 @@ export class RaffleService {
       const prizePurchase = await this.storeService.createFreePurchase(
         winnerUser, prize.productId, raffle.eventId, 1, 'RAFFLE_WINNER'
       );
-      
+
       const winnerRecord = this.raffleWinnerRepository.create({
         raffleId: raffle.id,
         userId: winnerUser.id,
@@ -156,23 +156,23 @@ export class RaffleService {
     await this.raffleRepository.save(raffle);
     this.logger.log(`Sorteo para ${raffle.event.title} finalizado.`);
   }
-  
+
   private selectWinners(participants: User[], count: number): User[] {
     const shuffled = [...participants].sort(() => 0.5 - Math.random());
     return shuffled.slice(0, Math.min(count, shuffled.length));
   }
 
   async getRaffleForEvent(eventId: string): Promise<Raffle | null> {
-    return this.raffleRepository.findOne({ 
-      where: { eventId }, 
-      relations: ['prizes', 'prizes.product', 'winners', 'winners.user', 'winners.prize', 'winners.prize.product'] 
+    return this.raffleRepository.findOne({
+      where: { eventId },
+      relations: ['prizes', 'prizes.product', 'winners', 'winners.user', 'winners.prize', 'winners.prize.product']
     });
   }
-  
+
   private async sendWinnerEmail(winner: User, prizeName: string, prizeQrId: string, eventName: string) {
     const frontendUrl = await this.configurationService.get('FRONTEND_URL') || 'https://sucht.com.ar';
     const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${prizeQrId}`;
-    
+
     const emailHtml = `
       <div style="background-color: #121212; color: #ffffff; font-family: Arial, sans-serif; padding: 40px; text-align: center;">
         <div style="max-width: 600px; margin: auto; background-color: #1e1e1e; border-radius: 12px; overflow: hidden; border: 1px solid #333;">
@@ -194,11 +194,11 @@ export class RaffleService {
         </div>
       </div>
     `;
-    
+
     await this.mailService.sendMail(
-        winner.email,
-        `🏆 ¡Ganaste el sorteo de SUCHT!`,
-        emailHtml
+      winner.email,
+      `🏆 ¡Ganaste el sorteo de SUCHT!`,
+      emailHtml
     );
     this.logger.log(`Email de notificación del sorteo enviado a ${winner.email}`);
   }

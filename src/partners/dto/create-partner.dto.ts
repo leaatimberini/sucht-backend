@@ -33,6 +33,10 @@ export class CreatePartnerDto {
     @IsOptional()
     whatsapp?: string;
 
+    @IsString()
+    @IsOptional()
+    category?: string;
+
     @IsBoolean()
     @IsOptional()
     isActive?: boolean;

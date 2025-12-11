@@ -18,6 +18,8 @@ import { StoreService } from 'src/store/store.service';
 import { UsersService } from 'src/users/users.service';
 import axios from 'axios';
 
+import { CapiService } from 'src/marketing/capi.service';
+
 @Injectable()
 export class PaymentsService {
   private readonly logger = new Logger(PaymentsService.name);
@@ -31,6 +33,7 @@ export class PaymentsService {
     private readonly ticketsService: TicketsService,
     private readonly ticketTiersService: TicketTiersService,
     private readonly storeService: StoreService,
+    private readonly capiService: CapiService,
   ) {
     const accessToken = this.configService.get<string>(
       'MERCADO_PAGO_ACCESS_TOKEN',
@@ -140,6 +143,10 @@ export class PaymentsService {
       const preference = new Preference(this.mpClient);
       const result = await preference.create({ body: preferenceBody });
 
+      // --- META CAPI: INITIATE CHECKOUT ---
+      this.capiService.sendInitiateCheckoutEvent(buyer, unitPrice * quantity, 'ARS', [ticketTierId]);
+      // ------------------------------------
+
       return {
         type: 'payment',
         preferenceId: result.id,
@@ -227,6 +234,11 @@ export class PaymentsService {
         amountPaid, // Ahora siempre será un número.
         paymentId,
       );
+
+      // --- META CAPI TRIGGER ---
+      this.capiService.sendPurchaseEvent(buyer, amountPaid, 'ARS', data.eventId, paymentId);
+      // -------------------------
+
       return { type: 'ticket', data: ticket };
     }
   }

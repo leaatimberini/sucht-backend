@@ -1,6 +1,6 @@
 // backend/src/tickets/tickets.module.ts
 
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TicketsService } from './tickets.service';
 import { TicketsController } from './tickets.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -16,7 +16,7 @@ import { RewardsModule } from 'src/rewards/rewards.module';
 @Module({
     imports: [
         TypeOrmModule.forFeature([Ticket, TicketTier]),
-        UsersModule,
+        forwardRef(() => UsersModule),
         EventsModule,
         MailModule,
         PointTransactionsModule,

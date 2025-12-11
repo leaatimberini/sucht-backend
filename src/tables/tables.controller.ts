@@ -1,4 +1,5 @@
 import { Controller, Get, Post, Body, Param, UseGuards, ParseUUIDPipe, Patch, Req, Delete } from '@nestjs/common';
+import { Public } from 'src/auth/decorators/public.decorator';
 import { TablesService } from './tables.service';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
@@ -49,6 +50,12 @@ export class TablesController {
   @Roles(UserRole.ADMIN, UserRole.OWNER, UserRole.ORGANIZER)
   findTablesForEvent(@Param('eventId', ParseUUIDPipe) eventId: string) {
     return this.tablesService.findTablesForEvent(eventId);
+  }
+
+  @Get('public/event/:eventId')
+  @Public()
+  findPublicTablesForEvent(@Param('eventId', ParseUUIDPipe) eventId: string) {
+    return this.tablesService.findPublicTablesForEvent(eventId);
   }
 
   @Get('reservations/event/:eventId')

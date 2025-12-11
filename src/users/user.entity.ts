@@ -18,6 +18,13 @@ export enum UserRole {
   PARTNER = 'partner',
 }
 
+export enum GoogleReviewStatus {
+  NONE = 'NONE',
+  PENDING_VALIDATION = 'PENDING_VALIDATION',
+  APPROVED = 'APPROVED',
+  REJECTED = 'REJECTED'
+}
+
 @Entity('users')
 export class User {
   @PrimaryGeneratedColumn('uuid')
@@ -82,6 +89,9 @@ export class User {
 
   @Column({ type: 'int', default: 0 })
   points: number;
+
+  @Column({ type: 'enum', enum: GoogleReviewStatus, default: GoogleReviewStatus.NONE })
+  googleReviewStatus: GoogleReviewStatus;
 
   @CreateDateColumn({ type: 'timestamp' })
   createdAt: Date;

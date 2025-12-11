@@ -1,6 +1,7 @@
 // src/ticket-tiers/dto/create-ticket-tier.dto.ts
 
 import { IsNotEmpty, IsString, IsNumber, Min, IsDateString, IsOptional, IsEnum, IsBoolean, IsInt, MaxLength, IsUUID } from 'class-validator';
+import { Transform } from 'class-transformer';
 import { ProductType } from '../ticket-tier.entity';
 
 export class CreateTicketTierDto {
@@ -82,10 +83,12 @@ export class CreateTicketTierDto {
 
   @IsOptional()
   @IsUUID('4')
+  @Transform(({ value }) => value === "" ? null : value)
   linkedRewardId?: string;
 
   @IsOptional()
   @IsUUID('4')
+  @Transform(({ value }) => value === "" ? null : value)
   tableCategoryId?: string;
   // --- FIN DE CAMPOS ---
 }
